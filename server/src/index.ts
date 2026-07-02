@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import sharp from "sharp";
 
 // Load environment variables early
 dotenv.config();
@@ -161,6 +162,57 @@ app.get("/uploads/:filename", async (req, res) => {
     });
 
     downloadStream.pipe(res);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Serve resized image from GridFS
+app.get("/uploads/:filename/resize", async (req, res) => {
+  try {
+    if (!mongoose.connection.db) {
+      return res.status(500).json({ message: "Database connection not established" });
+    }
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: "uploads",
+    });
+
+    const filename = req.params.filename;
+    const files = await bucket.find({ filename }).toArray();
+    if (!files || files.length === 0) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    const file = files[0];
+    const contentType = file.contentType || "image/jpeg";
+
+    // Only resize image types
+    if (!contentType.startsWith("image/") || contentType === "image/gif") {
+      const downloadStream = bucket.openDownloadStreamByName(filename);
+      if (file.contentType) res.set("Content-Type", file.contentType);
+      res.set("Cache-Control", "public, max-age=86400");
+      downloadStream.pipe(res);
+      return;
+    }
+
+    const w = Math.min(parseInt(req.query.w as string) || 40, 200);
+    const q = Math.min(parseInt(req.query.q as string) || 60, 80);
+
+    const chunks: Buffer[] = [];
+    const downloadStream = bucket.openDownloadStreamByName(filename);
+    for await (const chunk of downloadStream) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+
+    const resized = await sharp(buffer)
+      .resize(w, w, { fit: "cover" })
+      .jpeg({ quality: q, mozjpeg: true })
+      .toBuffer();
+
+    res.set("Content-Type", "image/jpeg");
+    res.set("Cache-Control", "public, max-age=604800");
+    res.send(resized);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }

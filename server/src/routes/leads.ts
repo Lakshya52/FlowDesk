@@ -2,7 +2,7 @@ import { Router } from 'express';
 import {
     getLeads, getLead, createLead, updateLead, deleteLead,
     addNote, recordCall, importExcel, downloadSampleExcel,
-    getUpcomingFollowups, updateMeetingStatus, getLeadCounts,
+    getUpcomingFollowups, updateMeetingStatus, getLeadCounts, getLeadStats,
 } from '../controllers/leadController';
 import { authenticate, authorize } from '../middlewares/auth';
 import { upload } from '../middlewares/upload';
@@ -18,6 +18,7 @@ router.use(authenticate);
 router.post('/import/excel', upload.single('file'), importExcel);
 router.get('/upcoming', getUpcomingFollowups);
 
+router.get('/stats', getLeadStats);
 router.get('/counts', getLeadCounts);
 router.get('/', getLeads);
 router.get('/:id', getLead);

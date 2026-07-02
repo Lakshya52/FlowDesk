@@ -216,7 +216,7 @@ function sendToOverlay(channel: string, data?: any) {
 
 // ─── System Tray ───────────────────────────────────────────────────────────
 function createTray() {
-  const iconPath = path.join(__dirname, "../assets/icon.ico");
+  const iconPath = path.join(__dirname, "../assets/icon.png");
   tray = new Tray(iconPath);
 
   const contextMenu = Menu.buildFromTemplate([

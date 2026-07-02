@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, Phone, Building, Loader2, AlertCircle, CheckCircle2, X, RefreshCw, Search, Filter, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, Clock, Phone, Building, Loader2, AlertCircle, CheckCircle2, X, RefreshCw, Search, Filter, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../../lib/api";
 import Avatar from "../common/Avatar";
+import toast from "react-hot-toast";
 import { useCrmSocket } from "../../hooks/useCrmSocket";
 
 interface Campaign {
@@ -151,6 +152,10 @@ const Schedule = () => {
 	const queryClient = useQueryClient();
 	useCrmSocket();
 	const [actionLoading, setActionLoading] = useState<string | null>(null);
+	const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+	const [rescheduleLeadId, setRescheduleLeadId] = useState<string | null>(null);
+	const [rescheduleDate, setRescheduleDate] = useState("");
+	const [rescheduleNotes, setRescheduleNotes] = useState("");
 	const [activeTab, setActiveTab] = useState<Tab>("all");
 	const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 	const [searchInput, setSearchInput] = useState("");
@@ -160,6 +165,14 @@ const Schedule = () => {
 	const [dateFrom, setDateFrom] = useState("");
 	const [dateTo, setDateTo] = useState("");
 	const [datePreset, setDatePreset] = useState("all");
+	const [showFollowupModal, setShowFollowupModal] = useState(false);
+	const [followupLeadId, setFollowupLeadId] = useState<string | null>(null);
+	const [followupNotes, setFollowupNotes] = useState("");
+	const [followupStatus, setFollowupStatus] = useState("connected");
+	const [showMeetingModal, setShowMeetingModal] = useState(false);
+	const [meetingLeadId, setMeetingLeadId] = useState<string | null>(null);
+	const [meetingNotes, setMeetingNotes] = useState("");
+	const [meetingOutcome, setMeetingOutcome] = useState("attempted");
 
 	const presets = [
 		{ label: "All", value: "all" },
@@ -253,13 +266,85 @@ const Schedule = () => {
 		}
 	};
 
-	const handleFollowupDone = async (leadId: string) => {
+	const handleRescheduleSave = async () => {
+		if (!rescheduleLeadId || !rescheduleDate) return;
+		setActionLoading(rescheduleLeadId);
+		try {
+			if (rescheduleNotes.trim()) {
+				await api.post(`/leads/${rescheduleLeadId}/notes`, { text: rescheduleNotes.trim() });
+			}
+			await api.put(`/leads/${rescheduleLeadId}`, { meetingAt: rescheduleDate, meetingStatus: "scheduled", status: "meeting_scheduled" });
+			queryClient.invalidateQueries({ queryKey: ["leads"] });
+			toast.success("Meeting rescheduled");
+			setShowRescheduleModal(false);
+			setRescheduleLeadId(null);
+			setRescheduleDate("");
+			setRescheduleNotes("");
+		} catch (err: any) {
+			alert(err.response?.data?.message || "Failed to reschedule");
+		} finally {
+			setActionLoading(null);
+		}
+	};
+
+	const handleFollowupCompleteSave = async () => {
+		if (!followupLeadId) return;
+		if (!followupNotes.trim()) {
+			toast.error("Notes are required");
+			return;
+		}
+		setActionLoading(followupLeadId);
+		try {
+			if (followupNotes.trim()) {
+				await api.post(`/leads/${followupLeadId}/notes`, { text: followupNotes.trim() });
+			}
+			await api.put(`/leads/${followupLeadId}`, { nextFollowupAt: null, status: followupStatus });
+			queryClient.invalidateQueries({ queryKey: ["leads"] });
+			toast.success("Follow-up completed");
+			setShowFollowupModal(false);
+			setFollowupLeadId(null);
+			setFollowupNotes("");
+			setFollowupStatus("connected");
+		} catch (err: any) {
+			alert(err.response?.data?.message || "Failed to complete follow-up");
+		} finally {
+			setActionLoading(null);
+		}
+	};
+
+	const handleMeetingCompleteSave = async () => {
+		if (!meetingLeadId) return;
+		if (!meetingNotes.trim()) {
+			toast.error("Notes are required");
+			return;
+		}
+		setActionLoading(meetingLeadId);
+		try {
+			if (meetingNotes.trim()) {
+				await api.post(`/leads/${meetingLeadId}/notes`, { text: meetingNotes.trim() });
+			}
+			await api.put(`/leads/${meetingLeadId}`, { meetingStatus: "done", status: meetingOutcome, nextFollowupAt: null });
+			queryClient.invalidateQueries({ queryKey: ["leads"] });
+			toast.success("Meeting completed");
+			setShowMeetingModal(false);
+			setMeetingLeadId(null);
+			setMeetingNotes("");
+			setMeetingOutcome("attempted");
+		} catch (err: any) {
+			alert(err.response?.data?.message || "Failed to complete meeting");
+		} finally {
+			setActionLoading(null);
+		}
+	};
+
+	const handleFollowupDismiss = async (leadId: string) => {
 		setActionLoading(leadId);
 		try {
 			await api.put(`/leads/${leadId}`, { nextFollowupAt: null });
 			queryClient.invalidateQueries({ queryKey: ["leads"] });
+			toast.success("Follow-up dismissed");
 		} catch (err: any) {
-			alert(err.response?.data?.message || "Failed to update follow-up");
+			alert(err.response?.data?.message || "Failed to dismiss follow-up");
 		} finally {
 			setActionLoading(null);
 		}
@@ -340,10 +425,16 @@ const Schedule = () => {
 					</p>
 				</div>
 				<button
-					className="btn btn-ghost btn-sm"
-					onClick={() => queryClient.invalidateQueries({ queryKey: ["leads"] })}
+					className="btn btn-secondary"
+					onClick={async () => {
+						await Promise.all([
+							queryClient.invalidateQueries({ queryKey: ["leads"] }),
+							queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
+						]);
+						toast.success("Refreshed");
+					}}
 					title="Refresh"
-					style={{ width: 36, height: 36, borderRadius: 8, border: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)" }}
+					style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
 				>
 					<RefreshCw size={16} />
 				</button>
@@ -566,8 +657,6 @@ const Schedule = () => {
 									const date = getItemDate(lead);
 									const rel = formatRelativeDateTime(date?.toISOString());
 									const isMeeting = lead.scheduleType === "meeting" || !!lead.meetingAt;
-									const meetingDate = lead.meetingAt ? new Date(lead.meetingAt) : null;
-									const isMeetingOverdue = isMeeting && meetingDate && meetingDate < new Date() && lead.meetingStatus === "scheduled";
 									const isMeetingDone = lead.meetingStatus === "done" || lead.meetingStatus === "canceled";
 
 									return (
@@ -648,48 +737,52 @@ const Schedule = () => {
 												</div>
 
 												<div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-													{isMeeting && isMeetingOverdue && (
-														<>
+													{isMeeting && !isMeetingDone && (
+														<div style={{ display: "flex", gap: 6 }}>
 															<button
 																className="btn btn-success btn-sm"
-																disabled={actionLoading === lead._id}
-																onClick={(e) => { e.stopPropagation(); handleMeetingAction(lead._id, "done"); }}
-																style={{ fontSize: "0.7rem", padding: "4px 10px", borderRadius: 6, minWidth: 80 }}
+																onClick={(e) => { e.stopPropagation(); setMeetingLeadId(lead._id); setMeetingOutcome("attempted"); setMeetingNotes(""); setShowMeetingModal(true); }}
+																style={{ fontSize: "0.78rem", padding: "6px 14px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
 															>
-																{actionLoading === lead._id ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
-																Done
+																<CheckCircle2 size={14} /> Completed
 															</button>
 															<button
-																className="btn btn-ghost btn-sm"
+																className="btn btn-secondary btn-sm"
+																onClick={(e) => { e.stopPropagation(); setRescheduleLeadId(lead._id); setRescheduleDate(lead.meetingAt?.slice(0, 16) || ""); setRescheduleNotes(""); setShowRescheduleModal(true); }}
+																style={{ fontSize: "0.78rem", padding: "6px 14px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
+															>
+																<CalendarClock size={14} /> Reschedule
+															</button>
+															<button
+																className="btn btn-sm"
 																disabled={actionLoading === lead._id}
 																onClick={(e) => { e.stopPropagation(); handleMeetingAction(lead._id, "canceled"); }}
-																style={{ fontSize: "0.7rem", padding: "4px 10px", borderRadius: 6, color: "var(--color-danger)", minWidth: 80 }}
+																style={{ fontSize: "0.78rem", padding: "6px 14px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.12)", color: "var(--color-danger)", border: "none" }}
 															>
-																<X size={11} /> Cancel
+																<X size={14} /> Cancel
 															</button>
-														</>
-													)}
-													{isMeeting && !isMeetingOverdue && !isMeetingDone && (
-														<button
-															className="btn btn-ghost btn-sm"
-															disabled={actionLoading === lead._id}
-															onClick={(e) => { e.stopPropagation(); handleMeetingAction(lead._id, "canceled"); }}
-															style={{ fontSize: "0.7rem", padding: "4px 10px", borderRadius: 6, color: "var(--color-danger)", minWidth: 80 }}
-														>
-															<X size={11} /> Cancel
-														</button>
+														</div>
 													)}
 													{!isMeeting && !isMeetingDone && (
-														<button
-															className="btn btn-success btn-sm"
-															disabled={actionLoading === lead._id}
-															onClick={(e) => { e.stopPropagation(); handleFollowupDone(lead._id); }}
-															style={{ fontSize: "0.7rem", padding: "4px 10px", borderRadius: 6, minWidth: 80 }}
-														>
-															{actionLoading === lead._id ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
-															Done
-														</button>
+														<div style={{ display: "flex", gap: 6 }}>
+															<button
+																className="btn btn-success btn-sm"
+																onClick={(e) => { e.stopPropagation(); setFollowupLeadId(lead._id); setFollowupStatus("connected"); setFollowupNotes(""); setShowFollowupModal(true); }}
+																style={{ fontSize: "0.78rem", padding: "6px 14px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
+															>
+																<CheckCircle2 size={14} />
+																Completed
+															</button>
+															<button
+																className="btn btn-danger btn-sm"
+																onClick={(e) => { e.stopPropagation(); handleFollowupDismiss(lead._id); }}
+																style={{ fontSize: "0.78rem", padding: "6px 14px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
+															>
+																<X size={14} /> Dismiss
+															</button>
+														</div>
 													)}
+
 												</div>
 											</div>
 										</div>
@@ -751,8 +844,212 @@ const Schedule = () => {
 					)}
 				</div>
 			)}
-		</div>
-	);
+
+			{showFollowupModal && (
+				<div
+					style={{
+						position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
+						zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+					}}
+					onClick={() => { setShowFollowupModal(false); setFollowupLeadId(null); }}
+				>
+					<div
+						className="card animate-fade-in"
+						style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
+						onClick={e => e.stopPropagation()}
+					>
+						<h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 600 }}>Complete Follow-up</h3>
+
+						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
+							Call Status <span style={{ color: 'var(--color-danger)' }}>*</span>
+						</label>
+						<select
+							value={followupStatus}
+							onChange={e => setFollowupStatus(e.target.value)}
+							style={{
+								width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-border)',
+								fontSize: '0.85rem', marginBottom: 14, background: 'var(--color-bg)',
+							}}
+						>
+							<option value="new">New</option>
+							<option value="attempted">Attempted</option>
+							<option value="connected">Connected</option>
+							<option value="interested">Interested</option>
+							<option value="callback_scheduled">Callback Scheduled</option>
+							<option value="meeting_scheduled">Meeting Scheduled</option>
+							<option value="not_interested">Not Interested</option>
+							<option value="not_reachable">Not Reachable</option>
+							<option value="do_not_call">Do Not Call</option>
+							<option value="closed_won">Closed Won</option>
+							<option value="closed_lost">Closed Lost</option>
+						</select>
+
+						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
+							Notes <span style={{ color: 'var(--color-danger)' }}>*</span>
+						</label>
+						<textarea
+							value={followupNotes}
+							onChange={e => setFollowupNotes(e.target.value)}
+							placeholder="Enter notes about this call..."
+							rows={4}
+							style={{
+								width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-border)',
+								fontSize: '0.85rem', resize: 'vertical', background: 'var(--color-bg)',
+							}}
+						/>
+
+						<div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
+							<button
+								className="btn btn-ghost"
+								onClick={() => { setShowFollowupModal(false); setFollowupLeadId(null); }}
+								style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8 }}
+							>
+								Cancel
+							</button>
+							<button
+								className="btn btn-primary"
+								disabled={actionLoading === followupLeadId || !followupNotes.trim()}
+								onClick={handleFollowupCompleteSave}
+								style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8 }}
+							>
+								{actionLoading === followupLeadId ? <Loader2 size={14} className="animate-spin" /> : 'Save'}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{showMeetingModal && (
+				<div
+					style={{
+						position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
+						zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+					}}
+					onClick={() => { setShowMeetingModal(false); setMeetingLeadId(null); }}
+				>
+					<div
+						className="card animate-fade-in"
+						style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
+						onClick={e => e.stopPropagation()}
+					>
+						<h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 600 }}>Complete Meeting</h3>
+
+						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
+							Meeting Outcome <span style={{ color: 'var(--color-danger)' }}>*</span>
+						</label>
+						<select
+							value={meetingOutcome}
+							onChange={e => setMeetingOutcome(e.target.value)}
+							style={{
+								width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-border)',
+								fontSize: '0.85rem', marginBottom: 14, background: 'var(--color-bg)',
+							}}
+						>
+							<option value="attempted">Attempted</option>
+							<option value="interested">Interested</option>
+							<option value="closed_won">Closed Won</option>
+							<option value="closed_lost">Closed Lost</option>
+						</select>
+
+						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
+							Notes <span style={{ color: 'var(--color-danger)' }}>*</span>
+						</label>
+						<textarea
+							value={meetingNotes}
+							onChange={e => setMeetingNotes(e.target.value)}
+							placeholder="Enter notes about this meeting..."
+							rows={4}
+							style={{
+								width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-border)',
+								fontSize: '0.85rem', resize: 'vertical', background: 'var(--color-bg)',
+							}}
+						/>
+
+						<div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
+							<button
+								className="btn btn-ghost"
+								onClick={() => { setShowMeetingModal(false); setMeetingLeadId(null); }}
+								style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8 }}
+							>
+								Cancel
+							</button>
+							<button
+								className="btn btn-primary"
+								disabled={actionLoading === meetingLeadId || !meetingNotes.trim()}
+								onClick={handleMeetingCompleteSave}
+								style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8 }}
+							>
+								{actionLoading === meetingLeadId ? <Loader2 size={14} className="animate-spin" /> : 'Save'}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{showRescheduleModal && (
+				<div
+					style={{
+						position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
+						zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+					}}
+					onClick={() => { setShowRescheduleModal(false); setRescheduleLeadId(null); }}
+				>
+					<div
+						className="card animate-fade-in"
+						style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
+						onClick={e => e.stopPropagation()}
+					>
+						<h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 600 }}>Reschedule Meeting</h3>
+
+						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
+							New Date & Time <span style={{ color: 'var(--color-danger)' }}>*</span>
+						</label>
+						<input
+							type="datetime-local"
+							value={rescheduleDate}
+							onChange={e => setRescheduleDate(e.target.value)}
+							style={{
+								width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-border)',
+								fontSize: '0.85rem', marginBottom: 14, background: 'var(--color-bg)',
+							}}
+						/>
+
+						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
+							Reason for Reschedule
+						</label>
+						<textarea
+							value={rescheduleNotes}
+							onChange={e => setRescheduleNotes(e.target.value)}
+							placeholder="Enter reason for rescheduling..."
+							rows={3}
+							style={{
+								width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-border)',
+								fontSize: '0.85rem', resize: 'vertical', background: 'var(--color-bg)',
+							}}
+						/>
+
+						<div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
+							<button
+								className="btn btn-ghost"
+								onClick={() => { setShowRescheduleModal(false); setRescheduleLeadId(null); }}
+								style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8 }}
+							>
+								Cancel
+							</button>
+							<button
+								className="btn btn-primary"
+								disabled={actionLoading === rescheduleLeadId || !rescheduleDate}
+								onClick={handleRescheduleSave}
+								style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8 }}
+							>
+								{actionLoading === rescheduleLeadId ? <Loader2 size={14} className="animate-spin" /> : 'Save'}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+	</div>
+);
 };
 
 export default Schedule;

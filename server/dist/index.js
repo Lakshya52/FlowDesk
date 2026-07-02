@@ -42,6 +42,7 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const sharp_1 = __importDefault(require("sharp"));
 // Load environment variables early
 dotenv_1.default.config();
 const socket_io_1 = require("socket.io");
@@ -177,6 +178,51 @@ app.get("/uploads/:filename", async (req, res) => {
             res.status(404).json({ message: "Error downloading file" });
         });
         downloadStream.pipe(res);
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+// Serve resized image from GridFS
+app.get("/uploads/:filename/resize", async (req, res) => {
+    try {
+        if (!mongoose_1.default.connection.db) {
+            return res.status(500).json({ message: "Database connection not established" });
+        }
+        const bucket = new mongoose_1.default.mongo.GridFSBucket(mongoose_1.default.connection.db, {
+            bucketName: "uploads",
+        });
+        const filename = req.params.filename;
+        const files = await bucket.find({ filename }).toArray();
+        if (!files || files.length === 0) {
+            return res.status(404).json({ message: "File not found" });
+        }
+        const file = files[0];
+        const contentType = file.contentType || "image/jpeg";
+        // Only resize image types
+        if (!contentType.startsWith("image/") || contentType === "image/gif") {
+            const downloadStream = bucket.openDownloadStreamByName(filename);
+            if (file.contentType)
+                res.set("Content-Type", file.contentType);
+            res.set("Cache-Control", "public, max-age=86400");
+            downloadStream.pipe(res);
+            return;
+        }
+        const w = Math.min(parseInt(req.query.w) || 40, 200);
+        const q = Math.min(parseInt(req.query.q) || 60, 80);
+        const chunks = [];
+        const downloadStream = bucket.openDownloadStreamByName(filename);
+        for await (const chunk of downloadStream) {
+            chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
+        const resized = await (0, sharp_1.default)(buffer)
+            .resize(w, w, { fit: "cover" })
+            .jpeg({ quality: q, mozjpeg: true })
+            .toBuffer();
+        res.set("Content-Type", "image/jpeg");
+        res.set("Cache-Control", "public, max-age=604800");
+        res.send(resized);
     }
     catch (error) {
         res.status(500).json({ message: error.message });

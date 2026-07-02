@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, X, Users, Target, Calendar, Loader2, Trash2 } from 'lucide-react';
+import { Plus, X, Users, Target, Calendar, Loader2, Trash2, Pencil } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
@@ -7,6 +7,7 @@ import { useCrmSocket } from '../../hooks/useCrmSocket';
 
 interface Campaign {
     _id: string;
+    avatar?: string;
     name: string;
     purpose: string;
     description?: string;
@@ -34,6 +35,7 @@ const Campaigns = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [form, setForm] = useState({ name: '', purpose: '', description: '' });
     const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+    const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
 
     const { data: campaigns = [], isLoading } = useQuery({
         queryKey: ["campaigns"],
@@ -66,25 +68,50 @@ const Campaigns = () => {
         },
     });
 
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: { name: string; purpose: string; description: string; people: string[] } }) =>
+            api.put(`/campaigns/${id}`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+        },
+    });
+
     const resetForm = () => {
         setForm({ name: '', purpose: '', description: '' });
         setSelectedMembers([]);
+        setEditingCampaign(null);
     };
 
     const handleCreate = async () => {
         if (!form.name.trim() || !form.purpose.trim()) return;
-        createMutation.mutate(
-            { name: form.name.trim(), purpose: form.purpose.trim(), description: form.description.trim(), people: selectedMembers },
-            {
-                onSuccess: () => {
-                    resetForm();
-                    setShowCreateModal(false);
-                },
-                onError: (err: any) => {
-                    alert(err.response?.data?.message || 'Failed to create campaign');
-                },
-            }
-        );
+
+        if (editingCampaign) {
+            updateMutation.mutate(
+                { id: editingCampaign._id, data: { name: form.name.trim(), purpose: form.purpose.trim(), description: form.description.trim(), people: selectedMembers } },
+                {
+                    onSuccess: () => {
+                        resetForm();
+                        setShowCreateModal(false);
+                    },
+                    onError: (err: any) => {
+                        alert(err.response?.data?.message || 'Failed to update campaign');
+                    },
+                }
+            );
+        } else {
+            createMutation.mutate(
+                { name: form.name.trim(), purpose: form.purpose.trim(), description: form.description.trim(), people: selectedMembers },
+                {
+                    onSuccess: () => {
+                        resetForm();
+                        setShowCreateModal(false);
+                    },
+                    onError: (err: any) => {
+                        alert(err.response?.data?.message || 'Failed to create campaign');
+                    },
+                }
+            );
+        }
     };
 
     const toggleMember = (userId: string) => {
@@ -100,6 +127,12 @@ const Campaigns = () => {
                 alert(err.response?.data?.message || 'Failed to delete campaign');
             },
         });
+    };
+    const handleCampaignEdit = (campaign: Campaign) => {
+        setForm({ name: campaign.name, purpose: campaign.purpose, description: campaign.description || '' });
+        setSelectedMembers(campaign.people.map(p => p._id));
+        setEditingCampaign(campaign);
+        setShowCreateModal(true);
     };
 
     // const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,6 +181,7 @@ const Campaigns = () => {
         );
     }
 
+    // console.log('Campaigns:', campaigns);
     return (
         <div style={{ maxWidth: 1200 }}>
             <div className="flex flex-col sm:flex-row items-start sm:items-end sm:justify-between gap-4" style={{ marginBottom: 20 }}>
@@ -220,7 +254,23 @@ const Campaigns = () => {
                                             {campaign.purpose}
                                         </div>
                                     </div>
-                                    {(currentUser?.role === 'admin' || currentUser?._id === campaign.createdBy?._id) && (
+                                    {(currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?._id === campaign.createdBy?._id) && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleCampaignEdit(campaign); }}
+                                            title="Edit campaign"
+                                            style={{
+                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                color: 'var(--color-text-tertiary)', padding: 4,
+                                                borderRadius: 6, flexShrink: 0, lineHeight: 0,
+                                                marginLeft: 8,
+                                            }}
+                                            onMouseOver={e => { e.currentTarget.style.background = '#C7FFD1'; e.currentTarget.style.color = '#00961C'; }}
+                                            onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--color-text-tertiary)'; }}
+                                        >
+                                            <Pencil size={14} />
+                                        </button>
+                                    )}
+                                    {(currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?._id === campaign.createdBy?._id) && (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleDelete(campaign._id); }}
                                             title="Delete campaign"
@@ -309,7 +359,7 @@ const Campaigns = () => {
                                                     flexShrink: 0,
                                                 }}>
                                                     {person.avatar ? (
-                                                        <img src={person.avatar} alt={person.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                                                        <img src={`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-api.raksco.in'}${person.avatar}/resize?w=40&q=60`} alt={person.name} width={20} height={20} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                                                     ) : getInitials(person.name)}
                                                 </div>
                                                 <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
@@ -349,9 +399,9 @@ const Campaigns = () => {
                                     <Plus size={18} style={{ color: 'var(--color-primary)' }} />
                                 </div>
                                 <div>
-                                    <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>New Campaign</h3>
+                                    <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>{editingCampaign ? 'Edit Campaign' : 'New Campaign'}</h3>
                                     <p style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>
-                                        Create a new outreach campaign
+                                        {editingCampaign ? 'Update campaign details' : 'Create a new outreach campaign'}
                                     </p>
                                 </div>
                             </div>
@@ -442,11 +492,13 @@ const Campaigns = () => {
                             <button
                                 className="btn btn-primary"
                                 style={{ width: '100%', marginTop: 4, padding: '10px' }}
-                                                    disabled={!form.name.trim() || !form.purpose.trim() || createMutation.isPending}
-                                                    onClick={handleCreate}
-                                                >
-                                                    {createMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : null}
-                                                    {createMutation.isPending ? 'Creating...' : 'Create Campaign'}
+                                disabled={!form.name.trim() || !form.purpose.trim() || createMutation.isPending || updateMutation.isPending}
+                                onClick={handleCreate}
+                            >
+                                {(createMutation.isPending || updateMutation.isPending) ? <Loader2 size={16} className="animate-spin" /> : null}
+                                {(createMutation.isPending || updateMutation.isPending)
+                                    ? (editingCampaign ? 'Updating...' : 'Creating...')
+                                    : (editingCampaign ? 'Update Campaign' : 'Create Campaign')}
                             </button>
                         </div>
                     </div>

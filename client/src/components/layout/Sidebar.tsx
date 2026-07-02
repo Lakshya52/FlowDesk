@@ -36,7 +36,22 @@ interface SidebarProps {
 	width?: number;
 }
 
-export const navItems = [
+export interface NavLinkItem {
+	break?: false;
+	to: string;
+	icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
+	label: string;
+	subItems?: { to: string; label: string }[];
+	new?: boolean;
+}
+
+interface NavBreakItem {
+	break: true;
+}
+
+type NavItem = NavLinkItem | NavBreakItem;
+
+export const navItems: NavItem[] = [
 	{ to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
 	{
 		to: "/crm",
@@ -52,26 +67,28 @@ export const navItems = [
 			{ to: "/crm/logs", label: "Logs" },
 		],
 	},
-	{ to: "/teams", icon: Users, label: "Our Teams" },
+	{ break: true },
 	{
 		to: "/assignments",
 		icon: FolderKanban,
 		label: "Projects",
 		subItems: [
 			{ to: "/assignments", label: "Projects" },
-			{ to: "/tasks", label: "Tasks" },
+			{ to: "/tasks", label: "Kanban Board" },
 		],
 	},
+	{ to: "/teams", icon: Users, label: "Our Teams" },
+	{ to: "/canvas", icon: Shapes, label: "Canvas", new: false },
+	{ to: "/calendar", icon: CalendarDays, label: "Calendar", new: false },
+	{ break: true },
 	{
 		to: "/clients",
 		icon: Building2,
 		label: "Companies & Clients",
 		new: false,
 	},
-	{ to: "/bulk-email", icon: Mail, label: "Bulk Messaging", new: false },
-	{ to: "/canvas", icon: Shapes, label: "Canvas", new: false },
-	{ to: "/calendar", icon: CalendarDays, label: "Calendar", new: false },
 	{ to: "/chat", icon: MessageSquare, label: "Chat" },
+	{ to: "/bulk-email", icon: Mail, label: "Bulk Messaging", new: false },
 	{
 		to: "/reports",
 		icon: BarChart3,
@@ -82,22 +99,24 @@ export const navItems = [
 			{ to: "/reports/activity", label: "User Activity" },
 		],
 	},
+	{ break: true },
 	{ to: "/settings", icon: Settings, label: "Settings" },
+	// { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export const getFirstAllowedRoute = (user: any): string => {
 	if (!user) return "/dashboard";
 	if (user.role === "admin") return "/dashboard";
 
-	const allowed = user.permissions?.allowedTabs ?? navItems.map((n) => n.to);
+	const allowed = user.permissions?.allowedTabs ?? navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
 
 	// Check parent items first
-	const firstParentMatch = navItems.find((item) => allowed.includes(item.to));
+	const firstParentMatch = navItems.find((item): item is NavLinkItem => !item.break && allowed.includes(item.to));
 	if (firstParentMatch) return firstParentMatch.to;
 
 	// If no parent matches, check subItems (e.g. /tasks)
 	for (const item of navItems) {
-		if (item.subItems) {
+		if (!item.break && item.subItems) {
 			const firstSubMatch = item.subItems.find((sub) =>
 				allowed.includes(sub.to),
 			);
@@ -123,12 +142,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const visibleNavItems =
 		user?.role === "admin"
 			? navItems
-			: navItems.filter((item) =>
-					(
-						user?.permissions?.allowedTabs ??
-						navItems.map((n) => n.to)
-					).includes(item.to),
-				);
+            : navItems.filter((item) => {
+                    const allowedTabs =
+                        user?.permissions?.allowedTabs ??
+                        navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
+                    if (item.break) return true;
+                    return allowedTabs.includes(item.to);
+                });
 
 	const toggleExpand = (to: string) => {
 		setExpandedItems((prev) => ({
@@ -312,11 +332,24 @@ const Sidebar: React.FC<SidebarProps> = ({
 					}}
 				>
 					{visibleNavItems.map((item) => {
+						if (item.break) {
+							return (
+								<div
+									key={Math.random()}
+									style={{
+										height: "1px",
+										background: "var(--color-border)",
+										margin: isOpen ? "8px 0" : "8px 4px",
+									}}
+								/>
+							);
+						}
+
 						const hasSubItems =
 							!!item.subItems && item.subItems.length > 0;
 						const isActiveParent =
 							hasSubItems &&
-							item.subItems.some(
+							item.subItems!.some(
 								(sub) =>
 									location.pathname === sub.to ||
 									location.pathname.startsWith(sub.to + "/"),

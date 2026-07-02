@@ -4,7 +4,7 @@ import { useThemeStore } from '../store/themeStore';
 import api from '../lib/api';
 import Avatar from '../components/common/Avatar';
 import { Sun, Moon, Shield, Users, UserPlus, Trash2, Eye, EyeOff, Lock, Pencil, X as XIcon } from 'lucide-react';
-import { navItems } from '../components/layout/Sidebar';
+import { navItems, NavLinkItem } from '../components/layout/Sidebar';
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Admin', manager: 'Manager', member: 'Team Member' };
 
@@ -19,10 +19,10 @@ const SettingsPage: React.FC = () => {
     email: '',
     password: '',
     role: 'member',
-    permissions: { allowedTabs: navItems.map(n => n.to) }, // all selected by default
+    permissions: { allowedTabs: navItems.filter((n): n is NavLinkItem => !n.break).map(n => n.to) }, // all selected by default
 });
     const [editingUserId, setEditingUserId] = useState<string | null>(null);
-    const [editForm, setEditForm] = useState({ role: 'member', permissions: { allowedTabs: navItems.map(n => n.to) } });
+    const [editForm, setEditForm] = useState({ role: 'member', permissions: { allowedTabs: navItems.filter((n): n is NavLinkItem => !n.break).map(n => n.to) } });
     const [savingEdit, setSavingEdit] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -50,7 +50,7 @@ const SettingsPage: React.FC = () => {
             const { data } = await api.get('/auth/users');
             setUsers(data.users || []);
             setShowCreateUser(false);
-            setNewUser({ name: '', email: '', password: '', role: 'member', permissions: { allowedTabs: navItems.map(n => n.to) } });
+            setNewUser({ name: '', email: '', password: '', role: 'member', permissions: { allowedTabs: navItems.filter((n): n is NavLinkItem => !n.break).map(n => n.to) } });
         } catch (e: any) {
             alert(e.response?.data?.message || 'Failed to create user');
         } finally {
@@ -62,7 +62,7 @@ const startEditUser = (u: any) => {
     setEditingUserId(u._id);
     setEditForm({
         role: u.role,
-        permissions: { allowedTabs: u.permissions?.allowedTabs ?? navItems.map(n => n.to) },
+        permissions: { allowedTabs: u.permissions?.allowedTabs ?? navItems.filter((n): n is NavLinkItem => !n.break).map(n => n.to) },
     });
 };
 
@@ -248,7 +248,7 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                 <Shield size={12} strokeWidth={2.5} />
                                 {ROLE_LABELS[user?.role || '']}
                             </div>
-                            {user?._id && !isMobile && (
+                            {/* {user?._id && !isMobile && (
                                 <div style={{
                                     padding: '4px 10px',
                                     background: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)',
@@ -256,7 +256,7 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                 }}>
                                     Employee ID: Aceone_{user._id}
                                 </div>
-                            )}
+                            )} */}
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0, ...(isMobile ? { width: '100%', justifyContent: 'center' } : { marginLeft: 'auto', textAlign: 'right' }) }}>
@@ -372,8 +372,8 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                 <label style={{ fontSize: '0.8125rem', fontWeight: 500, marginBottom: 8, display: 'block', color: 'var(--color-text-secondary)' }}>
                                     Module Access
                                 </label>
-                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 8 }}>
-                                    {navItems.map(item => {
+                                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 8 }}>
+                                    {navItems.filter(item => !item.break).map(item => {
                                         const isChecked = newUser.permissions.allowedTabs.includes(item.to);
                                         return (
                                             <label
@@ -514,7 +514,7 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                                         Module Access
                                                     </label>
                                                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 8 }}>
-                                                        {navItems.map(item => {
+                                                        {navItems.filter(item => !item.break).map(item => {
                                                             const isChecked = editForm.permissions.allowedTabs.includes(item.to);
                                                             return (
                                                                 <label

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
 	Phone,
@@ -19,10 +19,12 @@ import {
 	Pen,
 	Trash2,
 	Calendar,
+	RefreshCw,
 } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import api from "../../lib/api";
 import { useAuthStore } from "../../store/authStore";
+import toast from "react-hot-toast";
 import { useCrmSocket } from "../../hooks/useCrmSocket";
 
 interface Campaign {
@@ -259,7 +261,7 @@ const DialQueue = () => {
 		}
 	};
 
-	const leadsParams = { page, pageSize, activeTab, filterCampaign, filterStatus, searchQuery, filterIndustry, filterSource, filterPriority };
+	const leadsParams = useMemo(() => ({ page, pageSize, activeTab, filterCampaign, filterStatus, searchQuery, filterIndustry, filterSource, filterPriority }), [page, pageSize, activeTab, filterCampaign, filterStatus, searchQuery, filterIndustry, filterSource, filterPriority]);
 
 	const { data: leadsData = { leads: [], totalPages: 1 }, isLoading } = useQuery({
 		queryKey: ["leads", leadsParams],
@@ -279,6 +281,8 @@ const DialQueue = () => {
 			const { data } = await api.get("/leads", { params });
 			return { leads: data.success ? data.leads : [], totalPages: data.totalPages || 1 };
 		},
+		staleTime: 30000,
+		placeholderData: keepPreviousData,
 	});
 
 	const leads = leadsData.leads;
@@ -292,7 +296,7 @@ const DialQueue = () => {
 		},
 	});
 
-	const countsParams = { filterCampaign, searchQuery, filterIndustry, filterSource, filterPriority };
+	const countsParams = useMemo(() => ({ filterCampaign, searchQuery, filterIndustry, filterSource, filterPriority }), [filterCampaign, searchQuery, filterIndustry, filterSource, filterPriority]);
 
 	const { data: tabCounts = { all: 0, archived: 0, meeting_scheduled: 0, closed_won: 0 } } = useQuery({
 		queryKey: ["leads", "counts", countsParams],
@@ -306,6 +310,7 @@ const DialQueue = () => {
 			const { data } = await api.get("/leads/counts", { params });
 			return data.success ? data.counts : { all: 0, archived: 0, meeting_scheduled: 0, closed_won: 0 };
 		},
+		staleTime: 60000,
 	});
 
 	useEffect(() => {
@@ -669,6 +674,20 @@ const DialQueue = () => {
 
 				{/* {isAdmin && ( */}
 				<div style={{ display: "flex", gap: 8 }}>
+					<button
+						className="btn btn-secondary"
+						onClick={async () => {
+							await Promise.all([
+								queryClient.invalidateQueries({ queryKey: ["leads"] }),
+								queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
+							]);
+							toast.success('Refreshed');
+						}}
+						title="Refresh"
+						style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+					>
+						<RefreshCw size={16} />
+					</button>
 					<button
 						className="btn btn-secondary"
 						onClick={() => setShowImportModal(true)}

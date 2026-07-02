@@ -51,7 +51,7 @@
         "nsis",
         "portable"
       ],
-      "icon": "assets/icon.ico",
+      "icon": "assets/icon.png",
       "executableName": "FlowDesk"
     },
     "mac": {
@@ -60,7 +60,7 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "assets/icons"
+      "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -68,9 +68,11 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "FlowDesk",
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "installerHeaderIcon": "assets/icon.ico",
+      "installerIcon": "assets/icon.png",
+      "uninstallerIcon": "assets/icon.png",
+      "installerHeaderIcon": "assets/icon.png",
+      "installerSidebar": "assets/FlowDeskInstallerSidebarBmp.bmp",
+      "uninstallerSidebar": "assets/FlowDeskUninstallerSidebarBmp.bmp",
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "publish": [

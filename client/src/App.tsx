@@ -208,7 +208,7 @@ const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     // Also check if the path is a subItem of an already-allowed parent (e.g. /tasks under /assignments)
     const isSubItemOfAllowedParent = !isExactOrParentMatch && navItems.some(item =>
-        allowed.includes(item.to) && item.subItems?.some(sub => sub.to === location.pathname)
+        !item.break && allowed.includes(item.to) && item.subItems?.some(sub => sub.to === location.pathname)
     );
 
     if (!isExactOrParentMatch && !isSubItemOfAllowedParent) {

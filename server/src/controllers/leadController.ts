@@ -1,4 +1,5 @@
 import { Response } from "express";
+import mongoose from "mongoose";
 import Lead from "../models/Lead";
 import Campaign from "../models/Campaign";
 import ActivityLog, { EntityType } from "../models/ActivityLog";
@@ -1091,5 +1092,66 @@ export const updateMeetingStatus = async (
 		res.json({ success: true, lead: populated });
 	} catch (error: any) {
 		res.status(400).json({ success: false, message: error.message });
+	}
+};
+
+export const getLeadStats = async (req: AuthRequest, res: Response): Promise<void> => {
+	try {
+		const tenantId = getTenantId(req.user);
+		const accessible = await getAccessibleCampaignIds(req.user, tenantId);
+
+		const match: any = { tenantId: new mongoose.Types.ObjectId(tenantId) };
+
+		if (accessible) {
+			const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
+			match.$or = [
+				{ campaignId: { $in: accessible } },
+				{ campaignId: { $nin: allCampaignIds } },
+			];
+		}
+
+		const stats = await Lead.aggregate([
+			{ $match: match },
+			{
+				$group: {
+					_id: null,
+					total: { $sum: 1 },
+					totalCallDuration: { $sum: "$callDuration" },
+					won: { $sum: { $cond: [{ $eq: ["$status", "closed_won"] }, 1, 0] } },
+					lost: { $sum: { $cond: [{ $eq: ["$status", "closed_lost"] }, 1, 0] } },
+					active: {
+						$sum: {
+							$cond: [
+								{ $in: ["$status", ["closed_won", "closed_lost", "do_not_call", "not_interested"]] },
+								0,
+								1
+							]
+						}
+					},
+					statuses: { $push: "$status" },
+				},
+			},
+		]);
+
+		const statusCounts: Record<string, number> = {};
+		if (stats.length > 0) {
+			stats[0].statuses.forEach((s: string) => {
+				statusCounts[s] = (statusCounts[s] || 0) + 1;
+			});
+		}
+
+		res.json({
+			success: true,
+			stats: {
+				total: stats[0]?.total || 0,
+				won: stats[0]?.won || 0,
+				lost: stats[0]?.lost || 0,
+				active: stats[0]?.active || 0,
+				totalCallDuration: stats[0]?.totalCallDuration || 0,
+				statusCounts,
+			},
+		});
+	} catch (error: any) {
+		res.status(500).json({ success: false, message: error.message });
 	}
 };

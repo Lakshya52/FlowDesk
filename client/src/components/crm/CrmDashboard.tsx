@@ -77,18 +77,26 @@ const CrmDashboard = () => {
     const navigate = useNavigate();
     useCrmSocket();
 
-    const { data: leads = [], isLoading } = useQuery({
-        queryKey: ["leads", "dashboard"],
+    const { data: stats, isLoading } = useQuery({
+        queryKey: ["leads", "stats"],
         queryFn: async () => {
-            const res = await api.get('/leads', { params: { limit: 10000 } });
+            const res = await api.get('/leads/stats');
+            return res.data.success ? res.data.stats : null;
+        },
+    });
+
+    const { data: priorityLeads = [] } = useQuery({
+        queryKey: ["leads", "priority", "very_high"],
+        queryFn: async () => {
+            const res = await api.get('/leads', { params: { priority: 'very high', limit: 5 } });
             return (res.data.success ? res.data.leads : []) as Lead[];
         },
     });
 
-    const total = leads.length;
-    const won = leads.filter(l => l.status === 'closed_won').length;
-    const lost = leads.filter(l => l.status === 'closed_lost').length;
-    const activeLeads = leads.filter(l => !['closed_won', 'closed_lost', 'do_not_call', 'not_interested'].includes(l.status)).length;
+    const total = stats?.total || 0;
+    const won = stats?.won || 0;
+    const lost = stats?.lost || 0;
+    const activeLeads = stats?.active || 0;
     const successRate = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
 
     if (isLoading) {
@@ -130,15 +138,14 @@ const CrmDashboard = () => {
         },
         {
             label: 'Call Duration',
-            value: formatDuration(leads.reduce((sum, l) => sum + (l.callDuration || 0), 0)),
+            value: formatDuration(stats?.totalCallDuration || 0),
             bg: '#f3e8ff',
             color: '#8b5cf6',
         },
     ];
 
     const statusOrder = ['new', 'attempted', 'connected', 'interested', 'callback_scheduled', 'meeting_scheduled', 'not_interested', 'not_reachable', 'do_not_call', 'closed_won', 'closed_lost'];
-    const statusCounts: Record<string, number> = {};
-    leads.forEach(l => { statusCounts[l.status] = (statusCounts[l.status] || 0) + 1; });
+    const statusCounts: Record<string, number> = stats?.statusCounts || {};
 
     const lifecycleData = statusOrder.map(s => ({
         name: STATUS_LABELS[s] || s,
@@ -229,12 +236,12 @@ const CrmDashboard = () => {
                     <Link className='text-[0.8rem] flex items-center justify-center gap-2' to="/crm/dial">View All <ArrowRight size={18} /></Link>
                 </div>
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {leads.filter(l => l.priority === 'very high').length === 0 ? (
+                    {priorityLeads.length === 0 ? (
                         <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
                             No very high priority leads
                         </div>
                     ) : (
-                        leads.filter(l => l.priority === 'very high').sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5).map((lead) => (
+                        priorityLeads.map((lead) => (
                             <div
                                 key={lead._id}
                                 onClick={() => navigate(`/crm/dial?leadId=${lead._id}`)}

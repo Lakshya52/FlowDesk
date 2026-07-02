@@ -427,14 +427,14 @@ const TasksPage: React.FC = () => {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[400px] w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 min-h-[400px] w-full">
           {columns.map((col) => (
             <div
               key={col.key}
               style={{
                 background: "var(--color-surface-hover)",
                 borderRadius: 12,
-                padding: 12,
+                padding: 8,
                 border: draggedTaskId
                   ? `2px dashed ${col.color}40`
                   : "2px solid transparent",
