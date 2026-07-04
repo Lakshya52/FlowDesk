@@ -5,6 +5,7 @@ import { useCalendarStore } from '../../store/calendarStore';
 import api from '../../lib/api';
 import toast from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import Modal from '../common/Modal';
 
 interface EventModalProps {
   calendars: any[];
@@ -129,15 +130,13 @@ const endDateRef = useRef<HTMLInputElement>(null);
     }
   };
 
-  if (!isEventModalOpen) return null;
-
   const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '14px', outline: 'none', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' };
   const labelStyle: React.CSSProperties = { display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--color-text)', marginBottom: '4px' };
   const iconWrapperStyle: React.CSSProperties = { position: 'absolute' as const, left: '12px', top: '34px', color: 'var(--color-text-tertiary)' };
   const inputWithIconStyle: React.CSSProperties = { ...inputStyle, paddingLeft: '36px' };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
+    <Modal isOpen={isEventModalOpen} onClose={closeEventModal}>
       <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '12px', boxShadow: 'var(--shadow-xl)', width: '100%', maxWidth: '676px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', border: '1px solid var(--color-border)' }}>
         
         {/* Header */}
@@ -328,7 +327,7 @@ const endDateRef = useRef<HTMLInputElement>(null);
         </div>
 
       </div>
-    </div>
+    </Modal>
   );
 };
 

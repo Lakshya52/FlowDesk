@@ -6,6 +6,7 @@ import User from '../models/User';
 import ActivityLog from '../models/ActivityLog';
 import Lead from '../models/Lead';
 import { AuthRequest } from '../middlewares/auth';
+import { getTenantUserIds } from '../utils/tenant';
 
 export const getDashboardStats = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -15,6 +16,9 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
         const weekStart = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        // Get all users in this tenant for tenant scoping
+        const tenantUserIds = await getTenantUserIds(req.user);
 
         // Base filters for role-based access
         const assignmentFilter: any = {};
@@ -29,7 +33,12 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
             ];
         } else if (userRole === 'manager') {
             const managedTeams = await Team.find({ manager: userId }).distinct('_id');
-            const managedMembers = await Team.find({ manager: userId }).distinct('members');
+            const allManagedMembers = await Team.find({ manager: userId }).distinct('members');
+            
+            // Only include managed members that belong to this tenant
+            const managedMembers = allManagedMembers.filter((m: any) =>
+                tenantUserIds.includes(m.toString())
+            );
             
             // Managers see assignments they created OR where their team is assigned
             assignmentFilter['$or'] = [
@@ -49,6 +58,11 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
                 { user: { $in: managedMembers } },
                 { user: userId }
             ];
+        } else {
+            // Admin — scope all data to this tenant
+            assignmentFilter.createdBy = { $in: tenantUserIds };
+            taskFilter.assignedTo = { $in: tenantUserIds };
+            activityFilter.user = { $in: tenantUserIds };
         }
 
         // Active assignments
@@ -84,7 +98,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
         // Total tasks
         const totalTasks = await Task.countDocuments(taskFilter);
 
-        // Total call duration across all leads
+        // Total call duration across all leads (scoped by tenantId directly on Lead model)
         const tenantId = (req.user!.tenantId?._id || req.user!.tenantId).toString();
         const callDurationResult = await Lead.aggregate([
             { $match: { tenantId: tenantId as any } },
@@ -111,9 +125,9 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
 
         const totalActivities = await ActivityLog.countDocuments(activityFilter);
 
-        // Team workload (Available to everyone)
+        // Team workload (scoped to tenant users)
         const teamWorkload = await Task.aggregate([
-            { $match: { status: { $ne: 'completed' } } },
+            { $match: { status: { $ne: 'completed' }, assignedTo: { $in: tenantUserIds } } },
             { $group: { _id: '$assignedTo', taskCount: { $sum: 1 } } },
             {
                 $lookup: {
@@ -194,30 +208,47 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
 export const getCalendarEvents = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { start, end, userId, assignmentId } = req.query;
-        const filter: any = {};
+        const tenantUserIds = await getTenantUserIds(req.user);
+        const userRole = req.user!.role;
+
+        // Tenants-scoped base filter for tasks
+        const taskFilter: any = {
+            assignedTo: { $in: tenantUserIds }
+        };
 
         if (start && end) {
-            filter.dueDate = { $gte: new Date(start as string), $lte: new Date(end as string) };
+            taskFilter.dueDate = { $gte: new Date(start as string), $lte: new Date(end as string) };
         }
-        if (userId) filter.assignedTo = userId;
-        if (assignmentId) filter.assignment = assignmentId;
+        if (userId) {
+            // Only allow filtering by userId if it belongs to this tenant
+            if (tenantUserIds.includes(userId as string) || userRole !== 'member') {
+                taskFilter.assignedTo = userId;
+            }
+        }
+        if (assignmentId) taskFilter.assignment = assignmentId;
 
-        if (req.user!.role === 'member') {
-            filter.assignedTo = req.user!._id;
+        if (userRole === 'member') {
+            taskFilter.assignedTo = req.user!._id;
         }
 
-        const tasks = await Task.find(filter)
+        const tasks = await Task.find(taskFilter)
             .populate('assignedTo', 'name email avatar')
             .populate('assignment', 'title')
             .sort({ dueDate: 1 });
 
-        const assignments = await Assignment.find({
-            ...(assignmentId ? { _id: assignmentId } : {}),
-            ...(req.user!.role === 'member' ? { team: req.user!._id } : {}),
-            ...(start && end
-                ? { dueDate: { $gte: new Date(start as string), $lte: new Date(end as string) } }
-                : {}),
-        })
+        // Tenant-scoped base filter for assignments
+        const assignmentFilter: any = {
+            createdBy: { $in: tenantUserIds }
+        };
+        if (assignmentId) assignmentFilter._id = assignmentId;
+        if (userRole === 'member') {
+            assignmentFilter.team = req.user!._id;
+        }
+        if (start && end) {
+            assignmentFilter.dueDate = { $gte: new Date(start as string), $lte: new Date(end as string) };
+        }
+
+        const assignments = await Assignment.find(assignmentFilter)
             .populate('createdBy', 'name email')
             .sort({ dueDate: 1 });
 
@@ -232,15 +263,23 @@ export const getReportFilters = async (req: AuthRequest, res: Response): Promise
     try {
         const userRole = req.user!.role;
         const userId = req.user!._id;
+        const tenantUserIds = await getTenantUserIds(req.user);
 
         let teams: any[] = [];
         let employees: any[] = [];
 
         if (userRole === 'admin') {
-            teams = await Team.find().select('name _id members manager').lean();
-            employees = await User.find().select('name _id email employeeId').lean();
+            teams = await Team.find({ 
+                $or: [
+                    { members: { $in: tenantUserIds } },
+                    { manager: { $in: tenantUserIds } }
+                ]
+            }).select('name _id members manager').lean();
+            employees = await User.find({ 
+                _id: { $in: tenantUserIds } 
+            }).select('name _id email employeeId').lean();
         } else if (userRole === 'manager') {
-            // Include teams managed by the user AND teams where they are a member
+            // Include teams managed by the user AND teams where they are a member (within tenant)
             teams = await Team.find({ 
                 $or: [
                     { manager: userId },
@@ -250,19 +289,23 @@ export const getReportFilters = async (req: AuthRequest, res: Response): Promise
             
             const teamIds = teams.map(t => t._id);
             const teamMembers = await Team.find({ _id: { $in: teamIds } }).distinct('members');
+            // Intersect team members with tenant users
+            const tenantTeamMembers = teamMembers.filter((m: any) =>
+                tenantUserIds.includes(m.toString())
+            );
             employees = await User.find({ 
-                $or: [
-                    { _id: { $in: [...teamMembers, userId] } },
-                    { _id: userId }
-                ]
+                _id: { $in: [...tenantTeamMembers, userId.toString()] } 
             }).select('name _id email employeeId').lean();
         } else {
-            // For members, let them see their own teams and teammates
+            // For members, let them see their own teams and teammates (within tenant)
             teams = await Team.find({ members: userId }).select('name _id members manager').lean();
             const teamIds = teams.map(t => t._id);
             const teamMembers = await Team.find({ _id: { $in: teamIds } }).distinct('members');
+            const tenantTeamMembers = teamMembers.filter((m: any) =>
+                tenantUserIds.includes(m.toString())
+            );
             employees = await User.find({ 
-                _id: { $in: [...teamMembers, userId] } 
+                _id: { $in: [...tenantTeamMembers, userId.toString()] } 
             }).select('name _id email employeeId').lean();
         }
 
@@ -282,6 +325,7 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
         const { startDate, endDate, teamId, employeeId } = req.query;
         const userRole = req.user!.role;
         const userId = req.user!._id;
+        const tenantUserIds = await getTenantUserIds(req.user);
 
         const dateFilter: any = {};
         if (startDate && endDate) {
@@ -291,14 +335,21 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
             };
         }
 
-        let baseMatch: any = { ...dateFilter };
+        // Tenant scope: only tasks assigned to users in this tenant
+        let baseMatch: any = {
+            ...dateFilter,
+            assignedTo: { $in: tenantUserIds }
+        };
 
         // Role-based constraints
         if (userRole === 'member') {
             baseMatch.assignedTo = userId;
         } else if (userRole === 'manager') {
             const managedTeams = await Team.find({ manager: userId }).distinct('_id');
-            const managedMembers = await Team.find({ manager: userId }).distinct('members');
+            const allManagedMembers = await Team.find({ manager: userId }).distinct('members');
+            const managedMembers = allManagedMembers.filter((m: any) =>
+                tenantUserIds.includes(m.toString())
+            );
 
             if (teamId) {
                 if (!managedTeams.map(id => id.toString()).includes(teamId as string)) {
@@ -306,7 +357,10 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
                     return;
                 }
                 const team = await Team.findById(teamId);
-                baseMatch.assignedTo = { $in: team?.members || [] };
+                const tenantTeamMembers = (team?.members || []).filter((m: any) =>
+                    tenantUserIds.includes(m.toString())
+                );
+                baseMatch.assignedTo = { $in: tenantTeamMembers };
             } else if (employeeId) {
                 if (!managedMembers.map(id => id.toString()).includes(employeeId as string)) {
                     res.status(403).json({ message: 'Forbidden' });
@@ -319,8 +373,15 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
         } else if (userRole === 'admin') {
             if (teamId) {
                 const team = await Team.findById(teamId);
-                baseMatch.assignedTo = { $in: team?.members || [] };
+                const tenantTeamMembers = (team?.members || []).filter((m: any) =>
+                    tenantUserIds.includes(m.toString())
+                );
+                baseMatch.assignedTo = { $in: tenantTeamMembers };
             } else if (employeeId) {
+                if (!tenantUserIds.includes(employeeId as string)) {
+                    res.status(403).json({ message: 'Forbidden' });
+                    return;
+                }
                 baseMatch.assignedTo = employeeId;
             }
         }
@@ -347,9 +408,10 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
             .populate('assignment', 'title')
             .sort({ dueDate: 1 });
 
-        // Assignment completion analytics (Filtered by team if provided)
-        // Everyone sees assignment stats
-        const assignmentFilter: any = {};
+        // Assignment completion analytics (Filtered by team if provided, scoped to tenant)
+        const assignmentFilter: any = {
+            createdBy: { $in: tenantUserIds }
+        };
         if (teamId) {
             assignmentFilter.teams = teamId;
         }
@@ -410,30 +472,61 @@ export const globalSearch = async (req: AuthRequest, res: Response): Promise<voi
 
         const userId = req.user!._id;
         const userRole = req.user!.role;
+        const tenantUserIds = await getTenantUserIds(req.user);
         const searchRegex = new RegExp(query as string, 'i');
 
-        // Base filters
-        const taskFilter: any = { title: searchRegex };
-        const assignmentFilter: any = { $or: [{ title: searchRegex }, { clientName: searchRegex }] };
-        const userFilter: any = { $or: [{ name: searchRegex }, { email: searchRegex }, { employeeId: searchRegex }] };
-        const teamFilter: any = { name: searchRegex };
+        // Base filters with tenant scoping
+        const taskFilter: any = { 
+            title: searchRegex,
+            $or: [
+                { assignedTo: { $in: tenantUserIds } },
+                { createdBy: { $in: tenantUserIds } }
+            ]
+        };
+        const assignmentFilter: any = { 
+            $or: [
+                { title: searchRegex },
+                { clientName: searchRegex }
+            ],
+            createdBy: { $in: tenantUserIds }
+        };
+        const userFilter: any = { 
+            $or: [
+                { name: searchRegex },
+                { email: searchRegex },
+                { employeeId: searchRegex }
+            ],
+            _id: { $in: tenantUserIds }
+        };
+        const teamFilter: any = { 
+            name: searchRegex,
+            $or: [
+                { members: { $in: tenantUserIds } },
+                { manager: { $in: tenantUserIds } }
+            ]
+        };
 
-        // Role-based visibility
+        // Role-based visibility refinement
         if (userRole === 'member') {
             taskFilter.assignedTo = userId;
             assignmentFilter.team = userId;
             const myTeams = await Team.find({ members: userId }).distinct('_id');
             teamFilter._id = { $in: myTeams };
             const teamMembers = await Team.find({ members: userId }).distinct('members');
-            userFilter._id = { $in: teamMembers };
+            const tenantTeamMembers = teamMembers.filter((m: any) =>
+                tenantUserIds.includes(m.toString())
+            );
+            userFilter._id = { $in: tenantTeamMembers };
         } else if (userRole === 'manager') {
             const managedTeams = await Team.find({ manager: userId }).distinct('_id');
-            const managedMembers = await Team.find({ manager: userId }).distinct('members');
+            const allManagedMembers = await Team.find({ manager: userId }).distinct('members');
+            const managedMembers = allManagedMembers.filter((m: any) =>
+                tenantUserIds.includes(m.toString())
+            );
             taskFilter.assignedTo = { $in: [...managedMembers, userId] };
-            assignmentFilter.$or = assignmentFilter.$or || [];
             assignmentFilter.$or.push({ teams: { $in: managedTeams } });
             teamFilter.$or = [{ manager: userId }, { _id: { $in: managedTeams } }];
-            userFilter._id = { $in: [userId, ...managedMembers] };
+            userFilter._id = { $in: [userId.toString(), ...managedMembers] };
         }
 
         const [tasks, assignments, users, teams] = await Promise.all([

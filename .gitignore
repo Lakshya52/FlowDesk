@@ -39,3 +39,12 @@ pnpm-debug.log*
 *.tsbuildinfo
 .antigravitycli/
 .claude/
+
+# Playwright
+# /tests/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+

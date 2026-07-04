@@ -43,6 +43,7 @@ const Task_1 = __importDefault(require("../models/Task"));
 const ActivityLog_1 = __importStar(require("../models/ActivityLog"));
 const notificationService_1 = require("../services/notificationService");
 const Notification_1 = require("../models/Notification");
+const tenant_1 = require("../utils/tenant");
 const createTask = async (req, res) => {
     try {
         const AssignmentModel = mongoose.model('Assignment');
@@ -101,7 +102,11 @@ exports.createTask = createTask;
 const getTasks = async (req, res) => {
     try {
         const { assignment: assignmentId, status, priority, assignedTo, search, companyId } = req.query;
-        let andConditions = [];
+        const tenantUserIds = await (0, tenant_1.getTenantUserIds)(req.user);
+        let andConditions = [
+            // Base tenant filter: task assigned to or created by users in this tenant
+            { $or: [{ assignedTo: { $in: tenantUserIds } }, { createdBy: { $in: tenantUserIds } }] }
+        ];
         if (assignmentId)
             andConditions.push({ assignment: assignmentId });
         if (status)
@@ -191,6 +196,7 @@ const getTasks = async (req, res) => {
 exports.getTasks = getTasks;
 const getTask = async (req, res) => {
     try {
+        const tenantUserIds = await (0, tenant_1.getTenantUserIds)(req.user);
         const task = await Task_1.default.findById(req.params.id)
             .populate('assignedTo', 'name email avatar')
             .populate('createdBy', 'name email')
@@ -198,6 +204,13 @@ const getTask = async (req, res) => {
             .populate('dependencies', 'title status');
         if (!task) {
             res.status(404).json({ message: 'Task not found' });
+            return;
+        }
+        // Tenant check
+        const assigneeInTenant = task.assignedTo && tenantUserIds.includes(task.assignedTo.toString());
+        const creatorInTenant = task.createdBy && tenantUserIds.includes(task.createdBy.toString());
+        if (!assigneeInTenant && !creatorInTenant) {
+            res.status(403).json({ message: 'Access denied' });
             return;
         }
         // Security check
@@ -225,9 +238,17 @@ const getTask = async (req, res) => {
 exports.getTask = getTask;
 const updateTask = async (req, res) => {
     try {
+        const tenantUserIds = await (0, tenant_1.getTenantUserIds)(req.user);
         const oldTask = await Task_1.default.findById(req.params.id);
         if (!oldTask) {
             res.status(404).json({ message: 'Task not found' });
+            return;
+        }
+        // Tenant check
+        const assigneeInTenant = oldTask.assignedTo && tenantUserIds.includes(oldTask.assignedTo.toString());
+        const creatorInTenant = oldTask.createdBy && tenantUserIds.includes(oldTask.createdBy.toString());
+        if (!assigneeInTenant && !creatorInTenant) {
+            res.status(403).json({ message: 'Access denied' });
             return;
         }
         // Authorization check: Admin OR owner OR in project team
@@ -303,9 +324,17 @@ const updateTask = async (req, res) => {
 exports.updateTask = updateTask;
 const deleteTask = async (req, res) => {
     try {
+        const tenantUserIds = await (0, tenant_1.getTenantUserIds)(req.user);
         const task = await Task_1.default.findById(req.params.id);
         if (!task) {
             res.status(404).json({ message: 'Task not found' });
+            return;
+        }
+        // Tenant check
+        const assigneeInTenant = task.assignedTo && tenantUserIds.includes(task.assignedTo.toString());
+        const creatorInTenant = task.createdBy && tenantUserIds.includes(task.createdBy.toString());
+        if (!assigneeInTenant && !creatorInTenant) {
+            res.status(403).json({ message: 'Access denied' });
             return;
         }
         // Authorization check: Admin OR owner OR in project team

@@ -21,7 +21,7 @@ export const getLeads = async (
 ): Promise<void> => {
 	try {
 		const tenantId = getTenantId(req.user);
-		const { campaignId, status, search, industry, source, priority } =
+		const { campaignId, status, search, industry, source, priority, city, state, pincode } =
 			req.query;
 		const page = Math.max(1, parseInt(req.query.page as string) || 1);
 		const limit = Math.min(
@@ -69,6 +69,9 @@ export const getLeads = async (
 		if (industry) filter.industry = industry;
 		if (source) filter.source = source;
 		if (priority) filter.priority = priority;
+		if (city) filter.city = city;
+		if (state) filter.state = state;
+		if (pincode) filter.pincode = pincode;
 		if (search) {
 			const q = String(search).trim();
 			const digits = q.replace(/\D/g, '');
@@ -80,6 +83,10 @@ export const getLeads = async (
 				{ designation: { $regex: escaped, $options: 'i' } },
 				{ companyPan: { $regex: escaped, $options: 'i' } },
 				{ companyGst: { $regex: escaped, $options: 'i' } },
+				{ addressLine: { $regex: escaped, $options: 'i' } },
+				{ city: { $regex: escaped, $options: 'i' } },
+				{ state: { $regex: escaped, $options: 'i' } },
+				{ pincode: { $regex: escaped, $options: 'i' } },
 			];
 			if (digits.length >= 3) {
 				searchOr.push({ phone: { $regex: digits, $options: 'i' } });
@@ -453,11 +460,46 @@ export const importExcel = async (
 		const leads = [];
 		const errors = [];
 
+		// Collect all phones and GSTs from rows for duplicate detection
+		const rowPhones = rows.map((row, idx) => {
+			const phone = String(row.phone || row.Phone || row.PHONE || "").trim();
+			return { idx, phone };
+		}).filter(r => r.phone);
+
+		const rowGsts = rows.map((row, idx) => {
+			const gst = String(row.companyGst || row["Company GST"] || row.company_gst || row.GST || row.gst || "").trim().toUpperCase();
+			return { idx, gst };
+		}).filter(r => r.gst);
+
+		// Find existing leads with matching phones or GSTs in this tenant
+		const [existingPhones, existingGsts] = await Promise.all([
+			rowPhones.length > 0
+				? Lead.find({ tenantId, phone: { $in: rowPhones.map(r => r.phone) } }).select("phone").lean()
+				: [],
+			rowGsts.length > 0
+				? Lead.find({ tenantId, companyGst: { $in: rowGsts.map(r => r.gst) } }).select("companyGst").lean()
+				: [],
+		]);
+		const existingPhoneSet = new Set(existingPhones.map((l: any) => l.phone));
+		const existingGstSet = new Set(existingGsts.map((l: any) => l.companyGst));
+
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i];
 			try {
 				if (!row.name && !row.Name && !row.NAME) {
 					errors.push({ row: i + 1, message: "Missing name" });
+					continue;
+				}
+
+				const phone = String(row.phone || row.Phone || row.PHONE || "").trim();
+				if (phone && existingPhoneSet.has(phone)) {
+					errors.push({ row: i + 1, message: `Duplicate phone: ${phone}` });
+					continue;
+				}
+
+				const gst = String(row.companyGst || row["Company GST"] || row.company_gst || row.GST || row.gst || "").trim().toUpperCase();
+				if (gst && existingGstSet.has(gst)) {
+					errors.push({ row: i + 1, message: `Duplicate GST: ${gst}` });
 					continue;
 				}
 
@@ -502,11 +544,14 @@ export const importExcel = async (
 						row["Company PAN"] ||
 						row.company_pan ||
 						"",
-					companyGst:
+					companyGst: String(
 						row.companyGst ||
 						row["Company GST"] ||
 						row.company_gst ||
-						"",
+						row.GST ||
+						row.gst ||
+						""
+					).trim().toUpperCase(),
 					industry: row.industry || row.Industry || "",
 					email:
 						row.email || row.Email || row.EMAIL
@@ -809,7 +854,7 @@ export const getLeadCounts = async (
 ): Promise<void> => {
 	try {
 		const tenantId = getTenantId(req.user);
-		const { campaignId, search, industry, source, priority } = req.query;
+		const { campaignId, search, industry, source, priority, city, state, pincode } = req.query;
 
 		const baseFilter: any = { tenantId };
 		let campaignOr: any[] | null = null;
@@ -842,6 +887,9 @@ export const getLeadCounts = async (
 		if (industry) baseFilter.industry = industry;
 		if (source) baseFilter.source = source;
 		if (priority) baseFilter.priority = priority;
+		if (city) baseFilter.city = city;
+		if (state) baseFilter.state = state;
+		if (pincode) baseFilter.pincode = pincode;
 		if (search) {
 			const regex = new RegExp(String(search), "i");
 			searchOr = [
@@ -853,6 +901,10 @@ export const getLeadCounts = async (
 				{ designation: regex },
 				{ companyPan: regex },
 				{ companyGst: regex },
+				{ addressLine: regex },
+				{ city: regex },
+				{ state: regex },
+				{ pincode: regex },
 			];
 		}
 

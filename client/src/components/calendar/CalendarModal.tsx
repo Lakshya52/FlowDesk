@@ -4,7 +4,7 @@ import { useCalendarStore } from "../../store/calendarStore";
 import api from "../../lib/api";
 import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
-// import Avatar from "../common/Avatar";
+import Modal from "../common/Modal";
 
 const COLORS = [
   "#ef4444", // red
@@ -120,19 +120,7 @@ const CalendarModal: React.FC = () => {
   // const isDefault = calendarMeta?.isDefault;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "16px",
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        backdropFilter: "blur(4px)",
-      }}
-    >
+    <Modal isOpen={isCalendarModalOpen} onClose={closeCalendarModal}>
       <div
         style={{
           backgroundColor: "var(--color-surface)",
@@ -444,7 +432,7 @@ const CalendarModal: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

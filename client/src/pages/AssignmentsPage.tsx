@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import Avatar from "../components/common/Avatar";
+import Modal from "../components/common/Modal";
 import { useAuthStore } from "../store/authStore";
 import {
   Plus,
@@ -13,6 +14,11 @@ import {
   User,
   X,
   Building2,
+  Download,
+  Upload,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -27,6 +33,26 @@ const STATUS_LABELS: Record<string, string> = {
   in_progress: "In Progress",
   completed: "Completed",
   delayed: "Delayed",
+};
+
+const thStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  textAlign: "left",
+  fontWeight: 600,
+  fontSize: "0.75rem",
+  textTransform: "uppercase",
+  color: "var(--color-text-secondary)",
+  borderBottom: "1px solid var(--color-border)",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  borderBottom: "1px solid var(--color-border)",
+  whiteSpace: "nowrap",
+  maxWidth: 160,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 
 const AssignmentsPage: React.FC = () => {
@@ -88,6 +114,19 @@ const AssignmentsPage: React.FC = () => {
 
   const isAdmin = user?.role === "admin";
   const canCreate = true; // Everyone can create projects
+
+  // Import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importStep, setImportStep] = useState<"upload" | "preview" | "result">("upload");
+  const [importing, setImporting] = useState(false);
+  const [previewRows, setPreviewRows] = useState<any[]>([]);
+  const [previewTasks, setPreviewTasks] = useState<any[]>([]);
+  const [importResult, setImportResult] = useState<{
+    imported: number;
+    tasksImported?: number;
+    errors: any[];
+  } | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const { data: assignmentsData, isLoading: loading } = useQuery({
     queryKey: ["assignments", search, companyFilter],
@@ -517,12 +556,20 @@ const AssignmentsPage: React.FC = () => {
           </p>
         </div>
         {canCreate && (
-          <button
-            className="btn btn-primary w-full sm:w-auto"
-            onClick={() => setShowCreate(true)}
-          >
-            <Plus size={16} /> New Project
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowImportModal(true)}
+            >
+              <Download size={16} /> Import
+            </button>
+            <button
+              className="btn btn-primary w-full sm:w-auto"
+              onClick={() => setShowCreate(true)}
+            >
+              <Plus size={16} /> New Project
+            </button>
+          </div>
         )}
       </div>
 
@@ -1220,33 +1267,17 @@ const AssignmentsPage: React.FC = () => {
       )}
 
       {/* Create Modal */}
-      {showCreate && (
+      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} zIndex={100}>
         <div
+          className="card animate-fade-in"
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
+            width: "100%",
+            maxWidth: 560,
+            padding: 28,
+            maxHeight: "90vh",
+            overflow: "auto",
           }}
-          onClick={() => setShowCreate(false)}
         >
-          <div
-            className="card animate-fade-in"
-            style={{
-              width: "100%",
-              maxWidth: 560,
-              padding: 28,
-              maxHeight: "90vh",
-              overflow: "auto",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
             <h2
               style={{
                 fontSize: "1.125rem",
@@ -1813,35 +1844,491 @@ const AssignmentsPage: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </Modal>
 
-      {/* Confirmation Modals */}
-      {confirmState !== "none" && (
+      {/* Import Modal */}
+      <Modal
+        isOpen={showImportModal}
+        onClose={() => {
+          setShowImportModal(false);
+          setImportStep("upload");
+          setPreviewRows([]);
+          setPreviewTasks([]);
+          setImportResult(null);
+        }}
+        zIndex={50}
+      >
         <div
+          className="card animate-fade-in"
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 200,
-            backdropFilter: "blur(4px)",
+            maxWidth: 680,
+            width: "100%",
+            padding: 0,
+            borderRadius: 16,
+            maxHeight: "90vh",
+            overflowY: "auto",
           }}
         >
-          <div
-            className="card animate-fade-in"
-            style={{
-              width: "100%",
-              maxWidth: 400,
-              padding: 24,
-              textAlign: "center",
-            }}
-          >
+            {/* Header */}
+            <div
+              style={{
+                padding: "20px 24px",
+                borderBottom: "1px solid var(--color-border)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: "var(--color-surface)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                {importStep === "result" && importResult ? (
+                  importResult.imported > 0 ? (
+                    <CheckCircle size={20} color="var(--color-success)" />
+                  ) : (
+                    <AlertCircle size={20} color="var(--color-danger)" />
+                  )
+                ) : (
+                  <Download size={20} />
+                )}
+                <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
+                  {importStep === "upload"
+                    ? "Import Projects"
+                    : importStep === "preview"
+                      ? "Review Imported Projects"
+                      : "Import Complete"}
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportStep("upload");
+                  setPreviewRows([]);
+                  setPreviewTasks([]);
+                  setImportResult(null);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--color-text-secondary)",
+                  padding: 4,
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Upload step */}
+            {importStep === "upload" && (
+              <div style={{ padding: 24 }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setImporting(true);
+                    try {
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      const { data } = await api.post(
+                        "/assignments/import/preview",
+                        formData,
+                        {
+                          headers: {
+                            "Content-Type": "multipart/form-data",
+                          },
+                        },
+                      );
+                      if (data.success) {
+                        setPreviewRows(data.rows || []);
+                        setPreviewTasks(data.tasks || []);
+                        setImportStep("preview");
+                      }
+                    } catch (err: any) {
+                      alert(
+                        err?.response?.data?.message || "Preview failed",
+                      );
+                    } finally {
+                      setImporting(false);
+                      if (fileInputRef.current)
+                        fileInputRef.current.value = "";
+                    }
+                  }}
+                />
+
+                <div
+                  onClick={() =>
+                    !importing && fileInputRef.current?.click()
+                  }
+                  style={{
+                    border: "2px dashed var(--color-border)",
+                    borderRadius: 12,
+                    padding: "32px 24px",
+                    textAlign: "center",
+                    cursor: importing ? "default" : "pointer",
+                    marginBottom: 16,
+                  }}
+                >
+                  {importing ? (
+                    <Loader2 size={32} className="animate-spin" />
+                  ) : (
+                    <Upload
+                      size={32}
+                      style={{ opacity: 0.4 }}
+                    />
+                  )}
+                  <p
+                    style={{
+                      marginTop: 8,
+                      fontWeight: 600,
+                      color: "var(--color-text)",
+                    }}
+                  >
+                    {importing
+                      ? "Reading file..."
+                      : "Click to upload Excel file"}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-tertiary)",
+                    }}
+                  >
+                    .xlsx or .xls format
+                  </p>
+                </div>
+
+                <a
+                  href={`${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/assignments/import/sample`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    fontSize: "0.85rem",
+                    color: "var(--color-primary)",
+                    textDecoration: "none",
+                  }}
+                >
+                  <Download size={14} /> Download sample format
+                </a>
+              </div>
+            )}
+
+            {/* Preview step */}
+            {importStep === "preview" && (
+              <div style={{ padding: 24 }}>
+                <div
+                  style={{
+                    marginBottom: 16,
+                    display: "flex",
+                    gap: 12,
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.85rem",
+                      padding: "4px 12px",
+                      borderRadius: 12,
+                      background: "var(--color-success-light, #d1fae5)",
+                      color: "var(--color-success, #059669)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {previewRows.filter((r: any) => r.errors.length === 0).length} Valid
+                  </span>
+                  {previewRows.filter((r: any) => r.errors.length > 0).length >
+                    0 && (
+                    <span
+                      style={{
+                        fontSize: "0.85rem",
+                        padding: "4px 12px",
+                        borderRadius: 12,
+                        background: "var(--color-danger-light, #fee2e2)",
+                        color: "var(--color-danger, #dc2626)",
+                        fontWeight: 600,
+                      }}
+                    >
+                    {previewRows.filter((r: any) => r.errors.length > 0).length} Errors
+                  </span>
+                  )}
+                  {previewTasks.length > 0 && (
+                    <span
+                      style={{
+                        fontSize: "0.85rem",
+                        padding: "4px 12px",
+                        borderRadius: 12,
+                        background: "var(--color-info-light, #dbeafe)",
+                        color: "var(--color-info, #2563eb)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {previewTasks.filter((t: any) => t.errors.length === 0).length} Tasks
+                    </span>
+                  )}
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-tertiary)",
+                    }}
+                  >
+                    {previewRows.length} project{previewRows.length !== 1 ? "s" : ""}
+                    {previewTasks.length > 0 && `, ${previewTasks.length} task${previewTasks.length !== 1 ? "s" : ""}`}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    maxHeight: 320,
+                    overflowY: "auto",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 8,
+                    marginBottom: 16,
+                  }}
+                >
+                  <table
+                    style={{
+                      width: "100%",
+                      fontSize: "0.8rem",
+                      borderCollapse: "collapse",
+                    }}
+                  >
+                    <thead>
+                      <tr
+                        style={{
+                          background: "var(--color-surface)",
+                          position: "sticky",
+                          top: 0,
+                        }}
+                      >
+                        <th style={thStyle}>#</th>
+                        <th style={thStyle}>Title</th>
+                        <th style={thStyle}>Client</th>
+                        <th style={thStyle}>Priority</th>
+                        <th style={thStyle}>Status</th>
+                        <th style={thStyle}>Start</th>
+                        <th style={thStyle}>Due</th>
+                        <th style={thStyle}>Recurring</th>
+                        <th style={thStyle}>Errors</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewRows.map((row: any, idx: number) => (
+                        <tr
+                          key={idx}
+                          style={{
+                            background:
+                              row.errors.length > 0
+                                ? "rgba(239, 68, 68, 0.05)"
+                                : idx % 2 === 0
+                                  ? "var(--color-surface)"
+                                  : "transparent",
+                          }}
+                        >
+                          <td style={tdStyle}>{row.row}</td>
+                          <td style={tdStyle}>{row.title}</td>
+                          <td style={tdStyle}>{row.clientName}</td>
+                          <td style={tdStyle}>{row.priority}</td>
+                          <td style={tdStyle}>
+                            {row.status?.replace(/_/g, " ")}
+                          </td>
+                          <td style={tdStyle}>{row.startDate}</td>
+                          <td style={tdStyle}>
+                            {row.dueDate || "No due date"}
+                          </td>
+                          <td style={tdStyle}>
+                            {row.isRecurring === true ||
+                            String(row.isRecurring).toLowerCase() === "true"
+                              ? "Yes"
+                              : "No"}
+                          </td>
+                          <td
+                            style={{
+                              ...tdStyle,
+                              color:
+                                row.errors.length > 0
+                                  ? "var(--color-danger)"
+                                  : "var(--color-success)",
+                            }}
+                          >
+                            {row.errors.length > 0
+                              ? row.errors.join("; ")
+                              : "✓"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    className="btn"
+                    style={{ flex: 1, padding: 10 }}
+                    onClick={() => {
+                      setImportStep("upload");
+                      setPreviewRows([]);
+                      setPreviewTasks([]);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1, padding: 10 }}
+                    disabled={
+                      importing ||
+                      previewRows.filter((r: any) => r.errors.length === 0)
+                        .length === 0
+                    }
+                    onClick={async () => {
+                      setImporting(true);
+                      try {
+                        const file =
+                          fileInputRef.current?.files?.[0];
+                        if (!file) return;
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        const { data } = await api.post(
+                          "/assignments/import/excel",
+                          formData,
+                          {
+                            headers: {
+                              "Content-Type": "multipart/form-data",
+                            },
+                          },
+                        );
+                        setImportResult({
+                          imported: data.imported || 0,
+                          tasksImported: data.tasksImported || 0,
+                          errors: data.errors || [],
+                        });
+                        setImportStep("result");
+                        if (data.imported > 0) {
+                          queryClient.invalidateQueries({
+                            queryKey: ["assignments"],
+                          });
+                        }
+                      } catch (err: any) {
+                        alert(
+                          err?.response?.data?.message ||
+                            "Import failed",
+                        );
+                      } finally {
+                        setImporting(false);
+                      }
+                    }}
+                  >
+                    {importing ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : null}
+                    {importing
+                      ? "Importing..."
+                      : `Import ${previewRows.filter((r: any) => r.errors.length === 0).length} Projects`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Result step */}
+            {importStep === "result" && importResult && (
+              <div style={{ padding: 24 }}>
+                <div
+                  style={{ textAlign: "center", marginBottom: 20 }}
+                >
+                  {importResult.imported > 0 ? (
+                    <CheckCircle
+                      size={24}
+                      style={{ color: "var(--color-success)" }}
+                    />
+                  ) : (
+                    <AlertCircle
+                      size={24}
+                      style={{ color: "var(--color-danger)" }}
+                    />
+                  )}
+                  <h3
+                    style={{
+                      margin: "8px 0 4px",
+                      fontSize: "1.1rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {importResult.imported} project
+                    {importResult.imported !== 1 ? "s" : ""}
+                    {importResult.tasksImported != null && importResult.tasksImported > 0
+                      ? `, ${importResult.tasksImported} task${importResult.tasksImported !== 1 ? "s" : ""}`
+                      : ""} imported
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    {importResult.errors.length > 0
+                      ? `${importResult.errors.length} error(s)`
+                      : "All projects imported successfully"}
+                  </p>
+                </div>
+                {importResult.errors.length > 0 && (
+                  <div
+                    style={{
+                      marginBottom: 16,
+                      padding: 12,
+                      borderRadius: 8,
+                      background: "rgba(239, 68, 68, 0.08)",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    {importResult.errors.map(
+                      (e: any, i: number) => (
+                        <div key={i} style={{ marginBottom: 4 }}>
+                          <strong>Row {e.row}:</strong> {e.message}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
+                <button
+                  className="btn btn-primary"
+                  style={{ width: "100%", padding: 10 }}
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportStep("upload");
+                    setPreviewRows([]);
+                    setPreviewTasks([]);
+                    setImportResult(null);
+                  }}
+                >
+                  Done
+                </button>
+                </div>
+            )}
+          </div>
+        </Modal>
+
+      {/* Confirmation Modals */}
+      <Modal isOpen={confirmState !== "none"} onClose={() => setConfirmState("none")} zIndex={200}>
+        <div
+          className="card animate-fade-in"
+          style={{
+            width: "100%",
+            maxWidth: 400,
+            padding: 24,
+            textAlign: "center",
+          }}
+        >
             {confirmState === "create_company" ? (
               <>
                 <div
@@ -1963,8 +2450,7 @@ const AssignmentsPage: React.FC = () => {
               </>
             )}
           </div>
-        </div>
-      )}
+        </Modal>
     </div>
   );
 };

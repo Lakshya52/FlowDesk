@@ -41,6 +41,7 @@ const Attachment_1 = __importDefault(require("../models/Attachment"));
 const ActivityLog_1 = __importStar(require("../models/ActivityLog"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const gridfs_1 = require("../utils/gridfs");
+const tenant_1 = require("../utils/tenant");
 const uploadFile = async (req, res) => {
     try {
         if (!req.file) {
@@ -78,11 +79,13 @@ exports.uploadFile = uploadFile;
 const getFiles = async (req, res) => {
     try {
         const { assignmentId, taskId } = req.query;
+        const tenantUserIds = await (0, tenant_1.getTenantUserIds)(req.user);
         const filter = {};
         if (assignmentId)
             filter.assignment = assignmentId;
         if (taskId)
             filter.task = taskId;
+        filter.uploadedBy = { $in: tenantUserIds };
         const attachments = await Attachment_1.default.find(filter)
             .populate("uploadedBy", "name email")
             .sort({ createdAt: -1 });

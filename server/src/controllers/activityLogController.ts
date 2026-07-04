@@ -1,13 +1,16 @@
 import { Response } from 'express';
 import ActivityLog, { EntityType } from '../models/ActivityLog';
 import { AuthRequest } from '../middlewares/auth';
+import { getTenantUserIds } from '../utils/tenant';
 
 export const getCrmActivityLogs = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { entityType, action, limit = '50', offset = '0' } = req.query;
+        const tenantUserIds = await getTenantUserIds(req.user);
 
         const filter: any = {};
         filter.entityType = { $in: [EntityType.CAMPAIGN, EntityType.LEAD] };
+        filter.user = { $in: tenantUserIds };
 
         if (entityType) filter.entityType = entityType;
         if (action) filter.action = { $regex: action as string, $options: 'i' };

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import Avatar from "../components/common/Avatar";
+import Modal from "../components/common/Modal";
 import { useAuthStore } from "../store/authStore";
 import { Search, Edit3, Trash2, X, Check, Plus, Loader2 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
@@ -857,19 +858,11 @@ const TasksPage: React.FC = () => {
       )}
 
       {/* Create Task Modal */}
-      {showCreateModal && (
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)}>
         <div
-          style={{
-            position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)",
-            zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
-          }}
-          onClick={() => setShowCreateModal(false)}
+          className="card animate-fade-in"
+          style={{ maxWidth: 500, width: "100%", padding: 0, overflow: "hidden", borderRadius: 16 }}
         >
-          <div
-            className="card animate-fade-in"
-            style={{ maxWidth: 500, width: "100%", padding: 0, overflow: "hidden", borderRadius: 16 }}
-            onClick={(e) => e.stopPropagation()}
-          >
             <div style={{
               padding: "20px 24px", borderBottom: "1px solid var(--color-border)",
               display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1015,8 +1008,7 @@ const TasksPage: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </Modal>
     </div>
   );
 };

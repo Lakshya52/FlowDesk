@@ -5,6 +5,7 @@ import api from '../../lib/api';
 import toast from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import Avatar from '../common/Avatar';
+import Modal from '../common/Modal';
 
 const CalendarShareModal: React.FC = () => {
   const { isShareModalOpen, closeShareModal, selectedCalendarId } = useCalendarStore();
@@ -90,7 +91,7 @@ const CalendarShareModal: React.FC = () => {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
+    <Modal isOpen={isShareModalOpen} onClose={closeShareModal}>
       <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '12px', boxShadow: 'var(--shadow-xl)', width: '100%', maxWidth: '480px', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1px solid var(--color-border)', maxHeight: '90vh' }}>
         
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--color-border)', flexShrink: 0 }}>
@@ -199,7 +200,7 @@ const CalendarShareModal: React.FC = () => {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

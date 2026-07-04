@@ -3,6 +3,7 @@ import { X, Chrome, CheckCircle, Loader, Check } from 'lucide-react';
 import { useCalendarStore } from '../../store/calendarStore';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
+import Modal from '../common/Modal';
 // declare global {
 //   interface Window {
 //     electronAPI?: {
@@ -121,11 +122,7 @@ const handleClose = () => {
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 100,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
+    <Modal isOpen={isImportModalOpen} onClose={handleClose}>
       <div style={{
         backgroundColor: 'var(--color-surface)',
         borderRadius: '12px',
@@ -333,7 +330,7 @@ const handleClose = () => {
           </div>
         )}
       </div>
-    </div>
+    </Modal>
   );
 };
 

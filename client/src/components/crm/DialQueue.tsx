@@ -149,6 +149,9 @@ const DialQueue = () => {
 	const [filterIndustry, setFilterIndustry] = useState("");
 	const [filterSource, setFilterSource] = useState("");
 	const [filterPriority, setFilterPriority] = useState("");
+	const [filterCity, setFilterCity] = useState("");
+	const [filterState, setFilterState] = useState("");
+	const [filterPincode, setFilterPincode] = useState("");
 	const [activeTab, setActiveTab] = useState<"all" | "archived" | "meeting_scheduled" | "closed_won">("all");
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(50);
@@ -184,6 +187,21 @@ const DialQueue = () => {
 	const [editForm, setEditForm] = useState<
 		Record<string, string | undefined>
 	>({});
+
+	const [showProjectModal, setShowProjectModal] = useState(false);
+	const [creatingProject, setCreatingProject] = useState(false);
+	const [allUsers, setAllUsers] = useState<any[]>([]);
+	const [projectForm, setProjectForm] = useState({
+		title: "",
+		clientName: "",
+		assignmentType: "transactional" as "transactional" | "recurring",
+		description: "",
+		priority: "medium" as "low" | "medium" | "high" | "urgent",
+		startDate: new Date().toISOString().split("T")[0],
+		dueDate: "",
+		noDueDate: false,
+		team: [] as string[],
+	});
 
 	useEffect(() => {
 		if (selectedLead) {
@@ -261,7 +279,7 @@ const DialQueue = () => {
 		}
 	};
 
-	const leadsParams = useMemo(() => ({ page, pageSize, activeTab, filterCampaign, filterStatus, searchQuery, filterIndustry, filterSource, filterPriority }), [page, pageSize, activeTab, filterCampaign, filterStatus, searchQuery, filterIndustry, filterSource, filterPriority]);
+	const leadsParams = useMemo(() => ({ page, pageSize, activeTab, filterCampaign, filterStatus, searchQuery, filterIndustry, filterSource, filterPriority, filterCity, filterState, filterPincode }), [page, pageSize, activeTab, filterCampaign, filterStatus, searchQuery, filterIndustry, filterSource, filterPriority, filterCity, filterState, filterPincode]);
 
 	const { data: leadsData = { leads: [], totalPages: 1 }, isLoading } = useQuery({
 		queryKey: ["leads", leadsParams],
@@ -278,6 +296,9 @@ const DialQueue = () => {
 			if (filterIndustry) params.industry = filterIndustry;
 			if (filterSource) params.source = filterSource;
 			if (filterPriority) params.priority = filterPriority;
+			if (filterCity) params.city = filterCity;
+			if (filterState) params.state = filterState;
+			if (filterPincode) params.pincode = filterPincode;
 			const { data } = await api.get("/leads", { params });
 			return { leads: data.success ? data.leads : [], totalPages: data.totalPages || 1 };
 		},
@@ -296,7 +317,7 @@ const DialQueue = () => {
 		},
 	});
 
-	const countsParams = useMemo(() => ({ filterCampaign, searchQuery, filterIndustry, filterSource, filterPriority }), [filterCampaign, searchQuery, filterIndustry, filterSource, filterPriority]);
+	const countsParams = useMemo(() => ({ filterCampaign, searchQuery, filterIndustry, filterSource, filterPriority, filterCity, filterState, filterPincode }), [filterCampaign, searchQuery, filterIndustry, filterSource, filterPriority, filterCity, filterState, filterPincode]);
 
 	const { data: tabCounts = { all: 0, archived: 0, meeting_scheduled: 0, closed_won: 0 } } = useQuery({
 		queryKey: ["leads", "counts", countsParams],
@@ -307,6 +328,9 @@ const DialQueue = () => {
 			if (filterIndustry) params.industry = filterIndustry;
 			if (filterSource) params.source = filterSource;
 			if (filterPriority) params.priority = filterPriority;
+			if (filterCity) params.city = filterCity;
+			if (filterState) params.state = filterState;
+			if (filterPincode) params.pincode = filterPincode;
 			const { data } = await api.get("/leads/counts", { params });
 			return data.success ? data.counts : { all: 0, archived: 0, meeting_scheduled: 0, closed_won: 0 };
 		},
@@ -323,6 +347,9 @@ const DialQueue = () => {
 		filterIndustry,
 		filterSource,
 		filterPriority,
+		filterCity,
+		filterState,
+		filterPincode,
 		pageSize,
 	]);
 
@@ -334,6 +361,16 @@ const DialQueue = () => {
 		const leadId = params.get("leadId");
 		if (leadId) {
 			setFocusLeadId(leadId);
+			navigate("/crm/dial", { replace: true });
+		}
+	}, [location.search]);
+
+	// Set campaign filter from URL param (e.g. from Campaigns page card click)
+	useEffect(() => {
+		const params = new URLSearchParams(location.search);
+		const campaignId = params.get("campaignId");
+		if (campaignId) {
+			setFilterCampaign(campaignId);
 			navigate("/crm/dial", { replace: true });
 		}
 	}, [location.search]);
@@ -415,10 +452,35 @@ const DialQueue = () => {
 		});
 	};
 
+	const fetchUsersAndTeams = async () => {
+		try {
+			const { data } = await api.get("/auth/users?all=true");
+			setAllUsers(data.users || []);
+		} catch (err) {
+			console.error("Failed to fetch users", err);
+		}
+	};
+
 	const handleStatusChange = async (
 		leadId: string,
 		status: Lead["status"],
 	) => {
+		if (status === "closed_won" && selectedLead) {
+			setProjectForm({
+				title: `Project - ${selectedLead.companyName || selectedLead.name || "Lead"}`,
+				clientName: selectedLead.companyName || "",
+				assignmentType: "transactional",
+				description: `Project from lead: ${selectedLead.name || ""}${selectedLead.companyName ? ` (${selectedLead.companyName})` : ""}`,
+				priority: "medium",
+				startDate: new Date().toISOString().split("T")[0],
+				dueDate: "",
+				noDueDate: false,
+				team: [],
+			});
+			fetchUsersAndTeams();
+			setShowProjectModal(true);
+			return;
+		}
 		setUpdatingLead(true);
 		try {
 			const { data } = await api.put(`/leads/${leadId}`, { status });
@@ -431,6 +493,47 @@ const DialQueue = () => {
 		} finally {
 			setUpdatingLead(false);
 		}
+	};
+
+	const handleCreateProject = async () => {
+		if (!projectForm.title.trim() || !projectForm.clientName.trim()) {
+			toast.error("Title and Company Name are required");
+			return;
+		}
+		setCreatingProject(true);
+		try {
+			await api.post("/assignments", {
+				title: projectForm.title.trim(),
+				clientName: projectForm.clientName.trim(),
+				description: projectForm.description.trim(),
+				priority: projectForm.priority,
+				status: "not_started",
+				startDate: projectForm.startDate,
+				dueDate: projectForm.dueDate || null,
+				team: [...projectForm.team, currentUser?._id].filter(Boolean),
+				isRecurring: projectForm.assignmentType === "recurring",
+			});
+
+			const { data } = await api.put(`/leads/${selectedLead!._id}`, {
+				status: "closed_won",
+			});
+			if (data.success) {
+				setSelectedLead(data.lead);
+				queryClient.invalidateQueries({ queryKey: ["leads"] });
+				toast.success("Project created & lead closed as won");
+				setShowProjectModal(false);
+			}
+		} catch (err: any) {
+			toast.error(
+				err?.response?.data?.message || "Failed to create project",
+			);
+		} finally {
+			setCreatingProject(false);
+		}
+	};
+
+	const handleCancelProject = () => {
+		setShowProjectModal(false);
 	};
 
 	const handleRecordCall = async (
@@ -497,7 +600,7 @@ const DialQueue = () => {
 			setSchedulingFollowup(false);
 		}
 	};
-
+	
 	const handleCreateLead = async () => {
 		if (!createForm.name.trim()) return;
 		if (!createForm.campaignId) {
@@ -813,6 +916,7 @@ const DialQueue = () => {
 						onChange={(e) => { setSearchInput(e.target.value); setPage(1); }}
 					/>
 				</div>
+				{/* Filters */}
 				<div
 					style={{
 						display: "flex",
@@ -825,6 +929,8 @@ const DialQueue = () => {
 						size={14}
 						style={{ color: "var(--color-text-tertiary)" }}
 					/>
+
+					{/* campaign selection filter dropdown */}
 					<select
 						className="input"
 						style={{
@@ -843,6 +949,8 @@ const DialQueue = () => {
 							</option>
 						))}
 					</select>
+
+					{/* Lead status filter dropdown */}
 					<select
 						className="input"
 						style={{
@@ -860,6 +968,8 @@ const DialQueue = () => {
 							</option>
 						))}
 					</select>
+
+					{/* industry filter dropdown */}
 					<select
 						className="input"
 						style={{
@@ -881,6 +991,8 @@ const DialQueue = () => {
 							</option>
 						))}
 					</select>
+
+					{/* source filter dropdown */}
 					<select
 						className="input"
 						style={{
@@ -902,6 +1014,8 @@ const DialQueue = () => {
 							</option>
 						))}
 					</select>
+
+					{/* priority filter dropdown */}
 					<select
 						className="input"
 						style={{
@@ -917,6 +1031,75 @@ const DialQueue = () => {
 						<option value="high">High</option>
 						<option value="medium">Medium</option>
 						<option value="low">Low</option>
+					</select>
+
+					{/* city filter dropdown */}
+					<select
+						className="input"
+						style={{
+							width: 130,
+							padding: "6px 10px",
+							fontSize: "0.8rem",
+						}}
+						value={filterCity}
+						onChange={(e) => setFilterCity(e.target.value)}
+					>
+						<option value="">All Cities</option>
+						{[
+							...new Set(
+								(leads.map((l: any) => l.city).filter(Boolean) as string[]),
+							),
+						].map((c) => (
+							<option key={c} value={c}>
+								{c}
+							</option>
+						))}
+					</select>
+
+					{/* state filter dropdown */}
+					<select
+						className="input"
+						style={{
+							width: 130,
+							padding: "6px 10px",
+							fontSize: "0.8rem",
+						}}
+						value={filterState}
+						onChange={(e) => setFilterState(e.target.value)}
+					>
+						<option value="">All States</option>
+						{[
+							...new Set(
+								(leads.map((l: any) => l.state).filter(Boolean) as string[]),
+							),
+						].map((s) => (
+							<option key={s} value={s}>
+								{s}
+							</option>
+						))}
+					</select>
+
+					{/* pincode filter dropdown */}
+					<select
+						className="input"
+						style={{
+							width: 130,
+							padding: "6px 10px",
+							fontSize: "0.8rem",
+						}}
+						value={filterPincode}
+						onChange={(e) => setFilterPincode(e.target.value)}
+					>
+						<option value="">All Pincodes</option>
+						{[
+							...new Set(
+								(leads.map((l: any) => l.pincode).filter(Boolean) as string[]),
+							),
+						].map((p) => (
+							<option key={p} value={p}>
+								{p}
+							</option>
+						))}
 					</select>
 				</div>
 			</div>
@@ -3910,6 +4093,441 @@ const DialQueue = () => {
 								{updatingLead ? "Creating..." : "Create Lead"}
 							</button>
 						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Create Project Modal on Closed Won */}
+			{showProjectModal && (
+				<div
+					style={{
+						position: "fixed",
+						top: 0,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						background: "rgba(0,0,0,0.5)",
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						zIndex: 100,
+					}}
+					onClick={handleCancelProject}
+				>
+					<div
+						className="card animate-fade-in"
+						style={{
+							width: "100%",
+							maxWidth: 560,
+							padding: 28,
+							maxHeight: "90vh",
+							overflow: "auto",
+						}}
+						onClick={(e) => e.stopPropagation()}
+					>
+						<div
+							style={{
+								display: "flex",
+								justifyContent: "space-between",
+								alignItems: "center",
+								marginBottom: 20,
+							}}
+						>
+							<h2
+								style={{
+									fontSize: "1.125rem",
+									fontWeight: 700,
+									margin: 0,
+								}}
+							>
+								Create Project from Lead
+							</h2>
+							<button
+								onClick={handleCancelProject}
+								style={{
+									background: "none",
+									border: "none",
+									cursor: "pointer",
+									color: "var(--color-text-secondary)",
+									padding: 4,
+								}}
+							>
+								<X size={18} />
+							</button>
+						</div>
+
+						<form
+							onSubmit={(e) => {
+								e.preventDefault();
+								handleCreateProject();
+							}}
+							style={{
+								display: "flex",
+								flexDirection: "column",
+								gap: 16,
+							}}
+						>
+							<div>
+								<label
+									style={{
+										display: "block",
+										fontSize: "0.8125rem",
+										fontWeight: 500,
+										marginBottom: 4,
+										color: "var(--color-text-secondary)",
+									}}
+								>
+									Title *
+								</label>
+								<input
+									className="input"
+									required
+									value={projectForm.title}
+									onChange={(e) =>
+										setProjectForm((p) => ({
+											...p,
+											title: e.target.value,
+										}))
+									}
+									placeholder="Project title"
+								/>
+							</div>
+
+							<div>
+								<label
+									style={{
+										display: "block",
+										fontSize: "0.8125rem",
+										fontWeight: 500,
+										marginBottom: 4,
+										color: "var(--color-text-secondary)",
+									}}
+								>
+									Company Name *
+								</label>
+								<input
+									className="input"
+									required
+									value={projectForm.clientName}
+									onChange={(e) =>
+										setProjectForm((p) => ({
+											...p,
+											clientName: e.target.value,
+										}))
+									}
+									placeholder="Company name"
+								/>
+							</div>
+
+							<div
+								style={{
+									display: "grid",
+									gridTemplateColumns: "1fr 1fr",
+									gap: 12,
+								}}
+							>
+								<div>
+									<label
+										style={{
+											display: "block",
+											fontSize: "0.8125rem",
+											fontWeight: 500,
+											marginBottom: 4,
+											color: "var(--color-text-secondary)",
+										}}
+									>
+										Assignment Type
+									</label>
+									<select
+										className="input"
+										style={{ width: "100%" }}
+										value={projectForm.assignmentType}
+										onChange={(e) =>
+											setProjectForm((p) => ({
+												...p,
+												assignmentType: e.target
+													.value as any,
+											}))
+										}
+									>
+										<option value="transactional">
+											Transactional
+										</option>
+										<option value="recurring">
+											Recurring
+										</option>
+									</select>
+								</div>
+							</div>
+
+							<div>
+								<label
+									style={{
+										display: "block",
+										fontSize: "0.8125rem",
+										fontWeight: 500,
+										marginBottom: 4,
+										color: "var(--color-text-secondary)",
+									}}
+								>
+									Description
+								</label>
+								<textarea
+									className="input"
+									rows={3}
+									value={projectForm.description}
+									onChange={(e) =>
+										setProjectForm((p) => ({
+											...p,
+											description: e.target.value,
+										}))
+									}
+									placeholder="Description..."
+									style={{ resize: "vertical" }}
+								/>
+							</div>
+
+							<div
+								style={{
+									display: "grid",
+									gridTemplateColumns: "1fr 1fr 1fr",
+									gap: 12,
+								}}
+							>
+								<div>
+									<label
+										style={{
+											display: "block",
+											fontSize: "0.8125rem",
+											fontWeight: 500,
+											marginBottom: 4,
+											color: "var(--color-text-secondary)",
+										}}
+									>
+										Priority
+									</label>
+									<select
+										className="input"
+										style={{ width: "100%" }}
+										value={projectForm.priority}
+										onChange={(e) =>
+											setProjectForm((p) => ({
+												...p,
+												priority: e.target
+													.value as any,
+											}))
+										}
+									>
+										<option value="low">Low</option>
+										<option value="medium">Medium</option>
+										<option value="high">High</option>
+										<option value="urgent">Urgent</option>
+									</select>
+								</div>
+
+								<div>
+									<label
+										style={{
+											display: "block",
+											fontSize: "0.8125rem",
+											fontWeight: 500,
+											marginBottom: 4,
+											color: "var(--color-text-secondary)",
+										}}
+									>
+										Start Date *
+									</label>
+									<input
+										type="date"
+										className="input"
+										style={{ width: "100%" }}
+										required
+										value={projectForm.startDate}
+										onChange={(e) =>
+											setProjectForm((p) => ({
+												...p,
+												startDate: e.target.value,
+											}))
+										}
+									/>
+								</div>
+
+								<div>
+									<label
+										style={{
+											display: "block",
+											fontSize: "0.8125rem",
+											fontWeight: 500,
+											marginBottom: 4,
+											color: "var(--color-text-secondary)",
+										}}
+									>
+										Due Date
+									</label>
+									<input
+										type="date"
+										className="input"
+										style={{ width: "100%" }}
+										disabled={projectForm.noDueDate}
+										value={projectForm.dueDate}
+										onChange={(e) =>
+											setProjectForm((p) => ({
+												...p,
+												dueDate: e.target.value,
+											}))
+										}
+									/>
+									<div
+										style={{
+											marginTop: 6,
+											display: "flex",
+											alignItems: "center",
+											gap: 6,
+										}}
+									>
+										<input
+											type="checkbox"
+											id="noDueDate"
+											checked={projectForm.noDueDate}
+											onChange={(e) =>
+												setProjectForm((p) => ({
+													...p,
+													noDueDate: e.target.checked,
+													dueDate: e.target.checked
+														? ""
+														: p.dueDate,
+												}))
+											}
+										/>
+										<label
+											htmlFor="noDueDate"
+											style={{
+												fontSize: "0.75rem",
+												color: "var(--color-text-secondary)",
+												cursor: "pointer",
+											}}
+										>
+											No due date
+										</label>
+									</div>
+								</div>
+							</div>
+
+							<div>
+								<label
+									style={{
+										display: "block",
+										fontSize: "0.8125rem",
+										fontWeight: 500,
+										marginBottom: 8,
+										color: "var(--color-text-secondary)",
+									}}
+								>
+									Add Members
+								</label>
+								<div
+									style={{
+										display: "flex",
+										flexWrap: "wrap",
+										gap: 8,
+										maxHeight: 120,
+										overflowY: "auto",
+										padding: "6px 0",
+									}}
+								>
+									{allUsers.length === 0 && (
+										<span
+											style={{
+												fontSize: "0.8rem",
+												color: "var(--color-text-tertiary)",
+											}}
+										>
+											Loading members...
+										</span>
+									)}
+									{allUsers.map((user: any) => (
+										<label
+											key={user._id}
+											style={{
+												display: "flex",
+												alignItems: "center",
+												gap: 6,
+												fontSize: "0.8rem",
+												cursor: "pointer",
+												padding: "4px 8px",
+												borderRadius: 6,
+												background: projectForm.team.includes(
+													user._id,
+												)
+													? "var(--color-primary-light)"
+													: "transparent",
+												border: "1px solid var(--color-border)",
+											}}
+										>
+											<input
+												type="checkbox"
+												checked={projectForm.team.includes(
+													user._id,
+												)}
+												onChange={() =>
+													setProjectForm((p) => ({
+														...p,
+														team: p.team.includes(
+															user._id,
+														)
+															? p.team.filter(
+																	(id) =>
+																		id !==
+																		user._id,
+																)
+															: [...p.team, user._id],
+													}))
+												}
+											/>
+											{user.name || user.email}
+										</label>
+									))}
+								</div>
+							</div>
+
+							<div
+								style={{
+									marginTop: 24,
+									display: "flex",
+									gap: 12,
+								}}
+							>
+								<button
+									type="button"
+									className="btn btn-secondary"
+									style={{ flex: 1 }}
+									onClick={handleCancelProject}
+									disabled={creatingProject}
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									className="btn btn-primary"
+									style={{ flex: 1 }}
+									disabled={
+										creatingProject ||
+										!projectForm.title.trim() ||
+										!projectForm.clientName.trim()
+									}
+								>
+									{creatingProject ? (
+										<Loader2
+											size={16}
+											className="animate-spin"
+										/>
+									) : null}
+									{creatingProject
+										? "Creating..."
+										: "Create Project"}
+								</button>
+							</div>
+						</form>
 					</div>
 				</div>
 			)}

@@ -4,6 +4,7 @@ import ActivityLog, { EntityType } from "../models/ActivityLog";
 import { AuthRequest } from "../middlewares/auth";
 import mongoose from "mongoose";
 import { uploadToGridFS, deleteFromGridFS } from "../utils/gridfs";
+import { getTenantUserIds } from "../utils/tenant";
 
 export const uploadFile = async (
   req: AuthRequest,
@@ -60,10 +61,12 @@ export const getFiles = async (
 ): Promise<void> => {
   try {
     const { assignmentId, taskId } = req.query;
+    const tenantUserIds = await getTenantUserIds(req.user);
     const filter: any = {};
 
     if (assignmentId) filter.assignment = assignmentId;
     if (taskId) filter.task = taskId;
+    filter.uploadedBy = { $in: tenantUserIds };
 
     const attachments = await Attachment.find(filter)
       .populate("uploadedBy", "name email")

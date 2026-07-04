@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from "../lib/api";
+import Modal from "../components/common/Modal";
 import { Plus, Building2, Building, Users, FolderKanban, ChevronRight, ChevronDown, Edit2, Trash2, X, Phone, Mail, Globe, Upload, Download, FileSpreadsheet, FileText } from "lucide-react";
 
 interface Company {
@@ -1323,20 +1324,7 @@ const CreateCompanyModal = ({
     };
 
     return (
-        <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                background: "rgba(15, 23, 42, 0.5)",
-                backdropFilter: "blur(4px)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 1000,
-                padding: '20px'
-            }}
-            onClick={() => { setShowCreate(false); resetForm(); }}
-        >
+        <Modal isOpen={true} onClose={() => { setShowCreate(false); resetForm(); }} zIndex={1000}>
             <div
                 className="card animate-fade-in"
                 style={{
@@ -1350,7 +1338,6 @@ const CreateCompanyModal = ({
                     borderRadius: '16px',
                     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
                 }}
-                onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
                 <div style={{
@@ -1718,18 +1705,15 @@ const CreateCompanyModal = ({
                     </button>
                 </div>
             </div>
-        </div>
+        </Modal>
     );
 };
 
 const ContactModal = ({
     // showContactForm,
     setShowContactForm, editingContact, contactForm, setContactForm, handleSave }: any) => (
-    <div
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-        onClick={() => setShowContactForm(false)}
-    >
-        <div className="card" style={{ padding: 24, width: 550 }} onClick={(e) => e.stopPropagation()}>
+    <Modal isOpen={true} onClose={() => setShowContactForm(false)} zIndex={1000}>
+        <div className="card" style={{ padding: 24, width: 550 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h3 style={{ fontSize: "1.2rem", fontWeight: 600 }}>{editingContact ? "Edit Contact" : "Add Contact"}</h3>
                 <button className="btn btn-secondary btn-xs" onClick={() => setShowContactForm(false)}>
@@ -1838,7 +1822,7 @@ const ContactModal = ({
                 </div>
             </form>
         </div>
-    </div>
+    </Modal>
 );
 
 const ImportModal = ({
@@ -1849,11 +1833,8 @@ const ImportModal = ({
     };
 
     return (
-        <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-            onClick={() => { setShowImport(false); setImportResult(null); }}
-        >
-            <div className="card" style={{ padding: 24, width: 500 }} onClick={(e) => e.stopPropagation()}>
+        <Modal isOpen={true} onClose={() => { setShowImport(false); setImportResult(null); }} zIndex={1000}>
+            <div className="card" style={{ padding: 24, width: 500 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                     <h3 style={{ fontSize: "1.2rem", fontWeight: 600 }}>Import Companies</h3>
                     <button className="btn btn-secondary btn-xs" onClick={() => { setShowImport(false); setImportResult(null); }}>
@@ -1966,6 +1947,6 @@ const ImportModal = ({
                     </div>
                 )}
             </div>
-        </div>
+        </Modal>
     );
 };

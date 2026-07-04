@@ -5,10 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteNote = exports.updateNote = exports.createNote = exports.getNotes = void 0;
 const CanvasNote_1 = __importDefault(require("../models/CanvasNote"));
+const tenant_1 = require("../utils/tenant");
 const getNotes = async (req, res) => {
     try {
-        const userId = req.user._id;
-        const notes = await CanvasNote_1.default.find({ userId });
+        const tenantUserIds = await (0, tenant_1.getTenantUserIds)(req.user);
+        const notes = await CanvasNote_1.default.find({ userId: { $in: tenantUserIds } });
         res.json(notes);
     }
     catch (error) {

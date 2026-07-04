@@ -5,6 +5,7 @@ import ActivityLog, { EntityType } from "../models/ActivityLog";
 import User from "../models/User";
 import { AuthRequest } from "../middlewares/auth";
 import { createNotifications } from "../services/notificationService";
+import { getTenantUserIds } from "../utils/tenant";
 
 export const createComment = async (
 	req: AuthRequest,
@@ -59,10 +60,14 @@ export const getComments = async (
 ): Promise<void> => {
 	try {
 		const { assignmentId, taskId } = req.query;
+		const tenantUserIds = await getTenantUserIds(req.user);
 		const filter: any = {};
 
 		if (assignmentId) filter.assignment = assignmentId;
 		if (taskId) filter.task = taskId;
+
+		// Tenant scope: only show comments where author is in this tenant
+		filter.author = { $in: tenantUserIds };
 
 		const comments = await Comment.find(filter)
 			.populate("author", "name email avatar")
@@ -80,9 +85,16 @@ export const deleteComment = async (
 	res: Response,
 ): Promise<void> => {
 	try {
+		const tenantUserIds = await getTenantUserIds(req.user);
 		const comment = await Comment.findById(req.params.id);
 		if (!comment) {
 			res.status(404).json({ message: "Comment not found" });
+			return;
+		}
+
+		// Tenant check
+		if (!tenantUserIds.includes(comment.author.toString())) {
+			res.status(403).json({ message: "Access denied" });
 			return;
 		}
 

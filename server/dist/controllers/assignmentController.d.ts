@@ -6,4 +6,7 @@ export declare const getAssignment: (req: AuthRequest, res: Response) => Promise
 export declare const updateAssignment: (req: AuthRequest, res: Response) => Promise<void>;
 export declare const deleteAssignment: (req: AuthRequest, res: Response) => Promise<void>;
 export declare const updateAssignmentCanvas: (req: AuthRequest, res: Response) => Promise<void>;
+export declare const downloadSampleAssignmentsExcel: (_req: AuthRequest, res: Response) => Promise<void>;
+export declare const previewImportAssignments: (req: AuthRequest, res: Response) => Promise<void>;
+export declare const importAssignmentsExcel: (req: AuthRequest, res: Response) => Promise<void>;
 //# sourceMappingURL=assignmentController.d.ts.map

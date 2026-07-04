@@ -12,6 +12,7 @@ import { ArrowLeft, Plus, Paperclip, MessageSquare, Upload, Download, Trash2, Se
 import { format } from 'date-fns';
 import ProjectCanvas from '../components/assignments/ProjectCanvas';
 import FilePreviewModal from '../components/common/FilePreviewModal';
+import Modal from '../components/common/Modal';
 
 const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
 const STATUS_LABELS: Record<string, string> = { not_started: 'Not Started', in_progress: 'In Progress', completed: 'Completed', delayed: 'Delayed' };
@@ -1709,13 +1710,8 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             }
 
             {/* Manage Team Modal */}
-            {
-                showTeamModal && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-                    }} onClick={() => setShowTeamModal(false)}>
-                        <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 400, padding: 24 }} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <Modal isOpen={showTeamModal} onClose={() => setShowTeamModal(false)} zIndex={100}>
+                <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 400, padding: 24 }}>
                             <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: 16 }}>Manage Team Members</h2>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflow: 'auto', marginBottom: 20 } as React.CSSProperties}>
                                 {users.map(u => {
@@ -1763,9 +1759,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                 <button className="btn btn-secondary btn-sm" onClick={() => setShowTeamModal(false)}>Close</button>
                             </div>
                         </div>
-                    </div>
-                )
-            }
+                    </Modal>
         </div >
     );
 };

@@ -4,6 +4,7 @@ import { Calendar, Clock, Phone, Building, Loader2, AlertCircle, CheckCircle2, X
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../../lib/api";
 import Avatar from "../common/Avatar";
+import Modal from "../common/Modal";
 import toast from "react-hot-toast";
 import { useCrmSocket } from "../../hooks/useCrmSocket";
 
@@ -845,19 +846,11 @@ const Schedule = () => {
 				</div>
 			)}
 
-			{showFollowupModal && (
+			<Modal isOpen={showFollowupModal} onClose={() => { setShowFollowupModal(false); setFollowupLeadId(null); }}>
 				<div
-					style={{
-						position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
-						zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-					}}
-					onClick={() => { setShowFollowupModal(false); setFollowupLeadId(null); }}
+					className="card animate-fade-in"
+					style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
 				>
-					<div
-						className="card animate-fade-in"
-						style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
-						onClick={e => e.stopPropagation()}
-					>
 						<h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 600 }}>Complete Follow-up</h3>
 
 						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
@@ -916,22 +909,13 @@ const Schedule = () => {
 							</button>
 						</div>
 					</div>
-				</div>
-			)}
+				</Modal>
 
-			{showMeetingModal && (
+			<Modal isOpen={showMeetingModal} onClose={() => { setShowMeetingModal(false); setMeetingLeadId(null); }}>
 				<div
-					style={{
-						position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
-						zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-					}}
-					onClick={() => { setShowMeetingModal(false); setMeetingLeadId(null); }}
+					className="card animate-fade-in"
+					style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
 				>
-					<div
-						className="card animate-fade-in"
-						style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
-						onClick={e => e.stopPropagation()}
-					>
 						<h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 600 }}>Complete Meeting</h3>
 
 						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
@@ -983,22 +967,13 @@ const Schedule = () => {
 							</button>
 						</div>
 					</div>
-				</div>
-			)}
+				</Modal>
 
-			{showRescheduleModal && (
+			<Modal isOpen={showRescheduleModal} onClose={() => { setShowRescheduleModal(false); setRescheduleLeadId(null); }}>
 				<div
-					style={{
-						position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
-						zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-					}}
-					onClick={() => { setShowRescheduleModal(false); setRescheduleLeadId(null); }}
+					className="card animate-fade-in"
+					style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
 				>
-					<div
-						className="card animate-fade-in"
-						style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
-						onClick={e => e.stopPropagation()}
-					>
 						<h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 600 }}>Reschedule Meeting</h3>
 
 						<label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
@@ -1046,8 +1021,7 @@ const Schedule = () => {
 							</button>
 						</div>
 					</div>
-				</div>
-			)}
+				</Modal>
 	</div>
 );
 };

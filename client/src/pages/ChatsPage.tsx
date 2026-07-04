@@ -5,6 +5,7 @@ import api from "../lib/api";
 import { io, Socket } from "socket.io-client";
 import Avatar from "../components/common/Avatar";
 import FilePreviewModal from "../components/common/FilePreviewModal";
+import Modal from "../components/common/Modal";
 import toast from "react-hot-toast";
 import {
   Search,
@@ -2973,35 +2974,22 @@ export default function ChatsPage() {
         </div>
 
         {/* MODAL: Forward Message */}
-        {forwardingMessage && (
+        <Modal isOpen={forwardingMessage !== null} onClose={() => { setForwardingMessage(null); setForwardSuccessConvIds([]); }} zIndex={1000}>
           <div
+            className="card"
             style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.6)",
+              width: "100%",
+              maxWidth: 440,
+              padding: 24,
+              background: "var(--color-surface)",
+              borderRadius: 16,
+              border: "1px solid var(--color-border)",
+              boxShadow: "var(--shadow-xl)",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-              backdropFilter: "blur(4px)",
-              padding: 16,
+              flexDirection: "column",
+              maxHeight: "80vh",
             }}
           >
-            <div
-              className="card"
-              style={{
-                width: "100%",
-                maxWidth: 440,
-                padding: 24,
-                background: "var(--color-surface)",
-                borderRadius: 16,
-                border: "1px solid var(--color-border)",
-                boxShadow: "var(--shadow-xl)",
-                display: "flex",
-                flexDirection: "column",
-                maxHeight: "80vh",
-              }}
-            >
               <div
                 style={{
                   display: "flex",
@@ -3064,7 +3052,7 @@ export default function ChatsPage() {
                 >
                   Original Message:
                 </span>
-                {forwardingMessage.content || "[File Attachment]"}
+                {forwardingMessage?.content || "[File Attachment]"}
               </div>
 
               {/* <div style={{ position: "relative", marginBottom: 16 }}> */}
@@ -3193,8 +3181,7 @@ export default function ChatsPage() {
                 </button>
               </div>
             </div>
-          </div>
-        )}
+          </Modal>
       </div>
     </>
   );

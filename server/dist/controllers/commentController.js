@@ -42,6 +42,7 @@ const Notification_1 = require("../models/Notification");
 const ActivityLog_1 = __importStar(require("../models/ActivityLog"));
 const User_1 = __importDefault(require("../models/User"));
 const notificationService_1 = require("../services/notificationService");
+const tenant_1 = require("../utils/tenant");
 const createComment = async (req, res) => {
     try {
         const { content, assignmentId, taskId, mentions } = req.body;
@@ -85,11 +86,14 @@ exports.createComment = createComment;
 const getComments = async (req, res) => {
     try {
         const { assignmentId, taskId } = req.query;
+        const tenantUserIds = await (0, tenant_1.getTenantUserIds)(req.user);
         const filter = {};
         if (assignmentId)
             filter.assignment = assignmentId;
         if (taskId)
             filter.task = taskId;
+        // Tenant scope: only show comments where author is in this tenant
+        filter.author = { $in: tenantUserIds };
         const comments = await Comment_1.default.find(filter)
             .populate("author", "name email avatar")
             .populate("mentions.user", "name email")
@@ -103,9 +107,15 @@ const getComments = async (req, res) => {
 exports.getComments = getComments;
 const deleteComment = async (req, res) => {
     try {
+        const tenantUserIds = await (0, tenant_1.getTenantUserIds)(req.user);
         const comment = await Comment_1.default.findById(req.params.id);
         if (!comment) {
             res.status(404).json({ message: "Comment not found" });
+            return;
+        }
+        // Tenant check
+        if (!tenantUserIds.includes(comment.author.toString())) {
+            res.status(403).json({ message: "Access denied" });
             return;
         }
         // Only author or admin can delete

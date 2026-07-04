@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { X, Download, Search, FileSpreadsheet } from 'lucide-react';
+import Modal from '../common/Modal';
 
 interface DrilldownModalProps {
     isOpen: boolean;
@@ -9,10 +10,8 @@ interface DrilldownModalProps {
 }
 
 const DrilldownModal: React.FC<DrilldownModalProps> = ({ isOpen, onClose, title, data }) => {
-    if (!isOpen) return null;
-
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-fade-in">
+        <Modal isOpen={isOpen} onClose={onClose} zIndex={100}>
             <div className="bg-surface border border-border w-full max-w-6xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-slide-up transform-gpu">
                 {/* Modal Header */}
                 <div className="px-8 py-6 border-b border-border flex items-center justify-between bg-surface relative z-20">
@@ -89,7 +88,7 @@ const DrilldownModal: React.FC<DrilldownModalProps> = ({ isOpen, onClose, title,
                     </button>
                 </div>
             </div>
-        </div>
+        </Modal>
     );
 };
 

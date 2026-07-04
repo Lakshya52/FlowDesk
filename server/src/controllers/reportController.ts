@@ -9,6 +9,7 @@ import User from '../models/User';
 import { AuthRequest } from '../middlewares/auth';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
+import { getTenantUserIds } from '../utils/tenant';
 
 /**
  * Helper to get role-based constraints and shared filters
@@ -17,13 +18,14 @@ const getBaseFilters = async (req: AuthRequest) => {
     const userRole = req.user!.role;
     const userId = req.user!._id;
     const { teamId, employeeId, projectId, status, startDate, endDate } = req.query;
+    const tenantUserIds = await getTenantUserIds(req.user);
 
     let userFilter: any = {};
     let teamFilter: any = {};
     const taskMatch: any = {};
     const activityMatch: any = {};
 
-    // 1. Role-based scoping
+    // 1. Role-based scoping with tenant enforcement
     if (userRole === 'member') {
         userFilter._id = userId;
         teamFilter.members = userId;
@@ -31,36 +33,53 @@ const getBaseFilters = async (req: AuthRequest) => {
         activityMatch.user = userId;
     } else if (userRole === 'manager') {
         const managedTeams = await Team.find({ manager: userId }).distinct('_id');
-        const managedMembers = await Team.find({ manager: userId }).distinct('members');
+        const allManagedMembers = await Team.find({ manager: userId }).distinct('members');
+        const managedMembers = allManagedMembers.filter((m: any) =>
+            tenantUserIds.includes(m.toString())
+        );
         
         if (teamId) {
             const tId = new mongoose.Types.ObjectId(teamId as string);
             teamFilter._id = tId;
             const team = await Team.findById(tId);
             const roster = [...(team?.members || []), team?.manager].filter(Boolean);
-            userFilter._id = { $in: roster };
-            taskMatch.assignedTo = { $in: roster };
-            activityMatch.user = { $in: roster };
+            const tenantRoster = roster.filter((m: any) => tenantUserIds.includes(m.toString()));
+            userFilter._id = { $in: tenantRoster };
+            taskMatch.assignedTo = { $in: tenantRoster };
+            activityMatch.user = { $in: tenantRoster };
         } else {
             teamFilter._id = { $in: managedTeams };
-            const roster = Array.from(new Set([...managedMembers, userId]));
+            const roster = Array.from(new Set([...managedMembers, userId.toString()]));
             userFilter._id = { $in: roster };
             taskMatch.assignedTo = { $in: roster };
             activityMatch.user = { $in: roster };
         }
     } else if (userRole === 'admin') {
+        // Always apply tenant scoping for admin
         if (teamId) {
             const team = await Team.findById(teamId);
             const roster = [...(team?.members || []), team?.manager].filter(Boolean);
-            taskMatch.assignedTo = { $in: roster };
-            activityMatch.user = { $in: roster };
-            userFilter._id = { $in: roster };
-        }
-        if (employeeId) {
-            const eId = new mongoose.Types.ObjectId(employeeId as string);
-            userFilter._id = eId;
-            taskMatch.assignedTo = eId;
-            activityMatch.user = eId;
+            const tenantRoster = roster.filter((m: any) => tenantUserIds.includes(m.toString()));
+            taskMatch.assignedTo = { $in: tenantRoster };
+            activityMatch.user = { $in: tenantRoster };
+            userFilter._id = { $in: tenantRoster };
+        } else if (employeeId) {
+            if (!tenantUserIds.includes(employeeId as string)) {
+                // Employee not in this tenant — return empty
+                userFilter._id = null;
+                taskMatch.assignedTo = null;
+                activityMatch.user = null;
+            } else {
+                const eId = new mongoose.Types.ObjectId(employeeId as string);
+                userFilter._id = eId;
+                taskMatch.assignedTo = eId;
+                activityMatch.user = eId;
+            }
+        } else {
+            // No specific filter — scope to all tenant users
+            taskMatch.assignedTo = { $in: tenantUserIds };
+            activityMatch.user = { $in: tenantUserIds };
+            userFilter._id = { $in: tenantUserIds };
         }
     }
 
