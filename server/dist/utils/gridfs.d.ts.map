@@ -1,1 +1,0 @@
-{"version":3,"file":"gridfs.d.ts","sourceRoot":"","sources":["../../src/utils/gridfs.ts"],"names":[],"mappings":"AAIA;;;GAGG;AACH,wBAAsB,cAAc,CAChC,UAAU,EAAE,MAAM,EAClB,YAAY,EAAE,MAAM,EACpB,QAAQ,EAAE,MAAM,GACjB,OAAO,CAAC;IAAE,QAAQ,EAAE,MAAM,CAAA;CAAE,CAAC,CA8B/B;AAED;;GAEG;AACH,wBAAsB,gBAAgB,CAAC,QAAQ,EAAE,MAAM,GAAG,OAAO,CAAC,IAAI,CAAC,CAWtE"}
