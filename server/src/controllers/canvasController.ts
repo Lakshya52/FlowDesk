@@ -1,12 +1,18 @@
 import { Request, Response } from 'express';
 import CanvasNote from '../models/CanvasNote';
 import { getTenantUserIds } from '../utils/tenant';
+// import { getTenantUserIds } from '../utils/tenant';
 
-export const getNotes = async (req: Request, res: Response) => {
+export const getNotes = async (req: Request, res: Response) =>  //
+{
   try {
-    const tenantUserIds = await getTenantUserIds((req as any).user);
-    const notes = await CanvasNote.find({ userId: { $in: tenantUserIds } });
+    // const tenantUserIds = await getTenantUserIds((req as any).user);
+    // const notes = await CanvasNote.find({ userId: { $in: tenantUserIds } });
+    
+    // Personal canvas notes are private per user, not collaborative — no tenant-wide scope needed.
+    const notes = await CanvasNote.find({ userId: (req as any).user._id });
     res.json(notes);
+    
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
