@@ -24,9 +24,9 @@ export const getLeads = async (
 		const { campaignId, status, search, industry, source, priority, city, state, pincode } =
 			req.query;
 		const page = Math.max(1, parseInt(req.query.page as string) || 1);
-		const limit = Math.min(
-			10000,
-			Math.max(1, parseInt(req.query.limit as string) || 20),
+		const limit = Math.max(
+			1,
+			parseInt(req.query.limit as string) || 100000,
 		);
 		const skip = (page - 1) * limit;
 

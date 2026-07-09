@@ -1714,7 +1714,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                 <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 400, padding: 24 }}>
                             <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: 16 }}>Manage Team Members</h2>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflow: 'auto', marginBottom: 20 } as React.CSSProperties}>
-                                {users.map(u => {
+                                {users.filter(u => u._id !== user?._id).map(u => {
                                     const isManualMember = assignment.team?.some((m: any) => m._id === u._id);
                                     const assignedTeam = assignment.teams?.find((t: any) =>
                                         t.manager?._id === u._id ||

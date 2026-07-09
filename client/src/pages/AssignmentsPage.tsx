@@ -575,7 +575,7 @@ const AssignmentsPage: React.FC = () => {
 
       {/* Tabs */}
       <div
-        className="flex overflow-x-scroll gap-4 border-b border-(--color-border) mb-6 sm:mb-8"
+        className="flex overflow-x-scroll gap-4 border-b border-(--color-border) "
         style={{}}
       >
         <button
@@ -729,7 +729,7 @@ const AssignmentsPage: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6 sm:mb-8 sm:items-center">
+      <div className="flex flex-col sm:flex-row gap-4  sm:items-center">
         <div className="w-full sm:max-w-[360px] relative">
           <Search
             size={16}
@@ -1728,7 +1728,9 @@ const AssignmentsPage: React.FC = () => {
                     const team = allTeams.find((t: any) => t._id === teamId);
                     if (!team) return null;
                     const manager = team.manager;
-                    const members = team.members || [];
+                    const members = (team.members || []).filter(
+                      (m: any) => m._id !== manager?._id,
+                    );
                     const memberIds = [
                       ...members.map((m: any) => m._id),
                       manager?._id,
@@ -1969,11 +1971,10 @@ const AssignmentsPage: React.FC = () => {
                   onClick={() =>
                     !importing && fileInputRef.current?.click()
                   }
+                  className="border-2 border-dashed border-(--color-border) flex flex-col items-center justify-center"
                   style={{
-                    border: "2px dashed var(--color-border)",
                     borderRadius: 12,
                     padding: "32px 24px",
-                    textAlign: "center",
                     cursor: importing ? "default" : "pointer",
                     marginBottom: 16,
                   }}

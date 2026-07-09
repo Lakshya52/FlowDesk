@@ -18,26 +18,11 @@ export const createAssignment = async (
   try {
     const { teams: teamIds, team: memberIds = [], ...rest } = req.body;
 
-    // Always include the project creator
+    // Only include the creator and the members they explicitly selected
     let allMemberIds = new Set([
       req.user!._id.toString(),
       ...memberIds.map(String),
     ]);
-
-    if (teamIds && Array.isArray(teamIds) && teamIds.length > 0) {
-      const Team = (await import("../models/Team")).default;
-      const teams = await Team.find({ _id: { $in: teamIds } });
-      // Include all team members
-      const teamInvites = teams.flatMap((t) =>
-        t.members.map((m) => m.toString()),
-      );
-      teamInvites.forEach((id) => allMemberIds.add(id));
-      // Collect managers and add them
-      const managerIds = teams
-        .map((t) => t.manager?.toString())
-        .filter(Boolean);
-      managerIds.forEach((id) => allMemberIds.add(id));
-    }
 
     const assignment = await Assignment.create({
       ...rest,
@@ -274,12 +259,9 @@ export const updateAssignment = async (
 
     Object.assign(assignment, sanitizedBody);
 
-    // Auto-assign Team Members if teams were updated or manual team list changed
     if (req.body.teams || req.body.team) {
       const teamIds = req.body.teams || assignment.teams;
 
-      // Get the list of individual member IDs provided in the request
-      // If not provided, fall back to current list (handle populated vs unpopulated)
       let manualMemberIds: string[] = [];
       if (req.body.team) {
         manualMemberIds = req.body.team.map((id: any) => id.toString());
@@ -289,24 +271,7 @@ export const updateAssignment = async (
         );
       }
 
-      let allMemberIds = [...manualMemberIds];
-
-      if (teamIds && Array.isArray(teamIds) && teamIds.length > 0) {
-        const Team = (await import("../models/Team")).default;
-        const teams = await Team.find({ _id: { $in: teamIds } });
-
-        // Include all team members
-        const teamInvites = teams.flatMap((t) =>
-          t.members.map((m) => m.toString()),
-        );
-
-        // Merge with manual IDs, but respect the fact that some might have been
-        // explicitly removed from the manual list (optional behavior)
-        // For now, keep the policy: Team members ALWAYS have access.
-        allMemberIds = Array.from(new Set([...allMemberIds, ...teamInvites]));
-      }
-
-      assignment.team = allMemberIds as any;
+      assignment.team = manualMemberIds as any;
       assignment.teams = teamIds as any;
     }
 

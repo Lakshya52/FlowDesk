@@ -21,8 +21,9 @@ const TeamsPage: React.FC = () => {
 
     // ── UI state ──────────────────────────────────────────────────
     const [showCreate,       setShowCreate]       = useState(false);
-    const [form,             setForm]             = useState({ name: '', description: '' });
+    const [form,             setForm]             = useState({ name: '', description: '', members: [] as string[], manager: '' });
     const [saving,           setSaving]           = useState(false);
+    const [createMemberSearch, setCreateMemberSearch] = useState('');
     const [selectedTeam,     setSelectedTeam]     = useState<any>(null);
     const [showManage,       setShowManage]       = useState(false);
     const [activeTab,        setActiveTab]        = useState<ModalTab>('members');
@@ -70,13 +71,20 @@ const TeamsPage: React.FC = () => {
     // ── Handlers ──────────────────────────────────────────────────
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (form.members.length === 0) {
+            alert('Please select at least one team member.');
+            return;
+        }
+        if (!form.manager) {
+            alert('Please assign a team manager.');
+            return;
+        }
         setSaving(true);
         try {
             await api.post('/teams', form);
             setShowCreate(false);
-            setForm({ name: '', description: '' });
+            setForm({ name: '', description: '', members: [], manager: '' });
             queryClient.invalidateQueries({ queryKey: ['teams'] });
-            // queryClient.invalidateQueries({ queryKey: ['my-teams'] });
         } catch (e: any) {
             alert(e.response?.data?.message || 'Failed to create team');
         } finally {
@@ -428,7 +436,7 @@ const TeamsPage: React.FC = () => {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         zIndex: 100, backdropFilter: 'blur(2px)',
                     }}
-                    onClick={() => setShowCreate(false)}
+                    onClick={() => { setShowCreate(false); setForm({ name: '', description: '', members: [], manager: '' }); setCreateMemberSearch(''); }}
                 >
                     <div
                         className="card animate-fade-in"
@@ -475,8 +483,89 @@ const TeamsPage: React.FC = () => {
                                     style={{ resize: 'vertical' }}
                                 />
                             </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: 5, color: 'var(--color-text-secondary)' }}>
+                                    Team Members <span style={{ color: 'var(--color-error)' }}>*</span>
+                                    <span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--color-text-tertiary)' }}>
+                                        ({form.members.length} selected)
+                                    </span>
+                                </label>
+                                <div style={{ position: 'relative', marginBottom: 8 }}>
+                                    <Search
+                                        size={14}
+                                        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', pointerEvents: 'none' }}
+                                    />
+                                    <input
+                                        className="input"
+                                        placeholder="Search users…"
+                                        value={createMemberSearch}
+                                        onChange={e => setCreateMemberSearch(e.target.value)}
+                                        style={{ paddingLeft: 32, fontSize: '0.875rem' }}
+                                    />
+                                </div>
+                                <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                                    {users
+                                        .filter((u: any) =>
+                                            u.name?.toLowerCase().includes(createMemberSearch.toLowerCase()) ||
+                                            u.email?.toLowerCase().includes(createMemberSearch.toLowerCase())
+                                        )
+                                        .map((u: any) => {
+                                            const isSelected = form.members.includes(u._id);
+                                            return (
+                                                <div
+                                                    key={u._id}
+                                                    onClick={() => setForm(prev => ({
+                                                        ...prev,
+                                                        members: isSelected
+                                                            ? prev.members.filter((id: string) => id !== u._id)
+                                                            : [...prev.members, u._id],
+                                                    }))}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: 10,
+                                                        padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+                                                        background: isSelected ? 'var(--color-primary-light)' : 'var(--color-surface-hover)',
+                                                        border: isSelected ? '1px solid var(--color-primary)' : '1px solid transparent',
+                                                    }}
+                                                >
+                                                    <input type="checkbox" checked={isSelected} readOnly style={{ cursor: 'pointer' }} />
+                                                    <Avatar src={u.avatar} name={u.name} size={28} />
+                                                    <div style={{ flex: 1 }}>
+                                                        <span style={{ fontSize: '0.8125rem', fontWeight: 500 }}>{u.name}{u._id === user?._id ? ' (You)' : ''}</span>
+                                                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginLeft: 6 }}>{u.email}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    {users.length === 0 && (
+                                        <div style={{ textAlign: 'center', padding: 16, color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>
+                                            No users available
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: 5, color: 'var(--color-text-secondary)' }}>
+                                    Team Manager <span style={{ color: 'var(--color-error)' }}>*</span>
+                                </label>
+                                <select
+                                    className="input"
+                                    value={form.manager}
+                                    onChange={e => setForm({ ...form, manager: e.target.value })}
+                                    style={{ fontSize: '0.875rem' }}
+                                    required
+                                >
+                                    <option value="">— Select a manager —</option>
+                                    {users
+                                        .filter((u: any) => u.role === 'manager' || u.role === 'admin')
+                                        .map((u: any) => (
+                                            <option key={u._id} value={u._id}>
+                                                {u.name}{u._id === user?._id ? ' (You)' : ''}  ·  {u.email}
+                                            </option>
+                                        ))}
+                                </select>
+                            </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-                                <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>
+                                <button type="button" className="btn btn-secondary" onClick={() => { setShowCreate(false); setForm({ name: '', description: '', members: [], manager: '' }); setCreateMemberSearch(''); }}>
                                     Cancel
                                 </button>
                                 <button type="submit" className="btn btn-primary" disabled={saving}>
@@ -584,7 +673,7 @@ const TeamsPage: React.FC = () => {
                                     </div>
 
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        {filteredUsers.map((u: any) => {
+                                        {filteredUsers.filter((u: any) => u._id !== selectedTeam.manager?._id).map((u: any) => {
                                             const alreadyIn    = selectedTeam.members?.some((m: any) => m._id === u._id);
                                             const isTeamMgr    = selectedTeam.manager?._id === u._id;
                                             return (
@@ -601,7 +690,7 @@ const TeamsPage: React.FC = () => {
                                                         <Avatar src={u.avatar} name={u.name} size={34} />
                                                         <div>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                                                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{u.name}</span>
+                                                                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{u.name}{u._id === user?._id ? ' (You)' : ''}</span>
                                                                 {isTeamMgr && (
                                                                     <span title="Team Manager" style={{ display: 'inline-flex' }}>
                                                                         <Crown size={11} style={{ color: '#f59e0b' }} />
@@ -665,7 +754,7 @@ const TeamsPage: React.FC = () => {
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                     <Avatar src={u.avatar} name={u.name} size={36} />
                                                     <div>
-                                                        <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{u.name}</div>
+                                                        <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{u.name}{u._id === user?._id ? ' (You)' : ''}</div>
                                                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{u.email}</div>
                                                     </div>
                                                 </div>
@@ -744,10 +833,14 @@ const TeamsPage: React.FC = () => {
                                     >
                                         <option value="">— Choose a user —</option>
                                         {users
-                                            .filter((u: any) => u.role === 'manager')
+                                            .filter((u: any) =>
+                                                (u.role === 'manager' || u.role === 'admin') &&
+                                                u._id !== selectedTeam.manager?._id &&
+                                                !selectedTeam.members?.some((m: any) => m._id === u._id)
+                                            )
                                             .map((u: any) => (
                                                 <option key={u._id} value={u._id}>
-                                                    {u.name}  ·  {u.email}
+                                                    {u.name}{u._id === user?._id ? ' (You)' : ''}  ·  {u.email}
                                                 </option>
                                             ))}
                                     </select>
@@ -756,7 +849,7 @@ const TeamsPage: React.FC = () => {
                                         className="btn btn-primary"
                                         style={{ width: '100%', justifyContent: 'center', gap: 6 }}
                                         disabled={!selectedMgrId || assigningManager || selectedMgrId === selectedTeam.manager?._id}
-                                        onClick={() => handleAssignManager(selectedMgrId)}
+                                        onClick={() => handleAssignManager(selectedMgrId) }
                                     >
                                         <Crown size={14} />
                                         {assigningManager ? 'Assigning…' : 'Confirm Assignment'}

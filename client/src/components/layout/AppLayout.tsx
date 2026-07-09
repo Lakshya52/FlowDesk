@@ -124,12 +124,11 @@ const AppLayout: React.FC = () => {
             )}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%', height: '100%' }}>
                 <Header toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-                <main id="main-content-scroll" style={{
+                <main id="main-content-scroll"
+                    className="overflow-auto relative bg-(var(--color-bg))"
+                style={{
                     flex: 1,
-                    overflow: 'auto',
                     padding: location.pathname === '/canvas' ? '0' : (isMobile ? '16px' : '24px 32px'),
-                    background: 'var(--color-bg)',
-                    position: 'relative'
                 }}>
                     <div className="animate-fade-in">
                         <Outlet />

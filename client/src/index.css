@@ -395,13 +395,15 @@ body {
   border-radius: 6px;
 }
 
-/* ===== Date input – open picker on full-field click ===== */
-input[type="date"] {
+/* ===== Date / Time input – open picker on full-field click ===== */
+input[type="date"],
+input[type="time"] {
     position: relative;
     cursor: pointer;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator {
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -536,13 +538,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border-radius: 6px;
 }
 
-/* ===== Date input – open picker on full-field click ===== */
-input[type="date"] {
+/* ===== Date / Time input – open picker on full-field click ===== */
+input[type="date"],
+input[type="time"] {
     position: relative;
     cursor: pointer;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator {
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
     position: absolute;
     inset: 0;
     width: 100%;

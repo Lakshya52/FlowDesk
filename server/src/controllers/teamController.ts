@@ -5,10 +5,27 @@ import { AuthRequest } from '../middlewares/auth';
 
 export const createTeam = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const { members, manager, ...rest } = req.body;
+
+        if (!members || !Array.isArray(members) || members.length === 0) {
+            res.status(400).json({ message: 'At least one team member is required.' });
+            return;
+        }
+        if (!manager) {
+            res.status(400).json({ message: 'A team manager is required.' });
+            return;
+        }
+
+        // Ensure the manager is not duplicated in the members array
+        const cleanMembers = members.filter(
+            (id: string) => id.toString() !== manager.toString(),
+        );
+
         const team = await Team.create({
-            ...req.body,
+            ...rest,
+            members: cleanMembers,
+            manager,
             createdBy: req.user!._id,
-            // manager: req.user!._id,
         });
 
         await ActivityLog.create({

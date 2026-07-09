@@ -30,8 +30,8 @@ router.put('/:id/manager', authorize('admin'), async (req, res) => {
         if (managerId) {
             const managerUser = await User.findById(managerId);
             if (!managerUser) { res.status(404).json({ message: 'User not found' }); return; }
-            if (managerUser.role !== 'manager') {
-                res.status(400).json({ message: 'User must have the Manager role' });
+            if (managerUser.role !== 'manager' && managerUser.role !== 'admin') {
+                res.status(400).json({ message: 'User must have the Manager or Admin role' });
                 return;
             }
             team.manager = managerId;

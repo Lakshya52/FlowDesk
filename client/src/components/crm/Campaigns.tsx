@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Plus, X, Users, Target, Calendar, Loader2, Trash2, Pencil, Phone, Building, Search, Upload, Download, AlertCircle, CheckCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -78,7 +78,22 @@ const Campaigns = () => {
     const [showImportModal, setShowImportModal] = useState(false);
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<{ imported: number; errors: any[] } | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (toast) {
+            const t = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(t);
+        }
+    }, [toast]);
+
+    useLayoutEffect(() => {
+        if (selectedCampaignId) {
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        }
+    }, [selectedCampaignId]);
 
     const { data: campaigns = [], isLoading } = useQuery({
         queryKey: ["campaigns"],
@@ -151,7 +166,7 @@ const Campaigns = () => {
                         setShowCreateModal(false);
                     },
                     onError: (err: any) => {
-                        alert(err.response?.data?.message || 'Failed to update campaign');
+                        setToast({ message: err.response?.data?.message || 'Failed to update campaign', type: 'error' });
                     },
                 }
             );
@@ -164,7 +179,7 @@ const Campaigns = () => {
                         setShowCreateModal(false);
                     },
                     onError: (err: any) => {
-                        alert(err.response?.data?.message || 'Failed to create campaign');
+                        setToast({ message: err.response?.data?.message || 'Failed to create campaign', type: 'error' });
                     },
                 }
             );
@@ -178,11 +193,11 @@ const Campaigns = () => {
     };
 
     const handleDelete = (campaignId: string) => {
-        if (!confirm('Delete this campaign? This cannot be undone.')) return;
+        if (!window.confirm('Delete this campaign? This cannot be undone.')) return;
         if (selectedCampaignId === campaignId) setSelectedCampaignId(null);
         deleteMutation.mutate(campaignId, {
             onError: (err: any) => {
-                alert(err.response?.data?.message || 'Failed to delete campaign');
+                setToast({ message: err.response?.data?.message || 'Failed to delete campaign', type: 'error' });
             },
         });
     };
@@ -215,7 +230,7 @@ const Campaigns = () => {
                 queryClient.invalidateQueries({ queryKey: ["campaigns"] });
             }
         } catch (err: any) {
-            alert(err.response?.data?.message || "Import failed");
+            setToast({ message: err.response?.data?.message || "Import failed", type: 'error' });
         } finally {
             setImporting(false);
             if (fileInputRef.current) fileInputRef.current.value = "";
@@ -230,277 +245,51 @@ const Campaigns = () => {
         return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
-    const campaignsContent = (
-        <>
-            <div className="flex flex-col sm:flex-row items-start sm:items-end sm:justify-between gap-4" style={{ marginBottom: 20 }}>
-                <div>
-                    <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
-                        Campaigns
-                    </h1>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>
-                        {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}
-                    </p>
-                </div>
-
-                {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-                            <Plus size={16} /> New Campaign
-                        </button>
-                    </div>
-                )} 
-            </div>
-
-            {campaigns.length === 0 ? (
-                <div className="card" style={{ padding: 48, textAlign: 'center' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: 16, opacity: 0.3 }}>
-                        <Target size={48} style={{ color: 'var(--color-text-tertiary)', margin: '0 auto' }} />
-                    </div>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: 8 }}>
-                        No Campaigns Yet
-                    </h3>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', maxWidth: 360, margin: '0 auto' }}>
-                        Create your first campaign to start managing outreach, tracking leads, and organising your CRM efforts.
-                    </p>
-                </div>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20 }}>
-                    {campaigns.map((campaign) => (
-                        <div
-                            key={campaign._id}
-                            className="card animate-fade-in"
-                            style={{
-                                padding: 0,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                overflow: 'hidden',
-                                position: 'relative',
-                                transition: 'box-shadow 0.2s, border-color 0.2s',
-                                cursor: 'pointer',
-                                border: selectedCampaignId === campaign._id ? '2px solid var(--color-primary)' : undefined,
-                            }}
-                            onClick={() => setSelectedCampaignId(campaign._id)}
-                        >
-                            <div style={{
-                                padding: '18px 20px 14px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 10,
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
-                                        <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.3, margin: 0 }}>
-                                            {campaign.name}
-                                        </h4>
-                                        <div style={{
-                                            background: 'var(--color-primary-light)',
-                                            color: 'var(--color-primary)',
-                                            fontSize: '0.7rem',
-                                            fontWeight: 600,
-                                            padding: '2px 10px',
-                                            borderRadius: 20,
-                                            display: 'inline-block',
-                                            alignSelf: 'flex-start',
-                                        }}>
-                                            {campaign.purpose}
-                                        </div>
-                                    </div>
-                                    {(currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?._id === campaign.createdBy?._id) && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleCampaignEdit(campaign); }}
-                                            title="Edit campaign"
-                                            style={{
-                                                background: 'none', border: 'none', cursor: 'pointer',
-                                                color: 'var(--color-text-tertiary)', padding: 4,
-                                                borderRadius: 6, flexShrink: 0, lineHeight: 0,
-                                                marginLeft: 8,
-                                            }}
-                                            onMouseOver={e => { e.currentTarget.style.background = '#C7FFD1'; e.currentTarget.style.color = '#00961C'; }}
-                                            onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--color-text-tertiary)'; }}
-                                        >
-                                            <Pencil size={14} />
-                                        </button>
-                                    )}
-                                    {(currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?._id === campaign.createdBy?._id) && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(campaign._id); }}
-                                            title="Delete campaign"
-                                            style={{
-                                                background: 'none', border: 'none', cursor: 'pointer',
-                                                color: 'var(--color-text-tertiary)', padding: 4,
-                                                borderRadius: 6, flexShrink: 0, lineHeight: 0,
-                                                marginLeft: 8,
-                                            }}
-                                            onMouseOver={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
-                                            onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--color-text-tertiary)'; }}
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    )}
-                                </div>
-
-                                {campaign.description && (
-                                    <p style={{
-                                        fontSize: '0.78rem',
-                                        color: 'var(--color-text-secondary)',
-                                        lineHeight: 1.5,
-                                        margin: 0,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: 2,
-                                        WebkitBoxOrient: 'vertical',
-                                    }}>
-                                        {campaign.description}
-                                    </p>
-                                )}
-
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 12,
-                                    fontSize: '0.72rem',
-                                    color: 'var(--color-text-tertiary)',
-                                    flexWrap: 'wrap',
-                                }}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <Calendar size={11} />
-                                        {formatDate(campaign.createdAt)}
-                                    </span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <Target size={11} />
-                                        <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                                            {campaign.leadCount ?? 0} lead{(campaign.leadCount ?? 0) !== 1 ? 's' : ''}
-                                        </span>
-                                    </span>
-                                    <span style={{ marginLeft: 'auto', fontSize: '0.7rem' }}>
-                                        by {campaign.createdBy?.name || 'Unknown'}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {campaign.people.length > 0 && (
-                                <div style={{
-                                    padding: '10px 20px 12px',
-                                    borderTop: '1px solid var(--color-border)',
-                                    background: 'var(--color-surface)',
-                                }}>
-                                    <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
-                                        Members ({campaign.people.length})
-                                    </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                        {campaign.people.map((person, idx) => (
-                                            <div
-                                                key={person._id}
-                                                title={person.name}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 5,
-                                                    background: AVATAR_COLORS[idx % AVATAR_COLORS.length] + '12',
-                                                    borderRadius: 20,
-                                                    padding: '2px 8px 2px 4px',
-                                                }}
-                                            >
-                                                <div style={{
-                                                    width: 20, height: 20, borderRadius: '50%',
-                                                    background: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-                                                    color: 'white', display: 'flex', alignItems: 'center',
-                                                    justifyContent: 'center', fontSize: '0.55rem', fontWeight: 600,
-                                                    flexShrink: 0,
-                                                }}>
-                                                    {person.avatar ? (
-                                                        <img src={`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-api.raksco.in'}${person.avatar}/resize?w=40&q=60`} alt={person.name} width={20} height={20} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                                                    ) : getInitials(person.name)}
-                                                </div>
-                                                <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                                                    {person.name}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-        </>
-    );
-
     const leadsPanel = selectedCampaign && (
-        <div style={{
-            width: selectedCampaignId ? 400 : 0,
-            minWidth: selectedCampaignId ? 400 : 0,
-            borderLeft: '1px solid var(--color-border)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            transition: 'width 0.2s, min-width 0.2s',
-        }}>
-            <div style={{
-                padding: '16px 20px',
-                borderBottom: '1px solid var(--color-border)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'var(--color-surface)',
-                flexShrink: 0,
-            }}>
+        <div className={`flex flex-col overflow-hidden  border-l border-r border-b border-(--color-border) rounded-xl
+            ${selectedCampaignId ? 'w-full lg:w-[400px] lg:min-w-[400px]' : 'w-0 lg:w-0'}`}
+            style={{ transition: 'width 0.2s, min-width 0.2s' }}>
+            <div className="px-[16px_20px] py-4  border-b border-t border-(--color-border) flex items-center justify-between rounded-xl bg-(--color-surface) shrink-0">
                 <div>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>
+                    <h3 className="text-base font-bold m-0">
                         {selectedCampaign.name}
                     </h3>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+                    <p className="text-[0.75rem] text-(--color-text-secondary) mt-[2px] m-0">
                         {leads.length} lead{leads.length !== 1 ? 's' : ''}
                     </p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div className="flex items-center gap-1.5">
                     {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
                         <button
                             onClick={() => setShowImportModal(true)}
                             title="Import leads"
-                            style={{
-                                background: 'var(--color-primary-light)', border: 'none', cursor: 'pointer',
-                                color: 'var(--color-primary)', width: 32, height: 32, borderRadius: 8,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            }}
+                            className="bg-(--color-primary-light) border-none cursor-pointer text-(--color-primary) w-8 h-8 rounded-lg flex items-center justify-center shrink-0 hover:opacity-80"
                         >
                             <Upload size={14} />
                         </button>
                     )}
                     <button
                         onClick={() => { setSelectedCampaignId(null); setLeadSearch(''); }}
-                        style={{
-                            background: 'var(--color-surface-hover)', border: 'none', cursor: 'pointer',
-                            color: 'var(--color-text-tertiary)', width: 32, height: 32, borderRadius: 8,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                        }}
+                        className="bg-(--color-surface-hover) border-none cursor-pointer text-(--color-text-tertiary) w-8 h-8 rounded-lg flex items-center justify-center shrink-0 hover:opacity-80"
                     >
                         <X size={16} />
                     </button>
                 </div>
             </div>
 
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', flexShrink: 0 }}>
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    border: '1px solid var(--color-border)', borderRadius: 8, padding: '0 10px',
-                }}>
-                    <Search size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
+            <div className="px-4 py-3 border-b border-(--color-border) shrink-0">
+                <div className="flex items-center gap-1.5 border border-(--color-border) rounded-lg px-[10px]">
+                    <Search size={14} className="text-(--color-text-tertiary) shrink-0" />
                     <input
                         placeholder="Search leads..."
-                        style={{
-                            flex: 1, border: 'none', padding: '7px 0', fontSize: '0.8rem',
-                            outline: 'none', boxShadow: 'none', background: 'transparent',
-                        }}
+                        className="flex-1 border-none py-[7px] text-[0.8rem] outline-none shadow-none bg-transparent"
                         value={leadSearch}
                         onChange={e => setLeadSearch(e.target.value)}
                     />
                     {leadSearch && (
                         <button
                             onClick={() => setLeadSearch('')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 2, lineHeight: 0 }}
+                            className="bg-transparent border-none cursor-pointer text-(--color-text-tertiary) p-0.5 leading-none"
                         >
                             <X size={12} />
                         </button>
@@ -508,59 +297,52 @@ const Campaigns = () => {
                 </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+            <div className="flex-1 overflow-y-auto p-2">
                 {leadsLoading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
-                        <Loader2 size={24} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+                    <div className="flex justify-center p-10">
+                        <Loader2 size={24} className="animate-spin text-(--color-primary)" />
                     </div>
                 ) : leads.length === 0 ? (
-                    <div style={{ padding: 40, textAlign: 'center' }}>
-                        <Phone size={32} style={{ color: 'var(--color-text-tertiary)', opacity: 0.3, margin: '0 auto 12px', display: 'block' }} />
-                        <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                    <div className="p-10 text-center">
+                        <Phone size={32} className="text-(--color-text-tertiary) opacity-30 mx-auto mb-3 block" />
+                        <p className="text-[0.85rem] text-(--color-text-secondary)">
                             {leadSearch ? 'No leads match your search' : 'No leads in this campaign'}
                         </p>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div className="flex flex-col gap-1.5">
                         {leads.map((lead) => (
                             <div
                                 key={lead._id}
-                                className="card"
-                                style={{
-                                    padding: '10px 14px',
-                                    cursor: 'pointer',
-                                    border: '1px solid var(--color-border)',
-                                    transition: 'box-shadow 0.15s',
-                                }}
+                                className="card p-[10px_14px] cursor-pointer border border-(--color-border) hover:shadow-sm"
                                 onClick={() => navigate(`/crm/dial?leadId=${lead._id}`)}
                             >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                                <div className="flex items-start justify-between mb-1">
+                                    <span className="text-[0.85rem] font-semibold text-(--color-text)">
                                         {lead.name}
                                     </span>
-                                    <span style={{
-                                        fontSize: '0.6rem', fontWeight: 600, padding: '2px 6px', borderRadius: 4,
-                                        background: PRIORITY_COLORS[lead.priority] + '20',
-                                        color: PRIORITY_COLORS[lead.priority],
-                                        whiteSpace: 'nowrap', marginLeft: 8,
-                                    }}>
+                                    <span className={` text-[0.6rem] font-semibold px-1.5 py-0.5 rounded whitespace-nowrap ml-2 ${lead.priority === 'very high' ? 'bg-(--color-danger-light) text-(--color-danger)' : lead.priority === 'high' ? 'bg-(--color-warning-light) text-(--color-warning)' : lead.priority === 'medium' ? 'bg-(--color-primary-light) text-(--color-primary)' : 'bg-(--color-text-tertiary-light) text-(--color-text-tertiary)'}`}
+                                        style={{
+                                            // background: PRIORITY_COLORS[lead.priority] + '20',
+                                            color: PRIORITY_COLORS[lead.priority],
+                                        }}>
                                         {lead.priority}
                                     </span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.72rem', color: 'var(--color-text-secondary)', flexWrap: 'wrap' }}>
+                                <div className="flex items-center gap-2.5 text-[0.72rem] text-(--color-text-secondary) flex-wrap">
                                     {lead.phone && (
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                        <span className="flex items-center gap-1">
                                             <Phone size={11} /> {lead.phone}
                                         </span>
                                     )}
                                     {lead.companyName && (
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                        <span className="flex items-center gap-1">
                                             <Building size={11} /> {lead.companyName}
                                         </span>
                                     )}
                                 </div>
-                                <div style={{ marginTop: 4 }}>
-                                    <span className={`badge badge-${STATUS_BADGE[lead.status] || "todo"}`} style={{ fontSize: '0.6rem' }}>
+                                <div className="mt-1">
+                                    <span className={`badge badge-${STATUS_BADGE[lead.status] || "todo"} text-[0.6rem]`}>
                                         {lead.status.replace(/_/g, ' ')}
                                     </span>
                                 </div>
@@ -572,59 +354,192 @@ const Campaigns = () => {
         </div>
     );
 
+    const campaignsContent = (
+        <>
+            <div className="shrink-0 flex flex-col sm:flex-row items-start sm:items-end sm:justify-between gap-4 mb-5 pt-4 sm:pt-6">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">
+                        Campaigns
+                    </h1>
+                    <p className="text-[0.85rem] text-(--color-text-secondary) mt-1">
+                        {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}
+                    </p>
+                </div>
+
+                {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+                    <div className="flex gap-2">
+                        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+                            <Plus size={16} /> New Campaign
+                        </button>
+                    </div>
+                )} 
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto pb-4 sm:pb-6">
+            {campaigns.length === 0 ? (
+                <div className="card p-12 text-center">
+                    <div className="mb-4 opacity-30">
+                        <Target size={48} className="text-(--color-text-tertiary) mx-auto" />
+                    </div>
+                    <h3 className="text-[1.1rem] font-semibold text-(--color-text) mb-2">
+                        No Campaigns Yet
+                    </h3>
+                    <p className="text-[0.85rem] text-(--color-text-secondary) max-w-[360px] mx-auto">
+                        Create your first campaign to start managing outreach, tracking leads, and organising your CRM efforts.
+                    </p>
+                </div>
+            ) : (
+                <div className={`grid grid-cols-1 ${!leadsPanel ? "sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3" : "sm:grid-cols-1 xl:grid-cols-2 " }  gap-5 py-2`}>
+                    {campaigns.map((campaign) => (
+                        <div
+                            key={campaign._id}
+                            className={`card animate-fade-in flex flex-col overflow-hidden relative cursor-pointer transition-shadow transition-border-color
+                                ${selectedCampaignId === campaign._id ? '!border-(--color-primary) !border-2' : ''}`}
+                            style={{ padding: 0 }}
+                            onClick={() => setSelectedCampaignId(campaign._id)}
+                        >
+                            <div className="p-[18px_20px_14px] flex flex-col gap-2.5">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                                        <h4 className="text-[1.05rem] font-bold text-(--color-text) leading-tight m-0">
+                                            {campaign.name}
+                                        </h4>
+                                        <div className="bg-(--color-primary-light) text-(--color-primary) text-[0.7rem] font-semibold px-[10px] py-[2px] rounded-full inline-block self-start">
+                                            {campaign.purpose}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                                    {(currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?._id === campaign.createdBy?._id) && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleCampaignEdit(campaign); }}
+                                            title="Edit campaign"
+                                            className="bg-transparent border-none cursor-pointer text-(--color-text-tertiary) p-1 rounded-md shrink-0 leading-none hover:bg-[#C7FFD1] hover:!text-[#00961C]"
+                                        >
+                                            <Pencil size={14} />
+                                        </button>
+                                    )}
+                                    {(currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?._id === campaign.createdBy?._id) && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(campaign._id); }}
+                                            title="Delete campaign"
+                                            className="bg-transparent border-none cursor-pointer text-(--color-text-tertiary) p-1 rounded-md shrink-0 leading-none hover:bg-[#fef2f2] hover:!text-[#ef4444]"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    )}
+                                    </div>
+                                </div>
+
+                                {campaign.description && (
+                                    <p className="text-[0.78rem] text-(--color-text-secondary) leading-relaxed m-0 line-clamp-2">
+                                        {campaign.description}
+                                    </p>
+                                )}
+
+                                <div className="flex items-center gap-3 text-[0.72rem] text-(--color-text-tertiary) flex-wrap">
+                                    <span className="flex items-center gap-1">
+                                        <Calendar size={11} />
+                                        {formatDate(campaign.createdAt)}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <Target size={11} />
+                                        <span className="font-semibold text-(--color-primary)">
+                                            {campaign.leadCount ?? 0} lead{(campaign.leadCount ?? 0) !== 1 ? 's' : ''}
+                                        </span>
+                                    </span>
+                                    <span className="ml-auto text-[0.7rem]">
+                                        by {campaign.createdBy?.name || 'Unknown'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {campaign.people.length > 0 && (
+                                <div className="px-[20px] py-[10px_12px] border-t border-(--color-border) bg-(--color-surface)">
+                                    <div className="text-[0.68rem] text-(--color-text-tertiary) mb-1.5">
+                                        Members ({campaign.people.length})
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {campaign.people.map((person, idx) => (
+                                            <div
+                                                key={person._id}
+                                                title={person.name}
+                                                className="flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-1"
+                                                style={{ background: AVATAR_COLORS[idx % AVATAR_COLORS.length] + '12' }}
+                                            >
+                                                <div className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[0.55rem] font-semibold shrink-0"
+                                                    style={{ background: AVATAR_COLORS[idx % AVATAR_COLORS.length] }}>
+                                                    {person.avatar ? (
+                                                        <img src={`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-api.raksco.in'}${person.avatar}/resize?w=40&q=60`} alt={person.name} width={20} height={20} loading="lazy" decoding="async" className="w-full h-full rounded-full object-cover" />
+                                                    ) : getInitials(person.name)}
+                                                </div>
+                                                <span className="text-[0.7rem] font-medium text-(--color-text-secondary)">
+                                                    {person.name}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+            </div>
+        </>
+    );
+
+    
+
     if (isLoading) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
-                <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+            <div className="flex justify-center p-[60px]">
+                <Loader2 size={32} className="animate-spin text-(--color-primary)" />
             </div>
         );
     }
 
     return (
-        <div style={{ maxWidth: selectedCampaignId ? 1400 : 1200, height: selectedCampaignId ? '100dvh' : undefined, display: 'flex', gap: 0, overflow: selectedCampaignId ? 'hidden' : undefined }}>
-            <div style={{ flex: 1, minWidth: 0, paddingRight: selectedCampaignId ? 24 : 0, overflow: selectedCampaignId ? 'hidden' : undefined }}>
+        <>
+        {toast && (
+            <div className={`fixed top-4 right-4 z-[100] px-4 py-2.5 rounded-lg shadow-lg text-sm font-semibold text-white animate-fade-in ${
+                toast.type === 'error' ? 'bg-(--color-danger)' : 'bg-green-600'
+            }`}>
+                {toast.message}
+            </div>
+        )}
+        <div className="max-w-[1400px] mx-auto h-[80dvh] flex flex-col lg:flex-row gap-0 overflow-hidden">
+            <div className={`flex flex-col min-h-0 h-full flex-1 min-w-0 ${selectedCampaignId ? 'hidden lg:flex lg:pr-6' : 'flex'}`}>
                 {campaignsContent}
             </div>
             {leadsPanel}
 
             {/* Create Campaign Modal */}
             <Modal isOpen={showCreateModal} onClose={() => { setShowCreateModal(false); resetForm(); }}>
-                <div
-                    className="card animate-fade-in"
-                    style={{ maxWidth: 500, width: '100%', padding: 0, overflow: 'hidden', borderRadius: 16 }}
-                >
-                        <div style={{
-                            padding: '20px 24px', borderBottom: '1px solid var(--color-border)',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            background: 'var(--color-surface)',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Plus size={18} style={{ color: 'var(--color-primary)' }} />
+                <div className="card animate-fade-in max-w-[500px] w-full p-0 overflow-hidden rounded-2xl">
+                        <div className="px-6 py-5 border-b border-(--color-border) flex items-center justify-between bg-(--color-surface)">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-(--color-primary-light) flex items-center justify-center">
+                                    <Plus size={18} className="text-(--color-primary)" />
                                 </div>
                                 <div>
-                                    <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>{editingCampaign ? 'Edit Campaign' : 'New Campaign'}</h3>
-                                    <p style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>
+                                    <h3 className="text-base font-bold m-0">{editingCampaign ? 'Edit Campaign' : 'New Campaign'}</h3>
+                                    <p className="text-[0.72rem] text-(--color-text-tertiary) mt-[2px] m-0">
                                         {editingCampaign ? 'Update campaign details' : 'Create a new outreach campaign'}
                                     </p>
                                 </div>
                             </div>
                             <button
-                                style={{
-                                    background: 'var(--color-surface-hover)', border: 'none', cursor: 'pointer',
-                                    color: 'var(--color-text-tertiary)', width: 32, height: 32, borderRadius: 8,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                }}
+                                className="bg-(--color-surface-hover) border-none cursor-pointer text-(--color-text-tertiary) w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80"
                                 onClick={() => { setShowCreateModal(false); resetForm(); }}
                             >
                                 <X size={16} />
                             </button>
                         </div>
 
-                        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+                        <div className="p-6 flex flex-col gap-[18px]">
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-                                    Campaign Name <span style={{ color: 'var(--color-danger)' }}>*</span>
+                                <label className="block text-[0.75rem] text-(--color-text-secondary) mb-1.5">
+                                    Campaign Name <span className="text-(--color-danger)">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -636,8 +551,8 @@ const Campaigns = () => {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-                                    Purpose / Goal <span style={{ color: 'var(--color-danger)' }}>*</span>
+                                <label className="block text-[0.75rem] text-(--color-text-secondary) mb-1.5">
+                                    Purpose / Goal <span className="text-(--color-danger)">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -649,12 +564,11 @@ const Campaigns = () => {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+                                <label className="block text-[0.75rem] text-(--color-text-secondary) mb-1.5">
                                     Description (optional)
                                 </label>
                                 <textarea
-                                    className="input"
-                                    style={{ minHeight: 70, resize: 'vertical' }}
+                                    className="input min-h-[70px] resize-y"
                                     placeholder="Campaign details..."
                                     value={form.description}
                                     onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
@@ -662,12 +576,12 @@ const Campaigns = () => {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 10 }}>
-                                    Add Members <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>({selectedMembers.length} selected)</span>
+                                <label className="block text-[0.75rem] text-(--color-text-secondary) mb-2.5">
+                                    Add Members <span className="text-[0.7rem] text-(--color-text-tertiary)">({selectedMembers.length} selected)</span>
                                 </label>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxHeight: 160, overflowY: 'auto' }}>
+                                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
                                     {users.length === 0 ? (
-                                        <p style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)', padding: '4px 0' }}>No team members found</p>
+                                        <p className="text-[0.8rem] text-(--color-text-tertiary) py-1">No team members found</p>
                                     ) : (
                                         users.map(user => {
                                             const isSelected = selectedMembers.includes(user._id);
@@ -675,14 +589,7 @@ const Campaigns = () => {
                                                 <button
                                                     key={user._id}
                                                     onClick={() => toggleMember(user._id)}
-                                                    className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                                                    style={{
-                                                        borderRadius: 20,
-                                                        fontWeight: isSelected ? 600 : 400,
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: 6,
-                                                    }}
+                                                    className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'} rounded-full flex items-center gap-1.5 ${isSelected ? 'font-semibold' : 'font-normal'}`}
                                                 >
                                                     {isSelected ? <X size={12} /> : <Users size={12} />}
                                                     {user.name}
@@ -694,8 +601,7 @@ const Campaigns = () => {
                             </div>
 
                             <button
-                                className="btn btn-primary"
-                                style={{ width: '100%', marginTop: 4, padding: '10px' }}
+                                className="btn btn-primary w-full mt-1 py-[10px]"
                                 disabled={!form.name.trim() || !form.purpose.trim() || createMutation.isPending || updateMutation.isPending}
                                 onClick={handleCreate}
                             >
@@ -710,32 +616,21 @@ const Campaigns = () => {
 
             {/* Import Leads Modal */}
             <Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportResult(null); }}>
-                <div
-                    className="card animate-fade-in"
-                    style={{ maxWidth: 480, width: '100%', padding: 0, overflow: 'hidden', borderRadius: 16 }}
-                >
-                        <div style={{
-                            padding: '20px 24px', borderBottom: '1px solid var(--color-border)',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            background: 'var(--color-surface)',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Upload size={18} style={{ color: 'var(--color-primary)' }} />
+                <div className="card animate-fade-in max-w-[480px] w-full p-0 overflow-hidden rounded-2xl">
+                        <div className="px-6 py-5 border-b border-(--color-border) flex items-center justify-between bg-(--color-surface)">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-(--color-primary-light) flex items-center justify-center">
+                                    <Upload size={18} className="text-(--color-primary)" />
                                 </div>
                                 <div>
-                                    <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Import Leads</h3>
-                                    <p style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>
+                                    <h3 className="text-base font-bold m-0">Import Leads</h3>
+                                    <p className="text-[0.72rem] text-(--color-text-tertiary) mt-[2px] m-0">
                                         to {selectedCampaign?.name || 'campaign'}
                                     </p>
                                 </div>
                             </div>
                             <button
-                                style={{
-                                    background: 'var(--color-surface-hover)', border: 'none', cursor: 'pointer',
-                                    color: 'var(--color-text-tertiary)', width: 32, height: 32, borderRadius: 8,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                }}
+                                className="bg-(--color-surface-hover) border-none cursor-pointer text-(--color-text-tertiary) w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80"
                                 onClick={() => { setShowImportModal(false); setImportResult(null); }}
                             >
                                 <X size={16} />
@@ -743,87 +638,69 @@ const Campaigns = () => {
                         </div>
 
                         {importResult ? (
-                            <div style={{ padding: 24 }}>
-                                <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                                    <div style={{
-                                        width: 48, height: 48, borderRadius: '50%', margin: '0 auto 12px',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        background: importResult.imported > 0 ? '#dcfce7' : '#fef2f2',
-                                    }}>
+                            <div className="p-6">
+                                <div className="text-center mb-5">
+                                    <div className={`w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center ${
+                                        importResult.imported > 0 ? 'bg-green-100' : 'bg-red-100'
+                                    }`}>
                                         {importResult.imported > 0
-                                            ? <CheckCircle size={24} style={{ color: '#22c55e' }} />
-                                            : <AlertCircle size={24} style={{ color: '#ef4444' }} />
+                                            ? <CheckCircle size={24} className="text-green-600" />
+                                            : <AlertCircle size={24} className="text-red-500" />
                                         }
                                     </div>
-                                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--color-text)', margin: '0 0 4px' }}>
+                                    <h3 className="text-[1.05rem] font-bold text-(--color-text) m-0 mb-1">
                                         {importResult.imported} lead{importResult.imported !== 1 ? 's' : ''} imported
                                     </h3>
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', margin: 0 }}>
+                                    <p className="text-[0.8rem] text-(--color-text-secondary) m-0">
                                         {importResult.errors.length > 0
                                             ? `${importResult.errors.length} error${importResult.errors.length !== 1 ? 's' : ''} encountered`
                                             : 'All leads imported successfully'}
                                     </p>
                                 </div>
                                 {importResult.errors.length > 0 && (
-                                    <div style={{
-                                        marginBottom: 16, padding: 12, background: '#fef2f2',
-                                        borderRadius: 10, fontSize: '0.78rem', maxHeight: 150, overflowY: 'auto',
-                                        border: '1px solid #fecaca',
-                                    }}>
-                                        <div style={{ fontWeight: 600, color: '#dc2626', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div className="mb-4 p-3 bg-red-50 rounded-lg text-[0.78rem] max-h-[150px] overflow-y-auto border border-red-200">
+                                        <div className="font-semibold text-red-600 mb-2 flex items-center gap-1.5">
                                             <AlertCircle size={14} /> {importResult.errors.length} error{importResult.errors.length !== 1 ? 's' : ''}
                                         </div>
                                         {importResult.errors.map((e: any, i: number) => (
-                                            <div key={i} style={{ color: '#dc2626', padding: '4px 8px', background: 'white', borderRadius: 4, marginBottom: 4, fontSize: '0.75rem' }}>
+                                            <div key={i} className="text-red-600 p-1 bg-white rounded mb-1 text-[0.75rem]">
                                                 <strong>Row {e.row}:</strong> {e.message}
                                             </div>
                                         ))}
                                     </div>
                                 )}
                                 <button
-                                    className="btn btn-primary"
-                                    style={{ width: '100%', padding: 10, borderRadius: 10, fontWeight: 600 }}
+                                    className="btn btn-primary w-full py-[10px] rounded-lg font-semibold"
                                     onClick={() => { setShowImportModal(false); setImportResult(null); }}
                                 >
                                     Done
                                 </button>
                             </div>
                         ) : (
-                            <div style={{ padding: 24 }}>
+                            <div className="p-6">
                                 <input
                                     ref={fileInputRef}
                                     type="file"
                                     accept=".xlsx,.xls"
-                                    style={{ display: 'none' }}
+                                    className="hidden"
                                     onChange={handleFileImport}
                                 />
                                 <div
                                     onClick={() => fileInputRef.current?.click()}
-                                    style={{
-                                        border: '2px dashed var(--color-border)', borderRadius: 12,
-                                        padding: '32px 24px', textAlign: 'center', cursor: 'pointer',
-                                        background: 'var(--color-surface)', marginBottom: 16,
-                                        transition: 'border-color 0.2s',
-                                    }}
-                                    onMouseOver={e => (e.currentTarget.style.borderColor = 'var(--color-primary)')}
-                                    onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--color-border)')}
+                                    className="border-2 border-dashed border-(--color-border) rounded-xl p-[32px_24px] text-center cursor-pointer bg-(--color-surface) mb-4 hover:border-(--color-primary) transition-colors"
                                 >
-                                    <Upload size={32} style={{ color: 'var(--color-text-tertiary)', margin: '0 auto 12px', opacity: 0.4 }} />
-                                    <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 4px' }}>
+                                    <Upload size={32} className="text-(--color-text-tertiary) mx-auto mb-3 opacity-40" />
+                                    <p className="text-[0.85rem] font-semibold text-(--color-text) m-0 mb-1">
                                         {importing ? 'Importing...' : 'Click to upload Excel file'}
                                     </p>
-                                    <p style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', margin: 0 }}>
+                                    <p className="text-[0.72rem] text-(--color-text-tertiary) m-0">
                                         .xlsx or .xls format
                                     </p>
                                 </div>
 
                                 <a
                                     href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/leads/import/sample`}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                                        fontSize: '0.8rem', fontWeight: 500, color: 'var(--color-primary)',
-                                        textDecoration: 'none',
-                                    }}
+                                    className="flex items-center justify-center gap-1.5 text-[0.8rem] font-medium text-(--color-primary) no-underline"
                                 >
                                     <Download size={14} /> Download sample format
                                 </a>
@@ -832,6 +709,7 @@ const Campaigns = () => {
                     </div>
                 </Modal>
         </div>
+        </>
     );
 };
 

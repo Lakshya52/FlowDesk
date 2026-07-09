@@ -257,7 +257,7 @@ const CrmDashboard = () => {
                                                 {lead.status.replace(/_/g, ' ')}
                                             </span>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                                        <div className="flex flex-wrap items-center gap-3.5 text-[0.75rem] text-(--color-text-secondary) mt-0.5">
                                             {lead.phone && (
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                                                     <Phone size={11} /> {lead.phone}

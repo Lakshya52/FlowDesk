@@ -41,8 +41,15 @@ export interface NavLinkItem {
 	to: string;
 	icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
 	label: string;
-	subItems?: { to: string; label: string }[];
+	subItems?: SubNavItem[];
 	new?: boolean;
+}
+
+export interface SubNavItem {
+	to: string;
+	label: string;
+	subItems?: SubNavItem[];
+	adminOnly?: boolean;
 }
 
 interface NavBreakItem {
@@ -65,6 +72,7 @@ export const navItems: NavItem[] = [
 			{ to: "/crm/plan", label: "Plan" },
 			{ to: "/crm/summary", label: "Summary" },
 			{ to: "/crm/logs", label: "Logs" },
+			{ to: "/crm/field-visits", label: "Field Visits" },
 		],
 	},
 	{ break: true },
@@ -567,111 +575,142 @@ const Sidebar: React.FC<SidebarProps> = ({
 										style={{
 											display: "flex",
 											flexDirection: "column",
-											marginLeft: "21px", // Aligns directly under the center of the 20px icon (12px padding + 10px half icon - 1px border)
+											marginLeft: "21px",
 											marginTop: "4px",
 											marginBottom: "4px",
 										}}
 									>
-										{item.subItems.map((sub, idx) => {
+										{item.subItems.filter(sub => !sub.adminOnly || user?.role === "admin" || user?.role === "manager").map((sub, idx, arr) => {
 											const isLast =
 												idx ===
-												item.subItems!.length - 1;
+												arr.length - 1;
+											const hasNested =
+												!!sub.subItems && sub.subItems.length > 0;
+											const isNestedExpanded =
+												expandedItems[sub.to] ?? (location.pathname.startsWith(sub.to + "/") || location.pathname === sub.to);
 											return (
-												<div
-													key={sub.to}
-													style={{
-														position: "relative",
-														display: "flex",
-														alignItems: "center",
-													}}
-												>
-													{/* Vertical & Horizontal Branching Line */}
+												<div key={sub.to} style={{ display: "flex", flexDirection: "column" }}>
 													<div
 														style={{
-															position:
-																"absolute",
-															left: 0,
-															top: 0,
-															bottom: isLast
-																? "50%"
-																: "-4px", // negative connects to next gap
-															borderLeft:
-																"2px solid var(--color-border)",
-															borderBottom: isLast
-																? "2px solid var(--color-border)"
-																: "none",
-															borderBottomLeftRadius:
-																isLast
-																	? "8px"
-																	: "0",
-															width: isLast
-																? "20px"
-																: "0",
-														}}
-													/>
-													{!isLast && (
-														<div
-															style={{
-																position:
-																	"absolute",
-																left: 0,
-																top: "50%",
-																width: "20px",
-																borderTop:
-																	"2px solid var(--color-border)",
-															}}
-														/>
-													)}
-
-													<NavLink
-														to={sub.to}
-														style={({
-															isActive,
-														}) => ({
-															marginLeft: "24px", // Push text past the horizontal line
-															padding: "8px 12px",
-															borderRadius: "6px",
-															fontSize:
-																"0.8125rem",
-															fontWeight: isActive
-																? 600
-																: 400,
-															color: isActive
-																? "var(--color-primary)"
-																: "var(--color-text-secondary)",
-															textDecoration:
-																"none",
-															width: "100%",
-															transition:
-																"all 0.15s ease",
-														})}
-														onMouseEnter={(e) => {
-															const el =
-																e.currentTarget;
-															if (
-																!el.classList.contains(
-																	"active",
-																)
-															) {
-																el.style.color =
-																	"var(--color-text)";
-															}
-														}}
-														onMouseLeave={(e) => {
-															const el =
-																e.currentTarget;
-															if (
-																!el.classList.contains(
-																	"active",
-																)
-															) {
-																el.style.color =
-																	"var(--color-text-secondary)";
-															}
+															position: "relative",
+															display: "flex",
+															alignItems: "center",
 														}}
 													>
-														{sub.label}
-													</NavLink>
+														<div
+															style={{
+																position: "absolute",
+																left: 0,
+																top: 0,
+																bottom: isLast && !(hasNested && isNestedExpanded)
+																	? "50%"
+																	: "-4px",
+																borderLeft: "2px solid var(--color-border)",
+																borderBottom: isLast && !(hasNested && isNestedExpanded)
+																	? "2px solid var(--color-border)"
+																	: "none",
+																borderBottomLeftRadius: isLast && !(hasNested && isNestedExpanded) ? "8px" : "0",
+																width: isLast && !(hasNested && isNestedExpanded) ? "20px" : "0",
+															}}
+														/>
+														{!isLast && (
+															<div
+																style={{
+																	position: "absolute",
+																	left: 0,
+																	top: "50%",
+																	width: "20px",
+																	borderTop: "2px solid var(--color-border)",
+																}}
+															/>
+														)}
+
+														{hasNested ? (
+															<div
+																onClick={() => toggleExpand(sub.to)}
+																style={{
+																	marginLeft: "24px",
+																	padding: "8px 12px",
+																	borderRadius: "6px",
+																	fontSize: "0.8125rem",
+																	fontWeight: 500,
+																	color: "var(--color-text-secondary)",
+																	cursor: "pointer",
+																	width: "100%",
+																	display: "flex",
+																	alignItems: "center",
+																	gap: "6px",
+																}}
+															>
+																<span style={{ flex: 1 }}>{sub.label}</span>
+																<ChevronDown
+																	size={12}
+																	style={{
+																		transform: isNestedExpanded ? "rotate(0deg)" : "rotate(-90deg)",
+																		transition: "transform 0.2s ease",
+																	}}
+																/>
+															</div>
+														) : (
+															<NavLink
+																to={sub.to}
+																style={({ isActive }) => ({
+																	marginLeft: "24px",
+																	padding: "8px 12px",
+																	borderRadius: "6px",
+																	fontSize: "0.8125rem",
+																	fontWeight: isActive ? 600 : 400,
+																	color: isActive ? "var(--color-primary)" : "var(--color-text-secondary)",
+																	textDecoration: "none",
+																	width: "100%",
+																	transition: "all 0.15s ease",
+																})}
+																onMouseEnter={(e) => { if (!e.currentTarget.classList.contains("active")) e.currentTarget.style.color = "var(--color-text)"; }}
+																onMouseLeave={(e) => { if (!e.currentTarget.classList.contains("active")) e.currentTarget.style.color = "var(--color-text-secondary)"; }}
+															>
+																{sub.label}
+															</NavLink>
+														)}
+													</div>
+
+													{hasNested && isNestedExpanded && (
+														<div style={{ marginLeft: "44px", display: "flex", flexDirection: "column" }}>
+															{sub.subItems!.filter(n => !n.adminOnly || user?.role === "admin" || user?.role === "manager").map((nested, nidx, narr) => {
+																const isNestedLast = nidx === narr.length - 1;
+																return (
+																	<div key={nested.to} style={{ position: "relative", display: "flex", alignItems: "center" }}>
+																		<div style={{
+																			position: "absolute",
+																			left: 0, top: 0,
+																			bottom: isNestedLast ? "50%" : "-4px",
+																			borderLeft: "2px solid var(--color-border)",
+																			borderBottom: isNestedLast ? "2px solid var(--color-border)" : "none",
+																			borderBottomLeftRadius: isNestedLast ? "8px" : "0",
+																			width: isNestedLast ? "20px" : "0",
+																		}} />
+																		{!isNestedLast && (
+																			<div style={{ position: "absolute", left: 0, top: "50%", width: "20px", borderTop: "2px solid var(--color-border)" }} />
+																		)}
+																		<NavLink
+																			to={nested.to}
+																			style={({ isActive }) => ({
+																				marginLeft: "24px",
+																				padding: "7px 10px",
+																				borderRadius: "6px",
+																				fontSize: "0.75rem",
+																				fontWeight: isActive ? 600 : 400,
+																				color: isActive ? "var(--color-primary)" : "var(--color-text-tertiary)",
+																				textDecoration: "none",
+																				width: "100%",
+																			})}
+																		>
+																			{nested.label}
+																		</NavLink>
+																	</div>
+																);
+															})}
+														</div>
+													)}
 												</div>
 											);
 										})}

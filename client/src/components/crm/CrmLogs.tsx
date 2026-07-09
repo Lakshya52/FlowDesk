@@ -100,7 +100,7 @@ const CrmLogs = () => {
     };
 
     return (
-        <div style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <ScrollText size={20} style={{ color: 'var(--color-primary)' }} />
@@ -112,17 +112,10 @@ const CrmLogs = () => {
                 <button
                     onClick={() => queryClient.invalidateQueries({ queryKey: ["activity-logs"] })}
                     disabled={refreshing}
-                    style={{
-                        width: 36, height: 36, borderRadius: 8,
-                        border: '1px solid var(--color-border)',
-                        // background: 'white',
-                        cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'var(--color-text-secondary)',
-                    }}
+                    className="h-9 rounded-xl border border-(--color-border) cursor-pointer flex gap-2 items-center justify-center text-(--color-text-secondary) px-3 text-sm"
                     title="Refresh"
                 >
-                    <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                    <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> Refresh
                 </button>
             </div>
 

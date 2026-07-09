@@ -7,6 +7,7 @@ import {
   ClipboardList,
   ScrollText,
   CalendarClock,
+  MapPin,
 } from "lucide-react";
 import CrmDashboard from "../components/crm/CrmDashboard";
 import Campaigns from "../components/crm/Campaigns";
@@ -15,6 +16,7 @@ import Plan from "../components/crm/Plan";
 import CrmLogs from "../components/crm/CrmLogs";
 import Schedule from "../components/crm/Schedule";
 import Summary from "../components/crm/Summary";
+import FieldVisits from "../components/crm/FieldVisits";
 
 const SECTIONS = [
   {
@@ -66,6 +68,13 @@ const SECTIONS = [
     component: CrmLogs,
     description: "Campaign & lead activity logs",
   },
+  {
+    id: "field-visits",
+    label: "Field Visits",
+    icon: <MapPin size={18} />,
+    component: FieldVisits,
+    description: "Manage field visits with geo-tagged selfies & live tracking",
+  },
 ];
 
 const CrmPage = (): React.JSX.Element => {
@@ -79,7 +88,7 @@ const CrmPage = (): React.JSX.Element => {
   }, [activeSection]);
 
   return (
-    <div className="min-h-screen bg-(--color-bg) pb-20">
+    <div className="h-full bg-(--color-bg)">
       {/* <div className="bg-surface border-b border-border top-0 z-30 card rounded-2xl px-4 sm:px-8 lg:px-16 py-6 sm:py-10">
         <div
           className="max-w-[1400px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-8"

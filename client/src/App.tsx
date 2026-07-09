@@ -222,6 +222,11 @@ const AppInner: React.FC = () => {
   const location = useLocation();
   const showNavbar = ["/", "/release", "/404"].includes(location.pathname);
   const showFooter = ["/", "/release", "/login", "/register"].includes(location.pathname);
+
+  // Safety net: reset body overflow on route change in case a modal leaked it
+  React.useEffect(() => {
+    document.body.style.overflow = "";
+  }, [location.pathname]);
   // const showFooter = location.pathname !== "/documentation" && !location.pathname.startsWith("/documentation/"); 
 
   return (
@@ -256,6 +261,7 @@ const AppInner: React.FC = () => {
             path="/crm"
             element={<Navigate to="/crm/dashboard" replace />}
           />
+          <Route path="/crm/:section/:subsection" element={<RouteGuard><CrmPage /></RouteGuard>} />
           <Route path="/crm/:section" element={<RouteGuard><CrmPage /></RouteGuard>} />
         </Route>
         <Route path="*" element={<ProtectedNotFound />} />
