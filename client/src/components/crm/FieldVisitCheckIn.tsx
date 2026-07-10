@@ -454,6 +454,46 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
               <Loader2 size={16} className="animate-spin" /> Getting your location...
             </div>
           )}
+          {!locating && !location && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg text-xs text-red-600">
+                <MapPin size={14} className="shrink-0" />
+                <span>Location not detected. Please enable GPS and try again.</span>
+              </div>
+              <button
+                onClick={() => {
+                  setLocating(true);
+                  navigator.geolocation.getCurrentPosition(
+                    async (pos) => {
+                      setLocation({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        address: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
+                      });
+                      setLocating(false);
+                      try {
+                        const res = await fetch(
+                          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
+                        );
+                        const data = await res.json();
+                        if (data.display_name) {
+                          setLocation((prev) => prev ? { ...prev, address: data.display_name } : null);
+                        }
+                      } catch {}
+                    },
+                    () => {
+                      setLocating(false);
+                      toast.error("Could not get location. Please enable GPS.");
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                  );
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-2 border border-red-200 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <MapPin size={16} /> Recheck Location
+              </button>
+            </div>
+          )}
 
           <div className="flex justify-between">
             <button onClick={() => !visitId && setStep("client")} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
@@ -501,13 +541,54 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
             </div>
           )}
 
+          {!location && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg text-xs text-red-600">
+                <MapPin size={14} className="shrink-0" />
+                <span>Location not detected. Check-in requires GPS location.</span>
+              </div>
+              <button
+                onClick={() => {
+                  setLocating(true);
+                  navigator.geolocation.getCurrentPosition(
+                    async (pos) => {
+                      setLocation({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        address: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
+                      });
+                      setLocating(false);
+                      try {
+                        const res = await fetch(
+                          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
+                        );
+                        const data = await res.json();
+                        if (data.display_name) {
+                          setLocation((prev) => prev ? { ...prev, address: data.display_name } : null);
+                        }
+                      } catch {}
+                    },
+                    () => {
+                      setLocating(false);
+                      toast.error("Could not get location. Please enable GPS.");
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                  );
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-2 border border-red-200 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <MapPin size={16} /> Recheck Location
+              </button>
+            </div>
+          )}
+
           <div className="flex justify-between">
             <button onClick={() => setStep("selfie")} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
               Back
             </button>
             <button
               onClick={createAndCheckIn}
-              disabled={submitting}
+              disabled={submitting || !location}
               className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
             >
               {submitting && <Loader2 size={16} className="animate-spin" />}

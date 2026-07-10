@@ -117,7 +117,7 @@ const Campaigns = () => {
         queryKey: ["campaign-leads", selectedCampaignId, leadSearch],
         queryFn: async () => {
             if (!selectedCampaignId) return [];
-            const params: any = { campaignId: selectedCampaignId, limit: 200 };
+            const params: any = { campaignId: selectedCampaignId, };
             if (leadSearch) params.search = leadSearch;
             const { data } = await api.get("/leads", { params });
             return (data.success ? data.leads : []) as Lead[];

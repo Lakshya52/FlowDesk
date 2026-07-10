@@ -18,6 +18,7 @@ interface User {
     permissions: {
         allowedTabs: string[];
     };
+    employeeId: string;
 }
 
 interface AuthState {

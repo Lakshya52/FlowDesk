@@ -2,6 +2,10 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export type TenantPlan = 'free' | 'starter' | 'pro' | 'enterprise';
 
+export interface ITenantSettings {
+    geoFenceRadius: number;
+}
+
 export interface ITenant extends Document {
     name: string;
     website?: string;
@@ -12,6 +16,7 @@ export interface ITenant extends Document {
     isActive: boolean;
     maxUsers: number | null;
     trialEndsAt?: Date;
+    settings: ITenantSettings;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -31,6 +36,12 @@ const tenantSchema = new Schema<ITenant>(
         isActive: { type: Boolean, default: true },
         maxUsers: { type: Number, default: null },
         trialEndsAt: { type: Date, default: null },
+        settings: {
+            type: {
+                geoFenceRadius: { type: Number, default: 100, min: 10, max: 10000 },
+            },
+            default: () => ({ geoFenceRadius: 100 }),
+        },
     },
     { timestamps: true }
 );

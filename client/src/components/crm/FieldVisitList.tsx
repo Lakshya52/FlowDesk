@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Search, MapPin, User, Building2, CheckCircle, LogIn, LogOut, X, Plus, MessageSquareText, CalendarDays, Loader2 } from "lucide-react";
+import { Search, MapPin, User, Building2, CheckCircle, LogIn, LogOut, X, Plus, MessageSquareText, CalendarDays, Loader2,MapPinned, ShieldAlert, Timer, DollarSign, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../../lib/api";
 import { useAuthStore } from "../../store/authStore";
 import FieldVisitCheckIn from "./FieldVisitCheckIn";
+
+interface Location {
+  type: string;
+  coordinates: number[];
+  address?: string;
+}
 
 interface Visit {
   _id: string;
@@ -16,11 +22,19 @@ interface Visit {
   checkInTime?: string;
   checkOutTime?: string;
   checkInSelfie?: string;
+  checkInLocation?: Location;
+  checkOutLocation?: Location;
   status: "scheduled" | "checked_in" | "checked_out" | "cancelled";
   outcome?: "completed" | "rescheduled" | "no_show";
   meetingNotes?: string;
   remarks?: string;
   remarksAddedAt?: string;
+  geoFenceBreached?: boolean;
+  geoFenceRadius?: number;
+  trackingStartedAt?: string;
+  trackingEndedAt?: string;
+  expenses?: any[];
+  createdAt?: string;
 }
 
 interface Props {
@@ -45,6 +59,7 @@ const OUTCOME_COLORS: Record<string, string> = {
 const FieldVisitList: React.FC<Props> = ({ onAddRemarks, onCheckInComplete, refreshKey }) => {
   const { user } = useAuthStore();
   const currentUserId = user?._id;
+  const isAdminOrManager = user?.role === "admin" || user?.role === "manager";
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -161,7 +176,7 @@ const FieldVisitList: React.FC<Props> = ({ onAddRemarks, onCheckInComplete, refr
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
                       {visit.employeeId?.avatar ? (
-                        <img src={visit.employeeId.avatar} className="w-8 h-8 rounded-full object-cover" />
+                        <img src={`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-backend-l5tt.onrender.com'}${visit.employeeId.avatar}`} className="w-8 h-8 rounded-full object-cover" />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                           <User size={14} className="text-blue-600" />
@@ -182,10 +197,17 @@ const FieldVisitList: React.FC<Props> = ({ onAddRemarks, onCheckInComplete, refr
                     <span>{visit.clientName || visit.clientType}</span>
                   </div>
 
-                  {visit.scheduledDate && !visit.checkInTime && (
+                  {(visit.scheduledDate || visit.scheduledTime) && !visit.checkInTime && (
                     <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
                       <CalendarDays size={12} />
-                      <span>Scheduled: {formatTime(visit.scheduledDate)}{visit.scheduledTime ? ` at ${visit.scheduledTime}` : ""}</span>
+                      <span>Scheduled: {visit.scheduledDate ? formatTime(visit.scheduledDate) : ""}{visit.scheduledTime ? ` at ${visit.scheduledTime}` : ""}</span>
+                    </div>
+                  )}
+
+                  {visit.createdAt && (
+                    <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-1">
+                      <Timer size={12} />
+                      <span>Created: {formatTime(visit.createdAt)}</span>
                     </div>
                   )}
 
@@ -195,10 +217,73 @@ const FieldVisitList: React.FC<Props> = ({ onAddRemarks, onCheckInComplete, refr
                       <span>Checked in: {formatTime(visit.checkInTime)}</span>
                     </div>
                   )}
+                  {visit.checkInLocation?.address && (
+                    <div className="ml-5 mb-1 flex items-start gap-1">
+                      <p className="text-[10px] text-gray-400 line-clamp-1 flex-1">{visit.checkInLocation.address}</p>
+                      {visit.checkInLocation?.coordinates?.length === 2 && (
+                        <a
+                          href={`https://www.google.com/maps?q=${visit.checkInLocation.coordinates[1]},${visit.checkInLocation.coordinates[0]}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-blue-500 hover:text-blue-700"
+                          title="View on map"
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {visit.checkInSelfie && (
+                    <div className="mb-2 ml-5">
+                      <img
+                        src={`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-backend-l5tt.onrender.com'}/uploads/${visit.checkInSelfie}`}
+                        className="w-full max-h-40 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => window.open(`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-backend-l5tt.onrender.com'}/uploads/${visit.checkInSelfie}`, '_blank')}
+                      />
+                    </div>
+                  )}
+
                   {visit.checkOutTime && (
                     <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
                       <CheckCircle size={12} className="text-blue-500" />
                       <span>Checked out: {formatTime(visit.checkOutTime)}</span>
+                    </div>
+                  )}
+                  {visit.checkOutLocation?.address && (
+                    <div className="ml-5 mb-1 flex items-start gap-1">
+                      <p className="text-[10px] text-gray-400 line-clamp-1 flex-1">{visit.checkOutLocation.address}</p>
+                      {visit.checkOutLocation?.coordinates?.length === 2 && (
+                        <a
+                          href={`https://www.google.com/maps?q=${visit.checkOutLocation.coordinates[1]},${visit.checkOutLocation.coordinates[0]}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-blue-500 hover:text-blue-700"
+                          title="View on map"
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {isAdminOrManager && visit.trackingStartedAt && (
+                    <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-1">
+                      <MapPinned size={12} className="text-purple-400" />
+                      <span>Tracking: {formatTime(visit.trackingStartedAt)}{visit.trackingEndedAt ? ` - ${formatTime(visit.trackingEndedAt)}` : " (active)"}</span>
+                    </div>
+                  )}
+
+                  {isAdminOrManager && visit.geoFenceBreached !== undefined && (
+                    <div className={`flex items-center gap-1.5 text-xs mb-1 ${visit.geoFenceBreached ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
+                      <ShieldAlert size={12} className={visit.geoFenceBreached ? 'text-red-500' : ''} />
+                      <span>Geo-fence: {visit.geoFenceBreached ? '⚠ Breached' : `Within ${visit.geoFenceRadius || 100}m`}</span>
+                    </div>
+                  )}
+
+                  {visit.expenses && visit.expenses.length > 0 && (
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+                      <DollarSign size={12} className="text-green-500" />
+                      <span>{visit.expenses.length} expense{visit.expenses.length !== 1 ? 's' : ''} recorded</span>
                     </div>
                   )}
 

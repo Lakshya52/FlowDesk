@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuthStore } from "../../store/authStore";
-import { MapPin, BarChart3, Route, Map } from "lucide-react";
+import { MapPin, BarChart3, Route, Map, RefreshCw } from "lucide-react";
+import toast from "react-hot-toast";
 import FieldVisitList from "./FieldVisitList";
 import FieldVisitRemarks from "./FieldVisitRemarks";
 import FieldVisitMap from "./FieldVisitMap";
@@ -24,6 +25,7 @@ const FieldVisits: React.FC = () => {
   const [adminTab, setAdminTab] = useState<AdminTab>("visits");
   const [remarksVisitId, setRemarksVisitId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTrackingId, setActiveTrackingId] = useState<string | null>(null);
 
   useLocationTracking({
@@ -64,6 +66,21 @@ const FieldVisits: React.FC = () => {
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">View & manage your field visits</p>
         </div>
+        <button
+          onClick={() => {
+            setRefreshing(true);
+            setRefreshKey((k) => k + 1);
+            setTimeout(() => {
+              setRefreshing(false);
+              toast.success("Refreshed");
+            }, 500);
+          }}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          title="Refresh"
+        >
+          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+        </button>
       </div>
 
       {isAdminOrManager && (
@@ -96,9 +113,9 @@ const FieldVisits: React.FC = () => {
         />
       )}
 
-      {isAdminOrManager && adminTab === "map" && <FieldVisitMap />}
-      {isAdminOrManager && adminTab === "reports" && <FieldVisitReports />}
-      {isAdminOrManager && adminTab === "route" && <FieldVisitRoutePlanner />}
+      {isAdminOrManager && adminTab === "map" && <FieldVisitMap refreshKey={refreshKey} />}
+      {isAdminOrManager && adminTab === "reports" && <FieldVisitReports refreshKey={refreshKey} />}
+      {isAdminOrManager && adminTab === "route" && <FieldVisitRoutePlanner refreshKey={refreshKey} />}
     </div>
   );
 };

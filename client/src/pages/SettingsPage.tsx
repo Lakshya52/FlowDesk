@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import api from '../lib/api';
+import toast from 'react-hot-toast';
 import Avatar from '../components/common/Avatar';
-import { Sun, Moon, Shield, Users, UserPlus, Trash2, Eye, EyeOff, Lock, Pencil, X as XIcon } from 'lucide-react';
+import { Sun, Moon, Shield, Users, UserPlus, Trash2, Eye, EyeOff, Lock, Pencil, X as XIcon, MapPinned } from 'lucide-react';
 import { navItems, NavLinkItem } from '../components/layout/Sidebar';
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Admin', manager: 'Manager', member: 'Team Member' };
@@ -35,6 +36,32 @@ const SettingsPage: React.FC = () => {
     const [passwordSuccess, setPasswordSuccess] = useState('');
 
     const isAdmin = user?.role === 'admin';
+    const isAdminOrManager = isAdmin || user?.role === 'manager';
+
+    const [geoFenceRadius, setGeoFenceRadius] = useState(100);
+    const [savingGeoFence, setSavingGeoFence] = useState(false);
+
+    useEffect(() => {
+        if (isAdminOrManager) {
+            api.get('/settings').then(({ data }) => {
+                if (data.settings?.geoFenceRadius) {
+                    setGeoFenceRadius(data.settings.geoFenceRadius);
+                }
+            }).catch(() => {});
+        }
+    }, [isAdminOrManager]);
+
+    const handleSaveGeoFence = async () => {
+        setSavingGeoFence(true);
+        try {
+            await api.put('/settings', { geoFenceRadius });
+            toast.success('Geo-fence radius updated');
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || 'Failed to update');
+        } finally {
+            setSavingGeoFence(false);
+        }
+    };
 
     useEffect(() => {
         if (isAdmin) {
@@ -248,15 +275,15 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                 <Shield size={12} strokeWidth={2.5} />
                                 {ROLE_LABELS[user?.role || '']}
                             </div>
-                            {/* {user?._id && !isMobile && (
+                            {user?._id && !isMobile && (
                                 <div style={{
                                     padding: '4px 10px',
                                     background: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)',
                                     borderRadius: 12, fontSize: '0.75rem', fontWeight: 600,
                                 }}>
-                                    Employee ID: Aceone_{user._id}
+                                    Employee ID: {user.employeeId}
                                 </div>
-                            )} */}
+                            )}
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0, ...(isMobile ? { width: '100%', justifyContent: 'center' } : { marginLeft: 'auto', textAlign: 'right' }) }}>
@@ -341,6 +368,40 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                     </div>
                 </form>
             </div>
+
+            {/* Geo-Fence Settings (Admin/Manager) */}
+            {isAdminOrManager && (
+                <div className="card" style={{ padding: 20 }}>
+                    <div style={{ marginBottom: 16 }}>
+                        <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: 4 }}>
+                            <MapPinned size={16} style={{ display: 'inline', marginRight: 8, verticalAlign: 'middle' }} />
+                            Geo-Fence Settings
+                        </h3>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                            Set the global geo-fence radius (in meters) for all field visits
+                        </p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <input
+                            type="number"
+                            min={10}
+                            max={10000}
+                            value={geoFenceRadius}
+                            onChange={e => setGeoFenceRadius(Number(e.target.value))}
+                            className="input"
+                            style={{ width: 120 }}
+                        />
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>meters</span>
+                        <button
+                            onClick={handleSaveGeoFence}
+                            disabled={savingGeoFence}
+                            className="btn btn-primary btn-sm"
+                        >
+                            {savingGeoFence ? 'Saving...' : 'Save'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* User Management (Admin only) */}
             {isAdmin && (

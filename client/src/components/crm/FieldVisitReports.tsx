@@ -9,14 +9,14 @@ interface Reports {
   byEmployee: { _id: string; total: number; completed: number; checkedIn: number; employeeName?: string }[];
 }
 
-const FieldVisitReports: React.FC = () => {
+const FieldVisitReports: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
   const [reports, setReports] = useState<Reports | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("week");
 
   useEffect(() => {
     fetchReports();
-  }, [period]);
+  }, [period, refreshKey]);
 
   const fetchReports = async () => {
     try {

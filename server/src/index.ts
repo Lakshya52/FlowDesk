@@ -39,6 +39,7 @@ import userRoutes from "./routes/users";
 import activityLogRoutes from "./routes/activityLogs";
 import crmSummaryRoutes from "./routes/crmSummary";
 import fieldVisitRoutes from "./routes/fieldVisits";
+import settingsRoutes from "./routes/settings";
 import { startRecurringJob } from "./services/recurringTaskService";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
 
@@ -274,6 +275,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/crm-summary", crmSummaryRoutes);
 app.use("/api/field-visits", fieldVisitRoutes);
+app.use("/api/settings", settingsRoutes);
 
 // Socket.io connection logic
 io.on("connection", (socket) => {

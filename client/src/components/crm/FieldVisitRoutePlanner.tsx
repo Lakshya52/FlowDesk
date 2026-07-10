@@ -34,7 +34,7 @@ interface Lead {
   state?: string;
 }
 
-const FieldVisitRoutePlanner: React.FC = () => {
+const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -54,13 +54,13 @@ const FieldVisitRoutePlanner: React.FC = () => {
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     if (selectedEmployee) {
       fetchScheduledVisits();
     }
-  }, [selectedEmployee]);
+  }, [selectedEmployee, refreshKey]);
 
   const fetchEmployees = async () => {
     try {

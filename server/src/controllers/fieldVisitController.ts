@@ -5,6 +5,7 @@ import LocationTrack from "../models/LocationTrack";
 import Company from "../models/Company";
 import Lead from "../models/Lead";
 import Campaign from "../models/Campaign";
+import Tenant from "../models/Tenant";
 import { AuthRequest } from "../middlewares/auth";
 import { uploadToGridFS } from "../utils/gridfs";
 import {
@@ -38,6 +39,9 @@ export const createFieldVisit = async (req: AuthRequest, res: Response): Promise
             targetEmployee = employeeId;
         }
 
+        const tenant = await Tenant.findById(tenantId).select('settings');
+        const geoFenceRadius = tenant?.settings?.geoFenceRadius ?? 100;
+
         const visit = await FieldVisit.create({
             tenantId,
             employeeId: targetEmployee,
@@ -46,6 +50,7 @@ export const createFieldVisit = async (req: AuthRequest, res: Response): Promise
             clientName: clientName || '',
             scheduledDate: scheduledDate || undefined,
             scheduledTime: scheduledTime || undefined,
+            geoFenceRadius,
         });
 
         emitFieldVisitCreated(tenantId, visit);
@@ -217,6 +222,11 @@ export const checkIn = async (req: AuthRequest, res: Response): Promise<void> =>
         if (!lat || !lng) {
             res.status(400).json({ message: "Location (lat/lng) is required for check-in" });
             return;
+        }
+
+        const tenant = await Tenant.findById(tenantId).select('settings');
+        if (tenant?.settings?.geoFenceRadius) {
+            visit.geoFenceRadius = tenant.settings.geoFenceRadius;
         }
 
         const now = new Date();

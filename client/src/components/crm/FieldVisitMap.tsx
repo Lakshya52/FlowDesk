@@ -66,7 +66,7 @@ const MiniMap: React.FC<{ lat: number; lng: number; label: string }> = ({ lat, l
   );
 };
 
-const FieldVisitMap: React.FC = () => {
+const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
   const [visits, setVisits] = useState<ActiveVisit[]>([]);
   const [locations, setLocations] = useState<Record<string, LocationUpdate>>({});
   const [loading, setLoading] = useState(true);
@@ -105,7 +105,7 @@ const FieldVisitMap: React.FC = () => {
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [refreshKey]);
 
   const fetchActiveVisits = async () => {
     try {
