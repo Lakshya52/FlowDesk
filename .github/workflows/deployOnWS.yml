@@ -26,13 +26,13 @@ jobs:
       - name: Build frontend
         working-directory: client
         run: |
-          npm ci
+          npm ci --include=dev
           npm run build
 
       - name: Build backend
         working-directory: server
         run: |
-          npm ci
+          npm ci --include=dev
           npm run build
 
       - name: Clean old frontend dist
