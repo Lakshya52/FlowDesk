@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MapPin, Camera, User, Loader2, CheckCircle, Clock, Plus, X } from "lucide-react";
+import { MapPin, Camera, User, Loader2, CheckCircle, Clock, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../../lib/api";
 import CameraCapture from "../common/CameraCapture";
@@ -131,8 +131,8 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
   };
 
   const handleCreateLead = async () => {
-    if (!newLead.name.trim() || !newLead.campaignId) {
-      toast.error("Name and campaign are required");
+    if (!newLead.name.trim()) {
+      toast.error("Name is required");
       return;
     }
     setCreatingLead(true);
@@ -227,127 +227,120 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
 
   if (loadingVisit) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg mx-auto text-center">
-        <Loader2 size={24} className="animate-spin mx-auto mb-2 text-blue-600" />
-        <p className="text-sm text-gray-500">Loading visit details...</p>
-      </div>
-    );
-  }
-
-  if (showCreateLead) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg mx-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Create New Lead</h2>
-          <button onClick={() => setShowCreateLead(false)} className="text-gray-400 hover:text-gray-600">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Campaign *</label>
-            <select
-              value={newLead.campaignId}
-              onChange={(e) => setNewLead((p) => ({ ...p, campaignId: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-            >
-              <option value="">Select campaign...</option>
-              {campaigns.map((c) => (
-                <option key={c._id} value={c._id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Name *</label>
-            <input
-              type="text"
-              value={newLead.name}
-              onChange={(e) => setNewLead((p) => ({ ...p, name: e.target.value }))}
-              placeholder="Lead name"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Phone</label>
-              <input
-                type="text"
-                value={newLead.phone}
-                onChange={(e) => setNewLead((p) => ({ ...p, phone: e.target.value }))}
-                placeholder="Phone number"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
-              <input
-                type="text"
-                value={newLead.companyName}
-                onChange={(e) => setNewLead((p) => ({ ...p, companyName: e.target.value }))}
-                placeholder="Company name"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
-              <input
-                type="text"
-                value={newLead.city}
-                onChange={(e) => setNewLead((p) => ({ ...p, city: e.target.value }))}
-                placeholder="City"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
-              <input
-                type="text"
-                value={newLead.state}
-                onChange={(e) => setNewLead((p) => ({ ...p, state: e.target.value }))}
-                placeholder="State"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
-            <input
-              type="text"
-              value={newLead.addressLine}
-              onChange={(e) => setNewLead((p) => ({ ...p, addressLine: e.target.value }))}
-              placeholder="Address"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setShowCreateLead(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
-              Cancel
-            </button>
-            <button
-              onClick={handleCreateLead}
-              disabled={creatingLead || !newLead.name.trim() || !newLead.campaignId}
-              className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-            >
-              {creatingLead && <Loader2 size={14} className="animate-spin" />}
-              Create & Proceed
-            </button>
-          </div>
-        </div>
+      <div className="bg-(--color-surface) rounded-xl border border-(--color-border) p-6 max-w-lg mx-auto text-center">
+        <Loader2 size={24} className="animate-spin mx-auto mb-2 text-(--color-primary)" />
+        <p className="text-sm text-(--color-text-tertiary)">Loading visit details...</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg mx-auto">
-      <h2 className="text-lg font-semibold mb-4 text-gray-900">Field Visit Check-In</h2>
+    <div className="bg-(--color-surface) rounded-xl border border-(--color-border) p-6 max-w-lg mx-auto">
+      {showCreateLead ? (
+        <div>
+          <h2 className="text-lg font-semibold mb-4 text-(--color-text)">Create New Lead</h2>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Campaign (optional)</label>
+              <select
+                value={newLead.campaignId}
+                onChange={(e) => setNewLead((p) => ({ ...p, campaignId: e.target.value }))}
+                className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
+              >
+                <option value="">Select campaign...</option>
+                {campaigns.map((c) => (
+                  <option key={c._id} value={c._id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Name *</label>
+              <input
+                type="text"
+                value={newLead.name}
+                onChange={(e) => setNewLead((p) => ({ ...p, name: e.target.value }))}
+                placeholder="Lead name"
+                className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Phone</label>
+                <input
+                  type="text"
+                  value={newLead.phone}
+                  onChange={(e) => setNewLead((p) => ({ ...p, phone: e.target.value }))}
+                  placeholder="Phone number"
+                  className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Company</label>
+                <input
+                  type="text"
+                  value={newLead.companyName}
+                  onChange={(e) => setNewLead((p) => ({ ...p, companyName: e.target.value }))}
+                  placeholder="Company name"
+                  className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">City</label>
+                <input
+                  type="text"
+                  value={newLead.city}
+                  onChange={(e) => setNewLead((p) => ({ ...p, city: e.target.value }))}
+                  placeholder="City"
+                  className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">State</label>
+                <input
+                  type="text"
+                  value={newLead.state}
+                  onChange={(e) => setNewLead((p) => ({ ...p, state: e.target.value }))}
+                  placeholder="State"
+                  className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Address</label>
+              <input
+                type="text"
+                value={newLead.addressLine}
+                onChange={(e) => setNewLead((p) => ({ ...p, addressLine: e.target.value }))}
+                placeholder="Address"
+                className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowCreateLead(false)} className="px-4 py-2 text-sm text-(--color-text-secondary) border border-(--color-border) rounded-lg hover:bg-(--color-surface-hover)">
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateLead}
+                disabled={creatingLead || !newLead.name.trim()}
+                className="px-4 py-2 text-sm bg-(--color-success) text-white rounded-lg hover:bg-(--color-success) disabled:opacity-50 flex items-center gap-1"
+              >
+                {creatingLead && <Loader2 size={14} className="animate-spin" />}
+                Create & Proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <h2 className="text-lg font-semibold mb-4 text-(--color-text)">Field Visit Check-In</h2>
 
       {step === "client" && (
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-2">
-            <User size={16} className="text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">Select Lead</span>
+            <User size={16} className="text-(--color-primary)" />
+            <span className="text-sm font-medium text-(--color-text-secondary)">Select Lead</span>
           </div>
 
           <input
@@ -355,7 +348,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
             placeholder="Search leads by name, company, phone..."
             value={leadSearch}
             onChange={(e) => setLeadSearch(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
           />
 
           <div className="max-h-48 overflow-y-auto space-y-1">
@@ -368,45 +361,45 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
                 }}
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                   selectedLead?._id === c._id
-                    ? "bg-blue-50 border border-blue-200"
-                    : "hover:bg-gray-50 border border-transparent"
+                    ? "bg-(--color-primary-light) border border-(--color-primary-light)"
+                    : "hover:bg-(--color-surface-hover) border border-transparent"
                 }`}
               >
-                <p className="font-medium text-gray-900">{c.name || c.companyName || "Unnamed"}</p>
-                <p className="text-xs text-gray-500">
+                <p className="font-medium text-(--color-text)">{c.name || c.companyName || "Unnamed"}</p>
+                <p className="text-xs text-(--color-text-tertiary)">
                   {c.companyName && `${c.companyName}`}{c.city ? ` - ${c.city}` : ""}{c.phone ? ` | ${c.phone}` : ""}
                 </p>
               </button>
             ))}
             {filteredLeads.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-4">No leads found</p>
+              <p className="text-xs text-(--color-text-tertiary) text-center py-4">No leads found</p>
             )}
           </div>
 
           <button
             onClick={openCreateLead}
-            className="w-full flex items-center justify-center gap-1.5 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:text-gray-700 hover:border-gray-400 transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 py-2 border-2 border-dashed border-(--color-border) rounded-lg text-sm text-(--color-text-tertiary) hover:text-(--color-text-secondary) hover:border-(--color-border-hover) transition-colors"
           >
-            <Plus size={16} /> Create New Lead
+            <Plus size={16} /> Create Quick Lead
           </button>
 
           {selectedLead && (
-            <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
-              <CheckCircle size={16} className="text-green-600" />
-              <span className="text-sm text-green-700">
+            <div className="flex items-center gap-2 p-3 bg-(--color-success-light) rounded-lg border border-(--color-success-light)">
+              <CheckCircle size={16} className="text-(--color-success)" />
+              <span className="text-sm text-(--color-success)">
                 Selected: {selectedLead.name || selectedLead.companyName}
               </span>
             </div>
           )}
 
           <div className="flex justify-between">
-            <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+            <button onClick={onCancel} className="px-4 py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
               Back
             </button>
             <button
               onClick={() => selectedLead && setStep("selfie")}
               disabled={!selectedLead}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-(--color-primary) text-white rounded-lg hover:bg-(--color-primary-hover) disabled:opacity-50"
             >
               Next: Take Selfie
             </button>
@@ -416,27 +409,27 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
 
       {step === "selfie" && (
         <div className="space-y-4">
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-700 font-medium">
+          <div className="p-3 bg-(--color-primary-light) rounded-lg border border-(--color-primary-light)">
+            <p className="text-sm text-(--color-primary) font-medium">
               Lead: {selectedLead?.name || selectedLead?.companyName}
             </p>
             {selectedLead?.phone && (
-              <p className="text-xs text-blue-500 mt-0.5">{selectedLead.phone}</p>
+              <p className="text-xs text-(--color-primary) mt-0.5">{selectedLead.phone}</p>
             )}
           </div>
 
           {visitId && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="flex items-center gap-1.5 text-xs text-(--color-text-tertiary)">
               <Clock size={12} />
               <span>Scheduled visit — checking in now</span>
             </div>
           )}
 
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+          <div className="border-2 border-dashed border-(--color-border) rounded-lg p-8 text-center">
             {selfiePreview ? (
               <img src={selfiePreview} alt="Selfie" className="max-h-48 mx-auto rounded-lg" />
             ) : (
-              <div className="text-gray-400">
+              <div className="text-(--color-text-tertiary)">
                 <Camera size={40} className="mx-auto mb-2" />
                 <p className="text-sm">Take a geo-tagged selfie at the lead location</p>
               </div>
@@ -444,19 +437,19 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           </div>
 
           {!locating && location && (
-            <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
-              <MapPin size={14} className="mt-0.5 text-red-500 shrink-0" />
+            <div className="flex items-start gap-2 p-3 bg-(--color-surface-hover) rounded-lg text-xs text-(--color-text-secondary)">
+              <MapPin size={14} className="mt-0.5 text-(--color-danger) shrink-0" />
               <span className="break-all">{location.address}</span>
             </div>
           )}
           {locating && (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-(--color-text-tertiary)">
               <Loader2 size={16} className="animate-spin" /> Getting your location...
             </div>
           )}
           {!locating && !location && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg text-xs text-red-600">
+              <div className="flex items-center gap-2 p-3 bg-(--color-danger-light) rounded-lg text-xs text-(--color-danger)">
                 <MapPin size={14} className="shrink-0" />
                 <span>Location not detected. Please enable GPS and try again.</span>
               </div>
@@ -488,7 +481,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
                     { enableHighAccuracy: true, timeout: 10000 }
                   );
                 }}
-                className="flex items-center justify-center gap-1.5 w-full py-2 border border-red-200 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+                className="flex items-center justify-center gap-1.5 w-full py-2 border border-(--color-danger) rounded-lg text-sm text-(--color-danger) hover:bg-(--color-danger-light) transition-colors"
               >
                 <MapPin size={16} /> Recheck Location
               </button>
@@ -496,14 +489,14 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           )}
 
           <div className="flex justify-between">
-            <button onClick={() => !visitId && setStep("client")} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+            <button onClick={() => !visitId && setStep("client")} className="px-4 py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
               {visitId ? (
-                <span className="text-gray-400 cursor-not-allowed">Back</span>
+                <span className="text-(--color-text-tertiary) cursor-not-allowed">Back</span>
               ) : "Back"}
             </button>
             <button
               onClick={() => setShowCamera(true)}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="cursor-pointer px-4 py-2 text-sm bg-(--color-primary) text-white rounded-lg hover:bg-(--color-primary-hover)"
             >
               Open Camera
             </button>
@@ -520,11 +513,11 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
 
       {step === "confirm" && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-200">
-            <CheckCircle size={20} className="text-green-600" />
+          <div className="flex items-center gap-3 p-3 bg-(--color-success-light) rounded-lg border border-(--color-success-light)">
+            <CheckCircle size={20} className="text-(--color-success)" />
             <div>
-              <p className="text-sm font-medium text-green-800">Ready to check in</p>
-              <p className="text-xs text-green-600">
+              <p className="text-sm font-medium text-(--color-success)">Ready to check in</p>
+              <p className="text-xs text-(--color-success)">
                 {selectedLead?.name || selectedLead?.companyName}
               </p>
             </div>
@@ -535,15 +528,15 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           )}
 
           {location && (
-            <div className="flex items-start gap-2 text-xs text-gray-500">
-              <MapPin size={14} className="mt-0.5 text-red-500 shrink-0" />
+            <div className="flex items-start gap-2 text-xs text-(--color-text-tertiary)">
+              <MapPin size={14} className="mt-0.5 text-(--color-danger) shrink-0" />
               <span className="break-all">{location.address}</span>
             </div>
           )}
 
           {!location && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg text-xs text-red-600">
+              <div className="flex items-center gap-2 p-3 bg-(--color-danger-light) rounded-lg text-xs text-(--color-danger)">
                 <MapPin size={14} className="shrink-0" />
                 <span>Location not detected. Check-in requires GPS location.</span>
               </div>
@@ -575,7 +568,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
                     { enableHighAccuracy: true, timeout: 10000 }
                   );
                 }}
-                className="flex items-center justify-center gap-1.5 w-full py-2 border border-red-200 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+                className="flex items-center justify-center gap-1.5 w-full py-2 border border-(--color-danger) rounded-lg text-sm text-(--color-danger) hover:bg-(--color-danger-light) transition-colors"
               >
                 <MapPin size={16} /> Recheck Location
               </button>
@@ -583,13 +576,13 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           )}
 
           <div className="flex justify-between">
-            <button onClick={() => setStep("selfie")} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+            <button onClick={() => setStep("selfie")} className="cursor-pointer px-4 py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
               Back
             </button>
             <button
               onClick={createAndCheckIn}
               disabled={submitting || !location}
-              className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+              className="cursor-pointer px-6 py-2 text-sm bg-(--color-success) text-white rounded-lg hover:bg-(--color-success) disabled:opacity-50 flex items-center gap-2"
             >
               {submitting && <Loader2 size={16} className="animate-spin" />}
               Confirm Check-In
@@ -597,6 +590,8 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           </div>
         </div>
       )}
+      </>
+    )}
     </div>
   );
 };

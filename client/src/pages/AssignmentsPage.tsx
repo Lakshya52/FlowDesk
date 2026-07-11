@@ -1269,28 +1269,10 @@ const AssignmentsPage: React.FC = () => {
       {/* Create Modal */}
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} zIndex={100}>
         <div
-          className="card animate-fade-in"
-          style={{
-            width: "100%",
-            maxWidth: 560,
-            padding: 28,
-            maxHeight: "90vh",
-            overflow: "auto",
-          }}
+          className="card animate-fade-in w-full max-w-[560px] p-5 sm:p-7 max-h-[90vh] overflow-auto"
         >
-            <h2
-              style={{
-                fontSize: "1.125rem",
-                fontWeight: 700,
-                marginBottom: 20,
-              }}
-            >
-              Create Project
-            </h2>
-            <form
-              onSubmit={handleCreate}
-              style={{ display: "flex", flexDirection: "column", gap: 16 }}
-            >
+            <h2 className="text-lg font-bold mb-5">Create Project</h2>
+            <form onSubmit={handleCreate} className="flex flex-col gap-4">
               <div>
                 <label
                   style={{
@@ -1435,13 +1417,7 @@ const AssignmentsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                }}
-              >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label
                     style={{
@@ -1578,13 +1554,7 @@ const AssignmentsPage: React.FC = () => {
                 />
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  gap: 12,
-                }}
-              >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div>
                   <label
                     style={{
@@ -1826,19 +1796,17 @@ const AssignmentsPage: React.FC = () => {
                 </div>
               )}
 
-              <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
+              <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
+                  className="btn btn-secondary flex-1"
                   onClick={() => setShowCreate(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
+                  className="btn btn-primary flex-1"
                   disabled={saving}
                 >
                   {saving ? "Creating..." : "Create Project"}

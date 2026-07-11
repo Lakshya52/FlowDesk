@@ -3,6 +3,7 @@ import Task from '../models/Task';
 import mongoose from 'mongoose';
 import { createNotifications, NotificationPayload } from './notificationService';
 import { NotificationType } from '../models/Notification';
+import { startFieldVisitHeartbeat } from './fieldVisitHeartbeatService';
 
 export const processRecurringAssignments = async () => {
     try {
@@ -159,4 +160,6 @@ export const startRecurringJob = () => {
         processRecurringAssignments();
         processTaskDeadlines();
     }, 1000 * 60 * 60);
+
+    startFieldVisitHeartbeat();
 };

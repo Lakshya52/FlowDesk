@@ -668,7 +668,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     ];
 
     return (
-        <div style={{ maxWidth: 1000, width: '100%' }}>
+        <div className="w-full" style={{ maxWidth: 1000 }}>
             <FilePreviewModal
                 isOpen={!!previewFile}
                 onClose={() => setPreviewFile(null)}
@@ -684,22 +684,20 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             </button>
 
             {/* Project header */}
-            <div className="card" style={{ padding: window.innerWidth < 768 ? '16px' : '24px', marginBottom: 20 }}>
-                <div style={{ display: 'flex', flexDirection: window.innerWidth < 768 ? 'column' as any : 'row' as any, justifyContent: 'space-between', alignItems: window.innerWidth < 768 ? 'stretch' : 'flex-start', marginBottom: 16, gap: window.innerWidth < 768 ? 12 : 0 }}>
+            <div className="card p-4 md:p-6 mb-5">
+                <div className="flex flex-col md:flex-row justify-between items-stretch md:items-start mb-4 gap-3 md:gap-0">
                     <div style={{ flex: 1 }}>
                         {isEditingProject ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
-                                <div style={{ display: 'flex', gap: 10 }}>
+                                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5">
                                     <input
-                                        className="input"
-                                        style={{ fontSize: '1.25rem', fontWeight: 700, flex: 1 }}
+                                        className="input text-xl font-bold flex-1"
                                         value={editProjectForm.title}
                                         onChange={e => setEditProjectForm({ ...editProjectForm, title: e.target.value })}
                                         placeholder="Project Title"
                                     />
                                     <select
-                                        className="select"
-                                        style={{ width: 120 }}
+                                        className="select sm:w-[120px] w-full"
                                         value={editProjectForm.priority}
                                         onChange={e => setEditProjectForm({ ...editProjectForm, priority: e.target.value })}
                                     >
@@ -713,7 +711,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                     onChange={e => setEditProjectForm({ ...editProjectForm, description: e.target.value })}
                                     placeholder="Project Description"
                                 />
-                                <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 768 ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                     <div style={{ position: 'relative' }}>
                                         <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Client / Company</label>
                                         <input
@@ -805,7 +803,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                     </div>
 
                                     {editProjectForm.isRecurring && (
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             <div>
                                                 <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Pattern</label>
                                                 <select
@@ -834,8 +832,8 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                             </div>
                         ) : (
                             <>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                                    <h1 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{assignment.title}</h1>
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                    <h1 className="text-xl font-bold break-words">{assignment.title}</h1>
                                     {assignment.isRecurring && !assignment.parentAssignmentId && (
                                         <span className="badge" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>Recurring Blueprint</span>
                                     )}
@@ -862,7 +860,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                     </div>
                                 )}
                                 {assignment.description && <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>{assignment.description}</p>}
-                                <div style={{ display: 'flex', gap: 20, fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                                <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs sm:text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Briefcase size={16} /> Client: <strong>{assignment.clientName}</strong></span>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={16} /> Start: {format(new Date(assignment.startDate), 'MMM d, yyyy')}</span>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -877,7 +875,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                         )}
                     </div>
                     {canEdit && (
-                        <div style={{ display: 'flex', gap: 8 }}>
+                        <div className="flex flex-wrap gap-2">
                             {isEditingProject ? (
                                 <>
                                     <button className="btn btn-secondary btn-sm" onClick={() => setIsEditingProject(false)}>Cancel</button>
@@ -920,11 +918,11 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
 
                 {/* Teams */}
                 {assignment.teams?.length > 0 && (
-                    <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                    <div className="mb-3">
+                        <div className="text-xs text-(--color-text-tertiary) font-semibold uppercase tracking-wider mb-2">
                             Assigned Teams
                         </div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <div className="flex gap-2 flex-wrap">
                             {assignment.teams.map((t: any) => (
                                 <div key={t._id} style={{
                                     display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px',
@@ -941,8 +939,8 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                 )}
 
                 {/* Team Members */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' } as React.CSSProperties}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' } as React.CSSProperties}>
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex gap-1.5 flex-wrap">
                         {assignment.team?.map((m: any) => (
                             <span key={m._id} style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
@@ -962,11 +960,11 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--color-border)', marginBottom: 20 }}>
+            <div className="flex gap-0 overflow-x-auto border-b border-(--color-border) mb-5">
                 {tabs.map(t => (
                     <button
                         key={t.key}
-                        className="btn btn-ghost"
+                        className="btn btn-ghost whitespace-nowrap"
                         onClick={() => setActiveTab(t.key as any)}
                         style={{
                             borderRadius: 0,

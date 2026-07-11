@@ -7,6 +7,7 @@ import Campaign from '../models/Campaign';
 import ActivityLog, { EntityType } from '../models/ActivityLog';
 import User from '../models/User';
 import Team from '../models/Team';
+import FieldVisit from '../models/FieldVisit';
 import { AuthRequest } from '../middlewares/auth';
 
 const getDateRange = (scope: string, date: Date) => {
@@ -408,6 +409,46 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
       },
     ]);
 
+    // ── Field visit data ──
+    const visitMatch: any = { tenantId: new mongoose.Types.ObjectId(tenantId), createdAt: { $gte: start, $lte: end } };
+    if (targetUserId) visitMatch.employeeId = targetUserId;
+
+    const [visitStatusCounts, visitOutcomeCounts, visitEmployeeStats] = await Promise.all([
+      FieldVisit.aggregate([
+        { $match: visitMatch },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      FieldVisit.aggregate([
+        { $match: { ...visitMatch, status: 'checked_out' } },
+        { $group: { _id: '$outcome', count: { $sum: 1 } } },
+      ]),
+      FieldVisit.aggregate([
+        { $match: visitMatch },
+        {
+          $group: {
+            _id: '$employeeId',
+            total: { $sum: 1 },
+            completed: { $sum: { $cond: [{ $eq: ['$outcome', 'completed'] }, 1, 0] } },
+            checkedIn: { $sum: { $cond: [{ $eq: ['$status', 'checked_in'] }, 1, 0] } },
+          },
+        },
+        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'employee' } },
+        { $unwind: { path: '$employee', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1, total: 1, completed: 1, checkedIn: 1,
+            employeeName: { $ifNull: ['$employee.name', 'Unknown'] },
+          },
+        },
+      ]),
+    ]);
+
+    const totalVisits = visitStatusCounts.reduce((sum, s) => sum + s.count, 0);
+    const visitStatusMap: Record<string, number> = {};
+    visitStatusCounts.forEach((s: any) => { visitStatusMap[s._id] = s.count; });
+    const visitOutcomeMap: Record<string, number> = {};
+    visitOutcomeCounts.forEach((s: any) => { visitOutcomeMap[s._id] = s.count; });
+
     // ── Previous period + telecaller + activity + events in parallel ──
     const [prevAgg, telecallerData, activityData, currentEvents] = await Promise.all([
       Lead.aggregate([
@@ -788,6 +829,47 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
         const wn = d?.won || 0;
         addDataRow(trendSheet, [periodLabels[i - 1], ct, wn, ct > 0 ? `${Math.round((wn / ct) * 100)}%` : '—'], trr);
         trr++;
+      }
+
+      // ── Sheet 9: Field Visit Reports ──
+      const visitSheet = workbook.addWorksheet('Field Visit Reports');
+      let vr = 1;
+      vr = addTitle(visitSheet, 'Field Visit Reports', vr, 8);
+      vr = addSubtitle(visitSheet, dateRangeLabel, vr, 8);
+      vr += 1;
+
+      vr = addTableHeaders(visitSheet, [
+        { header: 'Metric', width: 20 }, { header: 'Value', width: 12 },
+      ], vr);
+      addDataRow(visitSheet, ['Total Visits', totalVisits], vr); vr++;
+      addDataRow(visitSheet, ['Scheduled', visitStatusMap['scheduled'] || 0], vr); vr++;
+      addDataRow(visitSheet, ['Checked In', visitStatusMap['checked_in'] || 0], vr); vr++;
+      addDataRow(visitSheet, ['Checked Out', visitStatusMap['checked_out'] || 0], vr); vr++;
+      addDataRow(visitSheet, ['Cancelled', visitStatusMap['cancelled'] || 0], vr); vr++;
+      vr += 1;
+
+      const outcomeLabels: Record<string, string> = {
+        completed: 'Completed', rescheduled: 'Rescheduled',
+        no_contact: 'No Contact', met_other: 'Met Other',
+      };
+      vr = addTableHeaders(visitSheet, [
+        { header: 'Outcome', width: 20 }, { header: 'Count', width: 12 },
+      ], vr);
+      Object.entries(outcomeLabels).forEach(([key, label]) => {
+        addDataRow(visitSheet, [label, visitOutcomeMap[key] || 0], vr);
+        vr++;
+      });
+      vr += 1;
+
+      if (visitEmployeeStats.length > 0) {
+        vr = addTableHeaders(visitSheet, [
+          { header: 'Employee', width: 24 }, { header: 'Total Visits', width: 14 },
+          { header: 'Checked In', width: 14 }, { header: 'Completed', width: 14 },
+        ], vr);
+        visitEmployeeStats.forEach((emp: any) => {
+          addDataRow(visitSheet, [emp.employeeName, emp.total, emp.checkedIn, emp.completed], vr);
+          vr++;
+        });
       }
     };
 

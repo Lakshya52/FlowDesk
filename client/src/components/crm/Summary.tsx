@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
 import {
   startOfWeek, endOfWeek, format, addWeeks, subWeeks,
-  startOfMonth, addMonths, subMonths,
-  startOfYear, addYears, subYears,
+  startOfMonth, endOfMonth, addMonths, subMonths,
+  startOfYear, endOfYear, addYears, subYears,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Download, FileText, AlertCircle, Inbox, TrendingUp, TrendingDown, Users, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, AlertCircle, Inbox, TrendingUp, TrendingDown, Users, RefreshCw, MapPin, LogIn, CheckCircle, XCircle, CalendarDays, User } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -35,46 +35,54 @@ interface SummaryData {
 
 interface UserItem { _id: string; name: string; role: string }
 
+interface VisitReport {
+  totalVisits: number;
+  byStatus: { _id: string; count: number }[];
+  byOutcome: { _id: string; count: number }[];
+  byEmployee: { _id: string; total: number; completed: number; checkedIn: number; employeeName?: string }[];
+}
+
 const SCOPE_TABS: { key: Scope; label: string }[] = [
   { key: 'weekly', label: 'Weekly' },
   { key: 'monthly', label: 'Monthly' },
   { key: 'yearly', label: 'Yearly' },
 ];
 
+const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
+  scheduled: { label: 'Scheduled', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+  checked_in: { label: 'Checked In', color: 'var(--color-success)', bg: 'var(--color-success-light)' },
+  checked_out: { label: 'Checked Out', color: 'var(--color-text-secondary)', bg: 'var(--color-surface-hover)' },
+  cancelled: { label: 'Cancelled', color: 'var(--color-danger)', bg: 'var(--color-danger-light)' },
+};
+
+const OUTCOME_MAP: Record<string, { label: string; color: string; bg: string }> = {
+  completed: { label: 'Completed', color: 'var(--color-success)', bg: 'var(--color-success-light)' },
+  rescheduled: { label: 'Rescheduled', color: 'var(--color-warning)', bg: 'var(--color-warning-light)' },
+  no_contact: { label: 'No Contact', color: 'var(--color-danger)', bg: 'var(--color-danger-light)' },
+  met_other: { label: 'Met Other', color: 'var(--color-primary-hover)', bg: 'var(--color-primary-light)' },
+};
+
 const Trend = ({ v }: { v: number | null }) => {
-  if (v === null) return <span style={{ color: 'var(--color-text-tertiary)', fontSize: 12 }}>{'\u2014'}</span>;
-  if (v === 0) return <span style={{ color: 'var(--color-text-tertiary)', fontSize: 12 }}>0%</span>;
+  if (v === null) return <span className="text-(--color-text-tertiary) text-xs">{'\u2014'}</span>;
+  if (v === 0) return <span className="text-(--color-text-tertiary) text-xs">0%</span>;
   const up = v > 0;
   return (
-    <span
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 2,
-        fontSize: 12, fontWeight: 500,
-        color: up ? 'var(--color-success)' : 'var(--color-danger)',
-      }}
-    >
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${up ? 'text-(--color-success)' : 'text-(--color-danger)'}`}>
       {up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}{up ? '+' : ''}{v}%
     </span>
   );
 };
 
 const StatItem = ({ label, value, trend, sub }: { label: string; value: string | number; trend?: number | null; sub?: string }) => (
-  <div
-    style={{
-      borderRight: '1px solid var(--color-border)',
-      paddingLeft: 20, paddingRight: 20,
-      minWidth: 0,
-    }}
-    className="first:pl-0 last:pr-0 last:border-r-0"
-  >
-    <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 2 }} className="truncate">
+  <div className="border-r border-(--color-border) px-3 sm:px-5 first:pl-0 last:pr-0 last:border-r-0 min-w-0">
+    <div className="text-[10px] font-semibold uppercase tracking-wider text-(--color-text-tertiary) mb-0.5 truncate">
       {label}
     </div>
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-      <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    <div className="flex items-baseline gap-2">
+      <span className="text-xl sm:text-2xl font-bold text-(--color-text) tabular-nums">{value}</span>
       {trend !== undefined && <Trend v={trend ?? null} />}
     </div>
-    {sub && <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{sub}</div>}
+    {sub && <div className="text-xs text-(--color-text-secondary) mt-0.5">{sub}</div>}
   </div>
 );
 
@@ -135,6 +143,22 @@ const Summary = () => {
     },
   });
 
+  const getEndDateParam = useCallback(() => {
+    if (scope === 'weekly') return format(endOfWeek(refDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    if (scope === 'monthly') return format(endOfMonth(refDate), 'yyyy-MM-dd');
+    return format(endOfYear(refDate), 'yyyy-MM-dd');
+  }, [scope, refDate]);
+
+  const { data: visitReports } = useQuery<{ reports: VisitReport }>({
+    queryKey: ["field-visit-reports", scope, getDateParam(), getEndDateParam(), selectedUserId],
+    queryFn: async () => {
+      const params: any = { startDate: getDateParam(), endDate: getEndDateParam() };
+      if (selectedUserId) params.employeeId = selectedUserId;
+      const { data: res } = await api.get('/field-visits/reports', { params });
+      return res;
+    },
+  });
+
   const queryError = error ? (error as any)?.response?.data?.message || 'Failed to load summary' : null;
 
   const handleScopeChange = (s: Scope) => { setScope(s); setRefDate(new Date()); };
@@ -164,26 +188,26 @@ const Summary = () => {
 
   if (loading && !data) {
     return (
-      <div style={{ maxWidth: 1200, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div className="skeleton" style={{ height: 36, width: 240, borderRadius: 8 }} />
-        <div className="skeleton" style={{ height: 16, width: 320, borderRadius: 6 }} />
-        <div style={{ display: 'flex', gap: 16 }}>
-          <div className="skeleton" style={{ height: 36, width: 200, borderRadius: 8 }} />
-          <div className="skeleton" style={{ height: 36, width: 160, borderRadius: 8 }} />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col gap-5">
+        <div className="skeleton h-9 w-60 rounded-lg" />
+        <div className="skeleton h-4 w-80 rounded-md" />
+        <div className="flex gap-4">
+          <div className="skeleton h-9 w-52 rounded-lg" />
+          <div className="skeleton h-9 w-40 rounded-lg" />
         </div>
-        <div className="skeleton" style={{ height: 80, borderRadius: 16 }} />
-        <div className="skeleton" style={{ height: 280, borderRadius: 16 }} />
-        <div className="skeleton" style={{ height: 200, borderRadius: 16 }} />
+        <div className="skeleton h-20 rounded-2xl" />
+        <div className="skeleton h-72 rounded-2xl" />
+        <div className="skeleton h-52 rounded-2xl" />
       </div>
     );
   }
 
   if (queryError && !data) {
     return (
-      <div style={{ maxWidth: 1200 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '60px 20px', textAlign: 'center' }}>
-          <AlertCircle size={36} style={{ color: 'var(--color-danger)' }} />
-          <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-secondary)' }}>{queryError}</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex flex-col items-center justify-center gap-4 py-16 px-5 text-center">
+          <AlertCircle size={36} className="text-(--color-danger)" />
+          <p className="text-sm font-medium text-(--color-text-secondary)">{queryError}</p>
           <button onClick={() => queryClient.invalidateQueries({ queryKey: ["crm-summary"] })} className="btn btn-primary btn-sm"><RefreshCw size={14} /> Try Again</button>
         </div>
       </div>
@@ -193,60 +217,55 @@ const Summary = () => {
   const hasChartData = data && data.chartData && data.chartData.length > 0 && data.chartData.some(d => d.contacted > 0 || d.won > 0);
   const isReloading = loading && !!data;
 
+  const reports = visitReports?.reports;
+  const statusCounts = (reports?.byStatus || []).reduce((acc, s) => ({ ...acc, [s._id]: s.count }), {} as Record<string, number>);
+
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6">
       {/* ── Page header ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-7">
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--color-text)' }}>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-(--color-text)">
             Summary
           </h1>
-          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+          <p className="text-sm text-(--color-text-secondary) mt-0.5">
             CRM performance overview for the selected period
           </p>
         </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => queryClient.invalidateQueries({ queryKey: ["crm-summary"] })} disabled={loading} className="btn btn-secondary w-full sm:w-auto" style={{ padding: '8px 12px' }} title="Refresh data">
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            </button>
-            <button onClick={handleExport} disabled={exporting} className="btn btn-primary w-full sm:w-auto">
-              <Download size={14} />
-              {exporting ? 'Exporting\u2026' : 'Export Excel'}
-            </button>
-          </div>
+        <div className="flex gap-2">
+          <button onClick={() => queryClient.invalidateQueries({ queryKey: ["crm-summary"] })} disabled={loading} className="btn btn-secondary px-3 py-2" title="Refresh data">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={handleExport} disabled={exporting} className="btn btn-primary">
+            <Download size={14} />
+            {exporting ? 'Exporting\u2026' : 'Export Excel'}
+          </button>
+        </div>
       </div>
 
       {/* ── Scope tabs + period navigation + user selector ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 32, borderBottom: '1px solid var(--color-border)' }}>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6 mb-6">
+        <div className="flex gap-8 border-b border-(--color-border)">
           {SCOPE_TABS.map(t => (
             <button
               key={t.key}
               onClick={() => handleScopeChange(t.key)}
-              style={{
-                padding: '8px 0',
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                color: scope === t.key ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                borderBottom: scope === t.key ? '2px solid var(--color-primary)' : '2px solid transparent',
-                marginBottom: -1,
-                transition: 'all 0.15s ease',
-              }}
+              className={`pb-2 text-sm font-semibold border-b-2 transition-all duration-150 cursor-pointer ${
+                scope === t.key
+                  ? 'text-(--color-primary) border-(--color-primary)'
+                  : 'text-(--color-text-tertiary) border-transparent'
+              }`}
             >{t.label}</button>
           ))}
         </div>
 
         {canSelectUser && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Users size={14} style={{ color: 'var(--color-text-tertiary)' }} />
+          <div className="flex items-center gap-1.5">
+            <Users size={14} className="text-(--color-text-tertiary)" />
             <select
-              className="select"
+              className="select text-xs py-1 px-2 min-w-[130px]"
               value={selectedUserId}
               onChange={e => setSelectedUserId(e.target.value)}
-              style={{ fontSize: '0.8rem', padding: '4px 24px 4px 8px', minWidth: 150 }}
             >
               <option value="">All Users</option>
               {users.map(u => (
@@ -256,34 +275,31 @@ const Summary = () => {
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+        <div className="flex items-center gap-2 sm:ml-auto">
           {isReloading && (
-            <RefreshCw size={14} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+            <RefreshCw size={14} className="animate-spin text-(--color-primary)" />
           )}
           <button
             onClick={() => setRefDate(new Date())}
             disabled={loading}
-            className="btn btn-ghost w-full sm:w-auto"
-            style={{ padding: '4px 10px', fontWeight: 600, fontSize: '0.75rem' }}
+            className="btn btn-ghost px-2.5 py-1 text-xs font-semibold"
           >
             Today
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px', borderRadius: 6, background: 'var(--color-surface-hover)' }}>
+          <div className="flex items-center gap-1 p-0.5 rounded-md bg-(--color-surface-hover)">
             <button
               onClick={() => navigate(-1)}
-              className="btn btn-ghost btn-sm"
-              style={{ padding: '2px 6px', borderRadius: 4 }}
+              className="btn btn-ghost btn-sm p-0.5 rounded cursor-pointer"
               aria-label="Previous"
             >
               <ChevronLeft size={15} />
             </button>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', minWidth: 160, textAlign: 'center' }}>
+            <span className="text-sm font-semibold text-(--color-text) min-w-[140px] sm:min-w-[160px] text-center">
               {getPeriodLabel()}
             </span>
             <button
               onClick={() => navigate(1)}
-              className="btn btn-ghost btn-sm"
-              style={{ padding: '2px 6px', borderRadius: 4 }}
+              className="btn btn-ghost btn-sm p-0.5 rounded cursor-pointer"
               aria-label="Next"
             >
               <ChevronRight size={15} />
@@ -294,42 +310,37 @@ const Summary = () => {
 
       {/* ── Error banner (reload failure with existing data) ── */}
       {queryError && data && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', marginBottom: 16, borderRadius: 10, background: 'var(--color-danger-light)', color: 'var(--color-danger)', fontSize: 13, fontWeight: 500 }}>
+        <div className="flex items-center gap-2 px-4 py-2 mb-4 rounded-lg bg-(--color-danger-light) text-(--color-danger) text-xs font-medium">
           <AlertCircle size={14} />
           <span>{queryError}</span>
-          <button onClick={() => queryClient.invalidateQueries({ queryKey: ["crm-summary"] })} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--color-danger)', fontWeight: 600, cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Retry</button>
+          <button onClick={() => queryClient.invalidateQueries({ queryKey: ["crm-summary"] })} className="ml-auto bg-none border-none text-(--color-danger) font-semibold cursor-pointer text-xs underline">Retry</button>
         </div>
       )}
 
       {/* ── Stats row ── */}
       {data ? (
-        <div
-          className="card animate-fade-in"
-          style={{ padding: '16px 20px', marginBottom: 24, display: 'flex', alignItems: 'stretch', overflowX: 'auto', minHeight: 80 }}
-        >
-          <StatItem label="Leads Total" value={data.leads.total} />
-          <StatItem label="Leads Contacted" value={data.leads.contacted} trend={data.leads.contactedTrend} sub={`${data.leads.won} won`} />
-          <StatItem label="Calls" value={data.leads.callCount} sub={data.leads.callDurationLabel} />
-          <StatItem label="Leads Won" value={data.leads.won} trend={data.leads.wonTrend} />
-          <StatItem label="Conversion Rate" value={`${data.conversionRate}%`} sub={`${data.leads.statusBreakdown.new} new`} />
-          <StatItem label="Meetings" value={data.events.total} trend={data.events.trend} />
+        <div className="card animate-fade-in p-4 sm:py-4 sm:px-5 mb-6 overflow-x-auto">
+          <div className="flex items-stretch min-w-max gap-0">
+            <StatItem label="Leads Total" value={data.leads.total} />
+            <StatItem label="Leads Contacted" value={data.leads.contacted} trend={data.leads.contactedTrend} sub={`${data.leads.won} won`} />
+            <StatItem label="Calls" value={data.leads.callCount} sub={data.leads.callDurationLabel} />
+            <StatItem label="Leads Won" value={data.leads.won} trend={data.leads.wonTrend} />
+            <StatItem label="Conversion Rate" value={`${data.conversionRate}%`} sub={`${data.leads.statusBreakdown.new} new`} />
+            <StatItem label="Meetings" value={data.events.total} trend={data.events.trend} />
+          </div>
         </div>
       ) : (
-        <div className="card" style={{ padding: '20px', marginBottom: 24, textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 14 }}>No data</div>
+        <div className="card p-5 mb-6 text-center text-(--color-text-tertiary) text-sm">No data</div>
       )}
 
       {/* ── Status Breakdown ── */}
       {data && (
-        <div className="card animate-fade-in" style={{ padding: '16px 20px', marginBottom: 24, minHeight: 160 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <FileText size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-            <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>Lead Status Breakdown</span>
+        <div className="card animate-fade-in p-4 sm:p-5 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText size={14} className="text-(--color-text-tertiary)" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-tertiary)">Lead Status Breakdown</span>
           </div>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-            gap: 10,
-          }}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
             {[
               { key: 'new', label: 'New', color: '#6366f1' },
               { key: 'attempted', label: 'Attempted', color: '#8b5cf6' },
@@ -346,21 +357,14 @@ const Summary = () => {
               const val = (data.leads.statusBreakdown as any)[s.key] ?? 0;
               const pct = data.leads.total > 0 ? Math.round((val / data.leads.total) * 100) : 0;
               return (
-                <div
-                  key={s.key}
-                  style={{
-                    display: 'flex', flexDirection: 'column', gap: 4,
-                    padding: '10px 12px', borderRadius: 10,
-                    background: 'var(--color-surface-hover)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color }} />
-                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>{s.label}</span>
+                <div key={s.key} className="flex flex-col gap-1 p-2.5 sm:p-3 rounded-lg bg-(--color-surface-hover)">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                    <span className="text-[11px] font-medium text-(--color-text-secondary) truncate">{s.label}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums' }}>{val}</span>
-                    <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{pct}%</span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-lg sm:text-xl font-bold text-(--color-text) tabular-nums">{val}</span>
+                    <span className="text-xs text-(--color-text-tertiary)">{pct}%</span>
                   </div>
                 </div>
               );
@@ -369,29 +373,119 @@ const Summary = () => {
         </div>
       )}
 
+      {/* ── Field Visit Reports ── */}
+      <div className="card animate-fade-in p-4 sm:p-5 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <MapPin size={14} className="text-(--color-primary)" />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-tertiary)">Field Visit Reports</span>
+        </div>
+
+        {reports ? (
+          <div className="space-y-5">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-(--color-text) tabular-nums">{reports.totalVisits}</span>
+              <span className="text-sm text-(--color-text-secondary)">total visits</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {Object.entries(STATUS_MAP).map(([key, cfg]) => {
+                const val = statusCounts[key] || 0;
+                const pct = reports.totalVisits > 0 ? Math.round((val / reports.totalVisits) * 100) : 0;
+                return (
+                  <div key={key} className="flex flex-col gap-1 p-3 rounded-lg" style={{ background: cfg.bg }}>
+                    <div className="flex items-center gap-1.5">
+                      {key === 'checked_in' && <LogIn size={12} style={{ color: cfg.color }} />}
+                      {key === 'checked_out' && <CheckCircle size={12} style={{ color: cfg.color }} />}
+                      {key === 'cancelled' && <XCircle size={12} style={{ color: cfg.color }} />}
+                      {key === 'scheduled' && <CalendarDays size={12} style={{ color: cfg.color }} />}
+                      <span className="text-xs font-medium" style={{ color: cfg.color }}>{cfg.label}</span>
+                    </div>
+                    <span className="text-lg font-bold text-(--color-text) tabular-nums">{val}</span>
+                    <span className="text-[10px] text-(--color-text-tertiary)">{pct}% of total</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {reports.byOutcome.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-(--color-text-tertiary)">By Outcome</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {reports.byOutcome.map((o) => {
+                    const cfg = OUTCOME_MAP[o._id];
+                    if (!cfg) return null;
+                    return (
+                      <div key={o._id} className="flex flex-col gap-1 p-3 rounded-lg" style={{ background: cfg.bg }}>
+                        <span className="text-xs font-medium" style={{ color: cfg.color }}>{cfg.label}</span>
+                        <span className="text-lg font-bold text-(--color-text) tabular-nums">{o.count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {reports.byEmployee.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <User size={13} className="text-(--color-text-tertiary)" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-(--color-text-tertiary)">By Employee</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-(--color-border)">
+                        <th className="text-left py-2 pr-4 font-semibold text-[10px] uppercase tracking-wider text-(--color-text-tertiary)">Employee</th>
+                        <th className="text-right py-2 px-4 font-semibold text-[10px] uppercase tracking-wider text-(--color-text-tertiary)">Total</th>
+                        <th className="text-right py-2 px-4 font-semibold text-[10px] uppercase tracking-wider text-(--color-text-tertiary)">Checked In</th>
+                        <th className="text-right py-2 pl-4 font-semibold text-[10px] uppercase tracking-wider text-(--color-text-tertiary)">Completed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reports.byEmployee.map((emp) => (
+                        <tr key={emp._id} className="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
+                          <td className="py-2 pr-4 font-medium text-(--color-text)">{emp.employeeName || 'Unknown'}</td>
+                          <td className="py-2 px-4 text-right tabular-nums text-(--color-text-secondary)">{emp.total}</td>
+                          <td className="py-2 px-4 text-right tabular-nums text-(--color-text-secondary)">{emp.checkedIn}</td>
+                          <td className="py-2 pl-4 text-right tabular-nums text-(--color-success) font-medium">{emp.completed}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-(--color-text-tertiary) text-sm">{!isAdmin && !isManager ? 'Field visit reports are not available for your role' : 'Loading field visit reports...'}</div>
+        )}
+      </div>
+
       {/* ── Chart ── */}
-      <div className="card animate-fade-in" style={{ padding: 24, marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
+      <div className="card animate-fade-in p-4 sm:p-6 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <h3 className="text-sm font-semibold text-(--color-text)">
             CRM Activity
-            <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 400, marginLeft: 6 }}>
+            <span className="text-(--color-text-tertiary) font-normal ml-1.5">
               ({scope === 'weekly' ? 'per day' : scope === 'monthly' ? 'per week' : 'per month'})
             </span>
           </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--color-primary)' }} />
+          <div className="flex items-center gap-4 text-xs font-medium text-(--color-text-secondary)">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-(--color-primary)" />
               Contacted
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--color-success)' }} />
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-(--color-success)" />
               Won
             </span>
           </div>
         </div>
 
         {hasChartData ? (
-          <div style={{ height: 240 }}>
+          <div className="h-60 sm:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.chartData} margin={{ top: 4, right: 4, left: -14, bottom: 0 }}>
                 <XAxis
@@ -422,38 +516,30 @@ const Summary = () => {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div style={{ height: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <Inbox size={32} style={{ color: 'var(--color-text-tertiary)' }} />
-            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>No activity this period</p>
-            <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Try a different time range or scope</p>
+          <div className="h-60 flex flex-col items-center justify-center gap-2">
+            <Inbox size={32} className="text-(--color-text-tertiary)" />
+            <p className="text-sm font-medium text-(--color-text-tertiary)">No activity this period</p>
+            <p className="text-xs text-(--color-text-tertiary)">Try a different time range or scope</p>
           </div>
         )}
       </div>
 
       {/* ── Breakdown table ── */}
-      <div className="card animate-fade-in" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FileText size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-          <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>Period Breakdown</span>
+      <div className="card animate-fade-in overflow-hidden">
+        <div className="px-4 sm:px-5 py-3.5 border-b border-(--color-border) flex items-center gap-2">
+          <FileText size={14} className="text-(--color-text-tertiary)" />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-tertiary)">Period Breakdown</span>
         </div>
 
-        <div style={{ overflowX: 'auto', minHeight: 160 }}>
+        <div className="overflow-x-auto min-h-[160px]">
           {data && data.chartData && data.chartData.length > 0 ? (
-            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+            <table className="w-full text-xs border-collapse">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <tr className="border-b border-(--color-border)">
                   {['Period', 'Contacted', 'Won', 'Conversion'].map(h => (
                     <th
                       key={h}
-                      style={{
-                        textAlign: h === 'Period' ? 'left' : 'right',
-                        padding: '10px 20px',
-                        fontWeight: 600,
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: 'var(--color-text-tertiary)',
-                      }}
+                      className={`py-2.5 px-4 sm:px-5 font-semibold text-[10px] uppercase tracking-wider text-(--color-text-tertiary) ${h === 'Period' ? 'text-left' : 'text-right'}`}
                     >{h}</th>
                   ))}
                 </tr>
@@ -470,33 +556,12 @@ const Summary = () => {
                     rate >= 25 ? 'var(--color-warning-light)' :
                     rate > 0 ? 'var(--color-danger-light)' : 'var(--color-surface-hover)';
                   return (
-                    <tr
-                      key={i}
-                      style={{
-                        borderBottom: '1px solid var(--color-border)',
-                        transition: 'background 0.15s ease',
-                      }}
-                      className="hover:bg-(--color-surface-hover)"
-                    >
-                      <td style={{ padding: '10px 20px', fontWeight: 500, color: 'var(--color-text)' }}>{row.name}</td>
-                      <td style={{ padding: '10px 20px', textAlign: 'right', color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                        {row.contacted || '\u2014'}
-                      </td>
-                      <td style={{ padding: '10px 20px', textAlign: 'right', color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                        {row.won || '\u2014'}
-                      </td>
-                      <td style={{ padding: '10px 20px', textAlign: 'right' }}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            padding: '1px 8px',
-                            borderRadius: 4,
-                            fontSize: 11,
-                            fontWeight: 500,
-                            color: rateColor,
-                            background: rateBg,
-                          }}
-                        >{rate}%</span>
+                    <tr key={i} className="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
+                      <td className="py-2.5 px-4 sm:px-5 font-medium text-(--color-text)">{row.name}</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right tabular-nums text-(--color-text-secondary)">{row.contacted || '\u2014'}</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right tabular-nums text-(--color-text-secondary)">{row.won || '\u2014'}</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right">
+                        <span className="inline-block px-2 py-0.5 rounded text-xs font-medium" style={{ color: rateColor, background: rateBg }}>{rate}%</span>
                       </td>
                     </tr>
                   );
@@ -504,13 +569,11 @@ const Summary = () => {
               </tbody>
             </table>
           ) : (
-            <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-              No data to display
-            </div>
+            <div className="py-8 px-5 text-center text-(--color-text-tertiary) text-xs">No data to display</div>
           )}
         </div>
 
-        <div style={{ padding: '8px 20px', borderTop: '1px solid var(--color-border)', fontSize: 10, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>
+        <div className="px-4 sm:px-5 py-2 border-t border-(--color-border) text-[10px] text-(--color-text-tertiary) text-right">
           Generated {format(new Date(), 'MMM d, yyyy h:mm a')} {'\u2014'} {user?.name || 'Current User'}
         </div>
       </div>

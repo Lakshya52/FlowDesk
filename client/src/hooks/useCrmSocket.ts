@@ -38,6 +38,17 @@ export const useCrmSocket = () => {
     socket.on("crm:campaign:updated", invalidateCampaigns);
     socket.on("crm:campaign:deleted", invalidateCampaigns);
 
+    const invalidateFieldVisitReports = () => {
+      queryClient.invalidateQueries({ queryKey: ["field-visit-reports"] });
+    };
+
+    socket.on("field-visit:created", invalidateFieldVisitReports);
+    socket.on("field-visit:updated", invalidateFieldVisitReports);
+    socket.on("field-visit:checked-in", invalidateFieldVisitReports);
+    socket.on("field-visit:checked-out", invalidateFieldVisitReports);
+    socket.on("field-visit:cancelled", invalidateFieldVisitReports);
+    socket.on("field-visit:completed", invalidateFieldVisitReports);
+
     return () => {
       socket.off("crm:lead:created", invalidateLeads);
       socket.off("crm:lead:updated", invalidateLeads);
@@ -45,6 +56,12 @@ export const useCrmSocket = () => {
       socket.off("crm:campaign:created", invalidateCampaigns);
       socket.off("crm:campaign:updated", invalidateCampaigns);
       socket.off("crm:campaign:deleted", invalidateCampaigns);
+      socket.off("field-visit:created", invalidateFieldVisitReports);
+      socket.off("field-visit:updated", invalidateFieldVisitReports);
+      socket.off("field-visit:checked-in", invalidateFieldVisitReports);
+      socket.off("field-visit:checked-out", invalidateFieldVisitReports);
+      socket.off("field-visit:cancelled", invalidateFieldVisitReports);
+      socket.off("field-visit:completed", invalidateFieldVisitReports);
       socket.off("connect", joinTenant);
     };
   }, [queryClient, user?.tenantId]);

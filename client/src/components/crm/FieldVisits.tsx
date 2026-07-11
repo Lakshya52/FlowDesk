@@ -1,13 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
-import { MapPin, BarChart3, Route, Map, RefreshCw } from "lucide-react";
+import { MapPin, Route, Map, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import FieldVisitList from "./FieldVisitList";
 import FieldVisitRemarks from "./FieldVisitRemarks";
 import FieldVisitMap from "./FieldVisitMap";
-import FieldVisitReports from "./FieldVisitReports";
+// import FieldVisitReports from "./FieldVisitReports";
 import FieldVisitRoutePlanner from "./FieldVisitRoutePlanner";
 import { useLocationTracking } from "../../hooks/useLocationTracking";
+import { useFieldVisitSocket } from "../../hooks/useFieldVisitSocket";
 
 type AdminTab = "visits" | "map" | "reports" | "route";
 
@@ -15,7 +16,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: React.ComponentType<{ si
   { key: "visits", label: "Visits", icon: MapPin },
   { key: "map", label: "Live Map", icon: Map },
   { key: "route", label: "Route Planner", icon: Route },
-  { key: "reports", label: "Reports", icon: BarChart3 },
+  // { key: "reports", label: "Reports", icon: BarChart3 },
 ];
 
 const FieldVisits: React.FC = () => {
@@ -35,6 +36,26 @@ const FieldVisits: React.FC = () => {
     durationMs: 60 * 60 * 1000,
   });
 
+  const tenantId = typeof user?.tenantId === "object" ? (user.tenantId as any)?._id : user?.tenantId;
+
+  const handleSocketRefresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
+
+  useFieldVisitSocket({
+    tenantId,
+    onRefresh: handleSocketRefresh,
+  });
+
+  useEffect(() => {
+    if (!remarksVisitId) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setRemarksVisitId(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [remarksVisitId]);
+
   const handleAddRemarks = (id: string) => {
     setRemarksVisitId(id);
   };
@@ -44,27 +65,15 @@ const FieldVisits: React.FC = () => {
     setRefreshKey((k) => k + 1);
   };
 
-  if (remarksVisitId) {
-    return (
-      <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
-        <FieldVisitRemarks
-          visitId={remarksVisitId}
-          onComplete={handleRemarksComplete}
-          onCancel={() => setRemarksVisitId(null)}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <MapPin size={24} className="text-blue-600" />
+          <h1 className="text-xl sm:text-2xl font-bold text-(--color-text) flex items-center gap-2">
+            <MapPin size={24} className="text-(--color-primary)" />
             Field Visits
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">View & manage your field visits</p>
+          <p className="text-sm text-(--color-text-tertiary) mt-0.5">View & manage your field visits</p>
         </div>
         <button
           onClick={() => {
@@ -76,15 +85,15 @@ const FieldVisits: React.FC = () => {
             }, 500);
           }}
           disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 border border-(--color-border) cursor-pointer text-sm font-medium rounded-lg hover:bg-(--color-surface-hover) disabled:opacity-50 transition-colors"
           title="Refresh"
         >
-          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} /> Refresh
         </button>
       </div>
 
       {isAdminOrManager && (
-        <div className="flex gap-1 border-b border-gray-200 mb-4">
+        <div className="flex gap-1 border-b border-(--color-border) mb-4">
           {ADMIN_TABS.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -93,8 +102,8 @@ const FieldVisits: React.FC = () => {
                 onClick={() => setAdminTab(tab.key)}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                   adminTab === tab.key
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                    ? "border-(--color-primary) text-(--color-primary)"
+                    : "border-transparent text-(--color-text-tertiary) hover:text-(--color-text-secondary)"
                 }`}
               >
                 <Icon size={16} />
@@ -114,8 +123,20 @@ const FieldVisits: React.FC = () => {
       )}
 
       {isAdminOrManager && adminTab === "map" && <FieldVisitMap refreshKey={refreshKey} />}
-      {isAdminOrManager && adminTab === "reports" && <FieldVisitReports refreshKey={refreshKey} />}
+      {/* {isAdminOrManager && adminTab === "reports" && <FieldVisitReports refreshKey={refreshKey} />} */}
       {isAdminOrManager && adminTab === "route" && <FieldVisitRoutePlanner refreshKey={refreshKey} />}
+
+      {remarksVisitId && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="relative bg-(--color-surface) rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
+            <FieldVisitRemarks
+              visitId={remarksVisitId}
+              onComplete={handleRemarksComplete}
+              onCancel={() => setRemarksVisitId(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

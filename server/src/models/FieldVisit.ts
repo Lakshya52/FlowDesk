@@ -30,8 +30,14 @@ export interface IFieldVisit extends Document {
         address: string;
     };
     status: 'scheduled' | 'checked_in' | 'checked_out' | 'cancelled';
-    outcome?: 'completed' | 'rescheduled' | 'no_show';
+    outcome?: 'completed' | 'rescheduled' | 'no_contact' | 'met_other';
     meetingNotes?: string;
+    rescheduledDate?: Date;
+    rescheduledTime?: string;
+    otherPersonName?: string;
+    otherPersonContact?: string;
+    otherPersonNotes?: string;
+    otherPersonOutcome?: string;
     followUpDate?: Date;
     digitalSignature?: string;
     remarks?: string;
@@ -41,6 +47,8 @@ export interface IFieldVisit extends Document {
     expenses: IExpense[];
     geoFenceRadius: number;
     geoFenceBreached: boolean;
+    trackingLost: boolean;
+    lastLocationUpdateAt?: Date;
     trackingStartedAt?: Date;
     trackingEndedAt?: Date;
     createdAt: Date;
@@ -85,8 +93,14 @@ const fieldVisitSchema = new Schema<IFieldVisit>(
             enum: ['scheduled', 'checked_in', 'checked_out', 'cancelled'],
             default: 'scheduled',
         },
-        outcome: { type: String, enum: ['completed', 'rescheduled', 'no_show'] },
+        outcome: { type: String, enum: ['completed', 'rescheduled', 'no_contact', 'met_other'] },
         meetingNotes: { type: String, trim: true },
+        rescheduledDate: { type: Date },
+        rescheduledTime: { type: String, trim: true },
+        otherPersonName: { type: String, trim: true },
+        otherPersonContact: { type: String, trim: true },
+        otherPersonNotes: { type: String, trim: true },
+        otherPersonOutcome: { type: String, trim: true },
         followUpDate: { type: Date },
         digitalSignature: { type: String },
         visitOrder: { type: Number },
@@ -96,6 +110,8 @@ const fieldVisitSchema = new Schema<IFieldVisit>(
         remarksAddedAt: { type: Date },
         geoFenceRadius: { type: Number, default: 100 },
         geoFenceBreached: { type: Boolean, default: false },
+        trackingLost: { type: Boolean, default: false },
+        lastLocationUpdateAt: { type: Date },
         trackingStartedAt: { type: Date },
         trackingEndedAt: { type: Date },
     },

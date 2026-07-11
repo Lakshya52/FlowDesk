@@ -16,6 +16,8 @@ import {
     emitFieldVisitCreated,
     emitFieldVisitUpdated,
     emitFieldVisitCancelled,
+    emitFieldVisitTrackingRestored,
+    emitFieldVisitCompleted,
 } from "../services/fieldVisitSocketService";
 
 const getTenantId = (user: any): string =>
@@ -64,9 +66,9 @@ export const getFieldVisits = async (req: AuthRequest, res: Response): Promise<v
     try {
         const tenantId = getTenantId(req.user);
         const user = req.user!;
-        const { status, employeeId, clientId, startDate, endDate, visitType, page: p, limit: l } = req.query;
+        const { status, outcome, employeeId, clientId, startDate, endDate, visitType, page: p, limit: l } = req.query;
         const page = Math.max(1, parseInt(p as string) || 1);
-        const limit = Math.min(100, Math.max(1, parseInt(l as string) || 20));
+        const limit = Math.min(100000, Math.max(1, parseInt(l as string) || 20));
         const skip = (page - 1) * limit;
 
         const filter: any = { tenantId };
@@ -78,6 +80,7 @@ export const getFieldVisits = async (req: AuthRequest, res: Response): Promise<v
         }
 
         if (status) filter.status = status;
+        if (outcome) filter.outcome = outcome;
         if (clientId) filter.clientId = clientId;
 
         if (visitType === 'scheduled') {
@@ -172,16 +175,18 @@ export const cancelFieldVisit = async (req: AuthRequest, res: Response): Promise
 
         if (user.role === 'member') filter.employeeId = user._id;
 
-        const visit = await FieldVisit.findOneAndUpdate(
-            filter,
-            { $set: { status: 'cancelled' } },
-            { new: true }
-        );
-
+        const visit = await FieldVisit.findOne(filter);
         if (!visit) {
             res.status(404).json({ message: "Visit not found" });
             return;
         }
+        if (visit.status !== 'scheduled') {
+            res.status(400).json({ message: `Cannot cancel a visit with status "${visit.status}"` });
+            return;
+        }
+
+        visit.status = 'cancelled';
+        await visit.save();
 
         emitFieldVisitCancelled(tenantId, visit._id.toString());
         res.json({ success: true, visit });
@@ -224,6 +229,23 @@ export const checkIn = async (req: AuthRequest, res: Response): Promise<void> =>
             return;
         }
 
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+        const accNum = parseFloat(accuracy || '0');
+
+        if (latNum === 0 && lngNum === 0) {
+            res.status(400).json({ message: "Invalid location (0,0) — enable GPS" });
+            return;
+        }
+        if (latNum < 6 || latNum > 37 || lngNum < 68 || lngNum > 98) {
+            res.status(400).json({ message: "Location outside service area — please enable GPS for accurate location" });
+            return;
+        }
+        if (accNum > 1000) {
+            res.status(400).json({ message: "Location accuracy too low — move to an open area and enable GPS" });
+            return;
+        }
+
         const tenant = await Tenant.findById(tenantId).select('settings');
         if (tenant?.settings?.geoFenceRadius) {
             visit.geoFenceRadius = tenant.settings.geoFenceRadius;
@@ -235,11 +257,12 @@ export const checkIn = async (req: AuthRequest, res: Response): Promise<void> =>
         visit.checkInSelfie = selfieFilename;
         visit.checkInLocation = {
             type: 'Point',
-            coordinates: [parseFloat(lng), parseFloat(lat)],
+            coordinates: [lngNum, latNum],
             address: address || '',
         };
         visit.status = 'checked_in';
         visit.trackingStartedAt = now;
+        visit.lastLocationUpdateAt = now;
 
         await visit.save();
 
@@ -247,7 +270,7 @@ export const checkIn = async (req: AuthRequest, res: Response): Promise<void> =>
             tenantId,
             visitId: visit._id,
             employeeId: userId,
-            points: [{ lat: parseFloat(lat), lng: parseFloat(lng), accuracy: parseFloat(accuracy || '0'), timestamp: now }],
+            points: [{ lat: latNum, lng: lngNum, accuracy: accNum, timestamp: now }],
             startedAt: now,
         });
 
@@ -302,6 +325,14 @@ export const checkOut = async (req: AuthRequest, res: Response): Promise<void> =
 
         await visit.save();
 
+        if (outcome === 'completed') {
+            emitFieldVisitCompleted(tenantId, {
+                visitId: visit._id.toString(),
+                clientName: visit.clientName || '',
+                employeeName: req.user!.name,
+            });
+        }
+
         const track = await LocationTrack.findOne({ visitId: visit._id }).sort({ startedAt: -1 });
         if (track) {
             track.endedAt = now;
@@ -320,25 +351,49 @@ export const addRemarks = async (req: AuthRequest, res: Response): Promise<void>
         const tenantId = getTenantId(req.user);
         const userId = req.user!._id;
         const visitId = req.params.id;
-        const { remarks } = req.body;
+        const { remarks, outcome, meetingNotes, rescheduledDate, rescheduledTime, otherPersonName, otherPersonContact, otherPersonNotes, otherPersonOutcome } = req.body;
 
         if (!remarks || !remarks.trim()) {
             res.status(400).json({ message: "Remarks text is required" });
             return;
         }
 
+        if (outcome && !['completed', 'rescheduled', 'no_contact', 'met_other'].includes(outcome)) {
+            res.status(400).json({ message: "Invalid outcome value" });
+            return;
+        }
+
         const filter: any = { _id: visitId, tenantId };
         if (req.user!.role === 'member') filter.employeeId = userId;
 
+        const updateData: any = { remarks: remarks.trim(), remarksAddedAt: new Date() };
+        if (outcome) updateData.outcome = outcome;
+        if (meetingNotes !== undefined) updateData.meetingNotes = meetingNotes;
+        if (rescheduledDate) updateData.rescheduledDate = new Date(rescheduledDate);
+        if (rescheduledTime !== undefined) updateData.rescheduledTime = rescheduledTime;
+        if (otherPersonName !== undefined) updateData.otherPersonName = otherPersonName;
+        if (otherPersonContact !== undefined) updateData.otherPersonContact = otherPersonContact;
+        if (otherPersonNotes !== undefined) updateData.otherPersonNotes = otherPersonNotes;
+        if (otherPersonOutcome !== undefined) updateData.otherPersonOutcome = otherPersonOutcome;
+
         const visit = await FieldVisit.findOneAndUpdate(
             filter,
-            { $set: { remarks: remarks.trim(), remarksAddedAt: new Date() } },
+            { $set: updateData },
             { new: true }
         );
 
         if (!visit) {
             res.status(404).json({ message: "Visit not found or not authorized" });
             return;
+        }
+
+        if (outcome === 'completed') {
+            const populated = await FieldVisit.findById(visit._id).populate('employeeId', 'name').lean();
+            emitFieldVisitCompleted(tenantId, {
+                visitId: visit._id.toString(),
+                clientName: visit.clientName || '',
+                employeeName: (populated?.employeeId as any)?.name || 'Unknown',
+            });
         }
 
         emitFieldVisitUpdated(tenantId, visit);
@@ -367,23 +422,68 @@ export const recordLocation = async (req: AuthRequest, res: Response): Promise<v
         }
 
         const now = new Date();
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+        const accNum = parseFloat(accuracy || '0');
+
+        const isValidLat = latNum >= -90 && latNum <= 90;
+        const isValidLng = lngNum >= -180 && lngNum <= 180;
+        if (!isValidLat || !isValidLng) {
+            res.status(400).json({ message: "Invalid coordinates" });
+            return;
+        }
+
+        if (accNum > 5000) {
+            res.status(400).json({ message: "Location accuracy too low — enable GPS" });
+            return;
+        }
 
         const track = await LocationTrack.findOne({ visitId, endedAt: { $exists: false } });
         if (track) {
-            track.points.push({ lat: parseFloat(lat), lng: parseFloat(lng), accuracy: parseFloat(accuracy || '0'), timestamp: now });
+            const lastPoint = track.points[track.points.length - 1];
+            if (lastPoint) {
+                const timeDiff = (now.getTime() - new Date(lastPoint.timestamp).getTime()) / 1000;
+                const distDiff = calculateDistance(
+                    lastPoint.lat, lastPoint.lng,
+                    latNum, lngNum
+                );
+                const speedMs = timeDiff > 0 ? distDiff / timeDiff : 0;
+                const speedKmh = speedMs * 3.6;
+
+                if (speedKmh > 200) {
+                    res.status(400).json({ message: `Location spoofing detected — speed ${speedKmh.toFixed(0)} km/h is impossible` });
+                    return;
+                }
+            }
+            track.points.push({ lat: latNum, lng: lngNum, accuracy: accNum, timestamp: now });
             await track.save();
         }
 
         const distance = calculateDistance(
             visit.checkInLocation!.coordinates[1],
             visit.checkInLocation!.coordinates[0],
-            parseFloat(lat),
-            parseFloat(lng)
+            latNum,
+            lngNum
         );
 
+        const wasBreached = visit.geoFenceBreached;
         if (distance > visit.geoFenceRadius && !visit.geoFenceBreached) {
             visit.geoFenceBreached = true;
-            await visit.save();
+        }
+
+        if (visit.trackingLost) {
+            visit.trackingLost = false;
+            emitFieldVisitTrackingRestored(tenantId, {
+                visitId: visit._id.toString(),
+                employeeId: userId.toString(),
+                employeeName: req.user!.name,
+            });
+        }
+
+        visit.lastLocationUpdateAt = now;
+        await visit.save();
+
+        if (!wasBreached && visit.geoFenceBreached) {
             emitFieldVisitBreached(tenantId, {
                 visitId: visit._id.toString(),
                 employeeId: userId.toString(),
@@ -391,11 +491,12 @@ export const recordLocation = async (req: AuthRequest, res: Response): Promise<v
             });
         }
 
+
         emitFieldVisitLocation(tenantId, {
             visitId: visit._id.toString(),
             employeeId: userId.toString(),
-            lat: parseFloat(lat),
-            lng: parseFloat(lng),
+            lat: latNum,
+            lng: lngNum,
             timestamp: now.toISOString(),
         });
 
@@ -608,7 +709,7 @@ export const rejectVisit = async (req: AuthRequest, res: Response): Promise<void
         const tenantId = getTenantId(req.user);
         const visit = await FieldVisit.findOneAndUpdate(
             { _id: req.params.id, tenantId },
-            { $set: { outcome: 'no_show' } },
+            { $set: { outcome: 'no_contact' } },
             { new: true }
         );
         if (!visit) {

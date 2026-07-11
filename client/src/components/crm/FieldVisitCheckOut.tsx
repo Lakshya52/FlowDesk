@@ -14,7 +14,7 @@ const FieldVisitCheckOut: React.FC<Props> = ({ visitId, onComplete, onCancel }) 
   const now = new Date();
   const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-  const [outcome, setOutcome] = useState<"completed" | "rescheduled" | "no_show" | "">("");
+  const [outcome, setOutcome] = useState<"completed" | "rescheduled" | "no_contact" | "met_other" | "">("");
   const [meetingNotes, setMeetingNotes] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const [signature, setSignature] = useState<string>("");
@@ -44,12 +44,12 @@ const FieldVisitCheckOut: React.FC<Props> = ({ visitId, onComplete, onCancel }) 
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg mx-auto">
-      <h2 className="text-lg font-semibold mb-4 text-gray-900">Check-Out</h2>
+    <div className="bg-(--color-surface) rounded-xl border border-(--color-border) p-6 max-w-lg mx-auto">
+      <h2 className="text-lg font-semibold mb-4 text-(--color-text)">Check-Out</h2>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-(--color-text-secondary) mb-1">
             <Clock size={14} className="inline mr-1" />
             Check-Out Time
           </label>
@@ -57,60 +57,60 @@ const FieldVisitCheckOut: React.FC<Props> = ({ visitId, onComplete, onCancel }) 
             type="datetime-local"
             value={checkOutTime}
             onChange={(e) => setCheckOutTime(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
           />
-          <p className="text-xs text-gray-400 mt-1">You can set any time for checkout, even later in the evening</p>
+          <p className="text-xs text-(--color-text-tertiary) mt-1">You can set any time for checkout, even later in the evening</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Outcome (optional)</label>
+          <label className="block text-sm font-medium text-(--color-text-secondary) mb-1">Outcome (optional)</label>
           <div className="flex gap-2">
-            {(["completed", "rescheduled", "no_show"] as const).map((o) => (
+            {(["completed", "rescheduled", "no_contact", "met_other"] as const).map((o) => (
               <button
                 key={o}
                 onClick={() => setOutcome(outcome === o ? "" : o)}
                 className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border capitalize ${
                   outcome === o
-                    ? "bg-blue-50 border-blue-300 text-blue-700"
-                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    ? "bg-(--color-primary-light) border-(--color-primary-light) text-(--color-primary-hover)"
+                    : "border-(--color-border) text-(--color-text-secondary) hover:bg-(--color-surface-hover)"
                 }`}
               >
                 {o.replace("_", " ")}
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-400 mt-1">You can add outcome later if needed</p>
+          <p className="text-xs text-(--color-text-tertiary) mt-1">You can add outcome later if needed</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Notes (optional)</label>
+          <label className="block text-sm font-medium text-(--color-text-secondary) mb-1">Meeting Notes (optional)</label>
           <textarea
             value={meetingNotes}
             onChange={(e) => setMeetingNotes(e.target.value)}
             rows={3}
             placeholder="Describe how the visit went..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Follow-Up Date (optional)</label>
+          <label className="block text-sm font-medium text-(--color-text-secondary) mb-1">Follow-Up Date (optional)</label>
           <input
             type="date"
             value={followUpDate}
             onChange={(e) => setFollowUpDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Customer Signature (optional)</label>
+          <label className="block text-sm font-medium text-(--color-text-secondary) mb-1">Customer Signature (optional)</label>
           {signature ? (
             <div className="relative inline-block">
               <img src={signature} alt="Signature" className="h-16 border rounded" />
               <button
                 onClick={() => setSignature("")}
-                className="ml-2 text-xs text-red-600 hover:text-red-800"
+                className="ml-2 text-xs text-(--color-danger) text-(--color-danger)"
               >
                 Remove
               </button>
@@ -118,7 +118,7 @@ const FieldVisitCheckOut: React.FC<Props> = ({ visitId, onComplete, onCancel }) 
           ) : (
             <button
               onClick={() => setShowSignature(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+              className="flex items-center gap-2 px-4 py-2 border border-(--color-border) rounded-lg text-sm text-(--color-text-secondary) hover:bg-(--color-surface-hover)"
             >
               <SignatureIcon size={16} /> Add Signature
             </button>
@@ -134,18 +134,18 @@ const FieldVisitCheckOut: React.FC<Props> = ({ visitId, onComplete, onCancel }) 
           )}
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+        <div className="bg-(--color-warning-light) border border-(--color-warning) rounded-lg p-3 text-xs text-(--color-warning)">
           You can add remarks and meeting details anytime after check-out from the visit list.
         </div>
 
         <div className="flex justify-between pt-2">
-          <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+          <button onClick={onCancel} className="px-4 py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2 text-sm bg-(--color-primary) text-white rounded-lg hover:bg-(--color-primary-hover) disabled:opacity-50 flex items-center gap-2"
           >
             {submitting && <Loader2 size={16} className="animate-spin" />}
             Complete Check-Out

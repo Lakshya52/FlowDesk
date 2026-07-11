@@ -848,8 +848,8 @@ const Schedule = () => {
 
 			<Modal isOpen={showFollowupModal} onClose={() => { setShowFollowupModal(false); setFollowupLeadId(null); }}>
 				<div
-					className="card animate-fade-in"
-					style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
+					className="card animate-fade-in w-[90dvw] sm:w-[60dvw] lg:w-[30dvw]"
+					style={{  padding: 24, borderRadius: 16 }}
 				>
 						<h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 600 }}>Complete Follow-up</h3>
 
@@ -913,8 +913,8 @@ const Schedule = () => {
 
 			<Modal isOpen={showMeetingModal} onClose={() => { setShowMeetingModal(false); setMeetingLeadId(null); }}>
 				<div
-					className="card animate-fade-in"
-					style={{ maxWidth: 440, width: '100%', padding: 24, borderRadius: 16 }}
+					className="card animate-fade-in w-[90dvw] sm:w-[60dvw] lg:w-[30dvw]"
+					style={{padding: 24, borderRadius: 16 }}
 				>
 						<h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 600 }}>Complete Meeting</h3>
 

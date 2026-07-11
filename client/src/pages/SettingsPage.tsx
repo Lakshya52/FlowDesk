@@ -371,20 +371,20 @@ const updateUserPermissions = async (e: React.FormEvent) => {
 
             {/* Geo-Fence Settings (Admin/Manager) */}
             {isAdminOrManager && (
-                <div className="card" style={{ padding: 20 }}>
+                <div className="card" style={{ padding: 20, marginBottom:16 }}>
                     <div style={{ marginBottom: 16 }}>
                         <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: 4 }}>
                             <MapPinned size={16} style={{ display: 'inline', marginRight: 8, verticalAlign: 'middle' }} />
                             Geo-Fence Settings
                         </h3>
                         <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                            Set the global geo-fence radius (in meters) for all field visits
+                            Set the global geo-fence radius (in meters) for all field visits ( minimum 1m to maximum 10000m )
                         </p>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <input
                             type="number"
-                            min={10}
+                            min={0}
                             max={10000}
                             value={geoFenceRadius}
                             onChange={e => setGeoFenceRadius(Number(e.target.value))}

@@ -214,19 +214,19 @@ export default function LeadDetailModal({
 	const translateY = isExiting ? "100%" : !mounted ? "100%" : isDraggingRender ? `${dragOffset}px` : "0";
 	const transition = isDraggingRender ? "none" : "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease, max-height 0.3s ease";
 	const cardOpacity = !mounted && !isExiting ? 0 : 1;
-	const backdropOpacity = !mounted && !isExiting ? 0 : 1;
+	// const backdropOpacity = !mounted && !isExiting ? 0 : 1;
 
 	return (
 		<div
-			className="backdrop-blur-sm fixed inset-0 z-50 flex items-end sm:items-center justify-center transition-opacity duration-200"
-			style={{ backgroundColor: `rgba(0,0,0,${0.2 * backdropOpacity})` }}
+			className="backdrop-blur-sm bg-(--color-primary-light)/40 h-full w-full fixed inset-0 z-50 flex items-end sm:items-center justify-center transition-opacity duration-200"
+			// style={{ backgroundColor: `rgba(0,0,0,${0.2 * backdropOpacity})` }}
 			onClick={closeModal}
 		>
 			<div
 				ref={cardRef}
 				className="w-full sm:max-w-[1200px] max-h-[80dvh] sm:max-h-[90dvh] flex flex-col bg-(--color-surface)
 					rounded-t-3xl sm:rounded-2xl
-					sm:border sm:border-(--color-border) sm:m-4 sm:shadow-xl
+					border border-(--color-border) sm:m-4 sm:shadow-xl
 					overflow-hidden"
 				style={{
 					transform: `translateY(${translateY})`,
@@ -302,7 +302,7 @@ export default function LeadDetailModal({
 						{/* ═══ COLUMN 1: Contact + Call ═══ */}
 						<div className="flex flex-col gap-3 sm:gap-4">
 							{/* Contact Information */}
-							<div className={SECTION_CLASS} style={{ borderColor: "color-mix(in srgb, var(--color-primary) 50%, transparent)" }}>
+							<div className={SECTION_CLASS} style={{ borderColor: "color-mix(in srgb, var(--color-primary) 20%, transparent)" }}>
 								<div className={HEADER_CLASS}>
 									<Building size={14} className="text-(--color-primary)" />
 									<span className="text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--color-text)">Contact</span>
@@ -402,7 +402,7 @@ export default function LeadDetailModal({
 							</div>
 
 							{/* Call Activity */}
-							<div className={SECTION_CLASS} style={{ borderColor: "color-mix(in srgb, var(--color-primary) 50%, transparent)" }}>
+							<div className={SECTION_CLASS} style={{ borderColor: "color-mix(in srgb, var(--color-primary) 20%, transparent)" }}>
 								<div className={HEADER_CLASS}>
 									<PhoneCall size={14} className="text-(--color-primary)" />
 									<span className="text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--color-text)">Call Activity</span>
@@ -450,7 +450,7 @@ export default function LeadDetailModal({
 
 						{/* ═══ COLUMN 2: Schedule + Activity Trail ═══ */}
 						<div className="flex flex-col border border-(--color-border) rounded-xl overflow-hidden"
-							style={{ borderColor: "color-mix(in srgb, var(--color-primary) 50%, transparent)" }}
+							style={{ borderColor: "color-mix(in srgb, var(--color-primary) 20%, transparent)" }}
 						>
 							<div className="shrink-0 p-3 sm:px-4 sm:py-3 border-b border-(--color-border)">
 								<div className="flex items-center gap-2 mb-2">
@@ -472,7 +472,7 @@ export default function LeadDetailModal({
 											className={`
 												flex items-center justify-center gap-2 px-1 
 
-												flex-1 py-2 text-[0.8rem] sm:text-[0.88rem] font-semibold rounded-md border border-(--color-primary) cursor-pointer whitespace-nowrap  ${
+												flex-1 py-2 text-[0.8rem] sm:text-[0.88rem] font-semibold rounded-md border border-(--color-primary)/20 cursor-pointer whitespace-nowrap  ${
 												scheduleType === type
 													? "bg-(--color-primary) text-white"
 													: "bg-(--color-surface) text-(--color-text-tertiary)"
@@ -548,7 +548,7 @@ export default function LeadDetailModal({
 
 						{/* ═══ COLUMN 3: Notes ═══ */}
 						<div className="lg:col-span-2 xl:col-span-1 border border-(--color-border) rounded-xl overflow-hidden flex flex-col"
-							style={{ borderColor: "color-mix(in srgb, var(--color-primary) 50%, transparent)" }}
+							style={{ borderColor: "color-mix(in srgb, var(--color-primary) 20%, transparent)" }}
 						>
 							<div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-(--color-border)">
 								<div className="flex items-center gap-2">

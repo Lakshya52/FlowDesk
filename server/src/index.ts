@@ -41,6 +41,7 @@ import crmSummaryRoutes from "./routes/crmSummary";
 import fieldVisitRoutes from "./routes/fieldVisits";
 import settingsRoutes from "./routes/settings";
 import { startRecurringJob } from "./services/recurringTaskService";
+import { startFieldVisitHeartbeat } from "./services/fieldVisitHeartbeatService";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
 
 const app = express();

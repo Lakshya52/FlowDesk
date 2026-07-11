@@ -74,26 +74,26 @@ const FieldVisitExpenses: React.FC<Props> = ({ visitId, expenses: initial = [], 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-gray-700 flex items-center gap-1">
-          <Receipt size={16} /> Expenses {total > 0 && <span className="text-gray-500">(₹{total.toFixed(0)})</span>}
+        <h4 className="text-sm font-medium text-(--color-text-secondary) flex items-center gap-1">
+          <Receipt size={16} /> Expenses {total > 0 && <span className="text-(--color-text-tertiary)">(₹{total.toFixed(0)})</span>}
         </h4>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+          className="flex items-center gap-1 text-xs text-(--color-primary) hover:text-(--color-primary-hover)"
         >
           <Plus size={14} /> Add
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-gray-50 rounded-lg p-3 space-y-2 border border-gray-200">
+        <div className="bg-(--color-surface-hover) rounded-lg p-3 space-y-2 border border-(--color-border)">
           <div className="flex gap-2">
             {(["travel", "fuel", "food", "other"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setType(t)}
                 className={`px-2 py-1 text-xs rounded capitalize ${
-                  type === t ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600"
+                  type === t ? "bg-(--color-primary) text-white" : "bg-(--color-surface) border border-(--color-border) text-(--color-text-secondary)"
                 }`}
               >
                 {t}
@@ -105,14 +105,14 @@ const FieldVisitExpenses: React.FC<Props> = ({ visitId, expenses: initial = [], 
             placeholder="Amount (₹)"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded"
+            className="w-full px-2 py-1.5 text-sm border border-(--color-border) rounded"
           />
           <input
             type="text"
             placeholder="Description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded"
+            className="w-full px-2 py-1.5 text-sm border border-(--color-border) rounded"
           />
           <input
             type="file"
@@ -121,13 +121,13 @@ const FieldVisitExpenses: React.FC<Props> = ({ visitId, expenses: initial = [], 
             className="text-xs"
           />
           <div className="flex gap-2">
-            <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded">
+            <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs text-(--color-text-secondary) border border-(--color-border) rounded">
               Cancel
             </button>
             <button
               onClick={handleAdd}
               disabled={submitting}
-              className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1.5 text-xs bg-(--color-primary) text-white rounded hover:bg-(--color-primary-hover) disabled:opacity-50 flex items-center gap-1"
             >
               {submitting && <Loader2 size={12} className="animate-spin" />}
               Save
@@ -137,15 +137,15 @@ const FieldVisitExpenses: React.FC<Props> = ({ visitId, expenses: initial = [], 
       )}
 
       {expenses.map((exp) => (
-        <div key={exp._id} className="flex items-center justify-between bg-white border border-gray-100 rounded-lg px-3 py-2">
+        <div key={exp._id} className="flex items-center justify-between bg-(--color-surface) border border-(--color-border) rounded-lg px-3 py-2">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-500 uppercase">{exp.type}</span>
-              <span className="text-sm font-semibold text-gray-900">₹{exp.amount.toFixed(0)}</span>
+              <span className="text-xs font-medium text-(--color-text-tertiary) uppercase">{exp.type}</span>
+              <span className="text-sm font-semibold text-(--color-text)">₹{exp.amount.toFixed(0)}</span>
             </div>
-            {exp.description && <p className="text-xs text-gray-400">{exp.description}</p>}
+            {exp.description && <p className="text-xs text-(--color-text-tertiary)">{exp.description}</p>}
           </div>
-          <button onClick={() => exp._id && handleRemove(exp._id)} className="text-red-400 hover:text-red-600">
+          <button onClick={() => exp._id && handleRemove(exp._id)} className="text-(--color-danger) hover:text-(--color-danger)">
             <Trash2 size={14} />
           </button>
         </div>

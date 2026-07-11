@@ -163,6 +163,7 @@ export const createLead = async (
 
 		const source =
 			req.user!.role === "admin" ? "Udyam Capital" : req.user!.name;
+		if (!req.body.campaignId) delete req.body.campaignId;
 		const lead = await Lead.create({
 			...req.body,
 			tenantId,

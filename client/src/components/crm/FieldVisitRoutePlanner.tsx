@@ -49,6 +49,7 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
   const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split("T")[0]);
   const [scheduledTime, setScheduledTime] = useState("10:00");
   const [adding, setAdding] = useState(false);
+  const [loadingLeads, setLoadingLeads] = useState(false);
 
   const [editingTime, setEditingTime] = useState<Record<string, string>>({});
 
@@ -61,6 +62,18 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
       fetchScheduledVisits();
     }
   }, [selectedEmployee, refreshKey]);
+
+  useEffect(() => {
+    if (!showAdd) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowAdd(false);
+        setSelectedLead(null);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showAdd]);
 
   const fetchEmployees = async () => {
     try {
@@ -98,11 +111,14 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
   };
 
   const fetchLeads = async () => {
+    setLoadingLeads(true);
     try {
       const res = await api.get("/leads", { params: { limit: 100000 } });
       setLeads(res.data.leads || []);
     } catch {
       toast.error("Failed to load leads");
+    } finally {
+      setLoadingLeads(false);
     }
   };
 
@@ -188,11 +204,11 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
     <div className="space-y-4 max-w-2xl">
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs font-medium text-gray-500 mb-1">Employee</label>
+          <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Employee</label>
           <select
             value={selectedEmployee}
             onChange={(e) => setSelectedEmployee(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
           >
             <option value="">Select employee...</option>
             {employees.map((emp) => (
@@ -210,23 +226,23 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
             fetchLeads();
           }}
           disabled={!selectedEmployee}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2 bg-(--color-primary) text-white text-sm font-medium rounded-lg hover:bg-(--color-primary-hover) disabled:opacity-50 transition-colors"
         >
           <Plus size={16} /> Schedule Visit
         </button>
       </div>
 
       {!selectedEmployee ? (
-        <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
-          <User size={40} className="mx-auto text-gray-300 mb-2" />
-          <p className="text-gray-500">Select an employee to plan their route</p>
+        <div className="text-center py-12 bg-(--color-surface-hover) rounded-xl border border-(--color-border)">
+          <User size={40} className="mx-auto text-(--color-text-tertiary) mb-2" />
+          <p className="text-(--color-text-tertiary)">Select an employee to plan their route</p>
         </div>
       ) : loading ? (
-        <div className="text-center py-8 text-gray-500">Loading visits...</div>
+        <div className="text-center py-8 text-(--color-text-tertiary)">Loading visits...</div>
       ) : visits.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
-          <CalendarDays size={40} className="mx-auto text-gray-300 mb-2" />
-          <p className="text-gray-500">
+        <div className="text-center py-12 bg-(--color-surface-hover) rounded-xl border border-(--color-border)">
+          <CalendarDays size={40} className="mx-auto text-(--color-text-tertiary) mb-2" />
+          <p className="text-(--color-text-tertiary)">
             No scheduled visits for {selectedEmployeeName}
           </p>
           <button
@@ -234,7 +250,7 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
               setShowAdd(true);
               fetchLeads();
             }}
-            className="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+            className="mt-3 inline-flex items-center gap-1 text-sm text-(--color-primary) hover:text-(--color-primary-hover)"
           >
             <Plus size={14} /> Schedule their first visit
           </button>
@@ -242,14 +258,14 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-(--color-text-secondary)">
               {visits.length} visit{visits.length > 1 ? "s" : ""} for <strong>{selectedEmployeeName}</strong>
             </p>
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+            <div className="flex items-center gap-1 bg-(--color-surface-hover) rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode("cards")}
                 className={`p-1.5 rounded-md text-xs transition-colors ${
-                  viewMode === "cards" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"
+                  viewMode === "cards" ? "bg-(--color-surface) shadow-sm text-(--color-primary)" : "text-(--color-text-tertiary) hover:text-(--color-text-secondary)"
                 }`}
                 title="Card view"
               >
@@ -258,7 +274,7 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
               <button
                 onClick={() => setViewMode("timeline")}
                 className={`p-1.5 rounded-md text-xs transition-colors ${
-                  viewMode === "timeline" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"
+                  viewMode === "timeline" ? "bg-(--color-surface) shadow-sm text-(--color-primary)" : "text-(--color-text-tertiary) hover:text-(--color-text-secondary)"
                 }`}
                 title="Timeline view"
               >
@@ -272,90 +288,90 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
               {visits.map((visit, index) => (
                 <div
                   key={visit._id}
-                  className="bg-white rounded-lg border border-gray-200 p-3 flex items-center gap-3"
+                  className="bg-(--color-surface) rounded-lg border border-(--color-border) p-3 flex items-center gap-3"
                 >
                   <div className="flex flex-col gap-0.5">
                     <button
                       onClick={() => moveVisit(index, -1)}
                       disabled={index === 0}
-                      className="text-gray-400 hover:text-gray-600 disabled:opacity-30 text-xs leading-none"
+                      className="text-(--color-text-tertiary) hover:text-(--color-text-secondary) disabled:opacity-30 text-xs leading-none"
                     >
                       ▲
                     </button>
-                    <span className="text-xs font-mono text-center text-gray-500">{index + 1}</span>
+                    <span className="text-xs font-mono text-center text-(--color-text-tertiary)">{index + 1}</span>
                     <button
                       onClick={() => moveVisit(index, 1)}
                       disabled={index === visits.length - 1}
-                      className="text-gray-400 hover:text-gray-600 disabled:opacity-30 text-xs leading-none"
+                      className="text-(--color-text-tertiary) hover:text-(--color-text-secondary) disabled:opacity-30 text-xs leading-none"
                     >
                       ▼
                     </button>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-(--color-text) truncate">
                       {visit.clientName || "Unnamed Client"}
                     </p>
-                    <p className="text-xs text-gray-500 capitalize">{visit.clientType}</p>
+                    <p className="text-xs text-(--color-text-tertiary) capitalize">{visit.clientType}</p>
                   </div>
                   <div className="min-w-[120px]">
                     <div className="flex items-center gap-1">
-                      <Clock size={12} className="text-gray-400 shrink-0" />
+                      <Clock size={12} className="text-(--color-text-tertiary) shrink-0" />
                       <input
                         type="time"
                         value={editingTime[visit._id] || ""}
                         onChange={(e) => updateVisitTime(visit._id, e.target.value)}
-                        className="w-full px-1.5 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="w-full px-1.5 py-1 text-xs border border-(--color-border) rounded focus:outline-none focus:ring-1 focus:ring-(--color-primary)"
                       />
                     </div>
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                    visit.status === "scheduled" ? "bg-blue-100 text-blue-700" :
-                    visit.status === "checked_in" ? "bg-green-100 text-green-700" :
-                    "bg-gray-100 text-gray-700"
+                    visit.status === "scheduled" ? "bg-(--color-primary-light) text-(--color-primary-hover)" :
+                    visit.status === "checked_in" ? "bg-(--color-success-light) text-(--color-success)" :
+                    "bg-(--color-surface-hover) text-(--color-text-secondary)"
                   }`}>
                     {visit.status.replace("_", " ")}
                   </span>
                   {index < visits.length - 1 && (
-                    <span className="text-gray-300 shrink-0 text-lg">→</span>
+                    <span className="text-(--color-text-tertiary) shrink-0 text-lg">→</span>
                   )}
                 </div>
               ))}
             </div>
           ) : (
             <div className="relative">
-              <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-blue-200 rounded" />
+              <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-(--color-primary-light) rounded" />
               <div className="space-y-4">
                 {sortedByTime.map((visit, index) => (
                   <div key={visit._id} className="relative pl-10">
-                    <div className="absolute left-2.5 top-1.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow" />
-                    <div className="bg-white rounded-lg border border-gray-200 p-3">
+                    <div className="absolute left-2.5 top-1.5 w-3 h-3 rounded-full bg-(--color-primary) border-2 border-(--color-surface) shadow" />
+                    <div className="bg-(--color-surface) rounded-lg border border-(--color-border) p-3">
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <Clock size={12} className="text-blue-500" />
-                          <span className="text-xs font-semibold text-blue-700">
+                          <Clock size={12} className="text-(--color-primary)" />
+                          <span className="text-xs font-semibold text-(--color-primary-hover)">
                             {visit.scheduledTime || "--:--"}
                           </span>
                         </div>
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                          visit.status === "scheduled" ? "bg-blue-100 text-blue-700" :
-                          visit.status === "checked_in" ? "bg-green-100 text-green-700" :
-                          "bg-gray-100 text-gray-700"
+                          visit.status === "scheduled" ? "bg-(--color-primary-light) text-(--color-primary-hover)" :
+                          visit.status === "checked_in" ? "bg-(--color-success-light) text-(--color-success)" :
+                          "bg-(--color-surface-hover) text-(--color-text-secondary)"
                         }`}>
                           {visit.status.replace("_", " ")}
                         </span>
                       </div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-(--color-text)">
                         {visit.clientName || "Unnamed Client"}
                       </p>
                       <div className="flex items-center justify-between mt-1.5">
-                        <p className="text-xs text-gray-500 capitalize">{visit.clientType}</p>
+                        <p className="text-xs text-(--color-text-tertiary) capitalize">{visit.clientType}</p>
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-gray-400">#{index + 1}</span>
+                          <span className="text-[10px] text-(--color-text-tertiary)">#{index + 1}</span>
                           <input
                             type="time"
                             value={editingTime[visit._id] || ""}
                             onChange={(e) => updateVisitTime(visit._id, e.target.value)}
-                            className="w-20 px-1 py-0.5 text-[10px] border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-20 px-1 py-0.5 text-[10px] border border-(--color-border) rounded focus:outline-none focus:ring-1 focus:ring-(--color-primary)"
                           />
                         </div>
                       </div>
@@ -369,7 +385,7 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
           <button
             onClick={saveRoute}
             disabled={saving || visits.length < 2}
-            className="w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-2.5 bg-(--color-primary) text-white rounded-lg text-sm font-medium hover:bg-(--color-primary-hover) disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Save Route Order
@@ -379,79 +395,85 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
 
       {showAdd && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-4">
+          <div className="bg-(--color-surface) rounded-xl max-w-md w-full p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Schedule Visit</h3>
-              <button onClick={() => { setShowAdd(false); setSelectedLead(null); }} className="text-gray-400 hover:text-gray-600">
+              <h3 className="font-semibold text-(--color-text)">Schedule Visit</h3>
+              <button onClick={() => { setShowAdd(false); setSelectedLead(null); }} className="text-(--color-text-tertiary) hover:text-(--color-text-secondary)">
                 <X size={18} />
               </button>
             </div>
 
             {selectedEmployeeData && (
-              <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center gap-3 p-3 bg-(--color-primary-light) rounded-lg border border-(--color-primary-light)">
                 {selectedEmployeeData.avatar ? (
                   <img src={`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-backend-l5tt.onrender.com'}${selectedEmployeeData.avatar}`} className="w-10 h-10 rounded-full object-cover" />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <User size={18} className="text-blue-600" />
+                  <div className="w-10 h-10 rounded-full bg-(--color-primary-light) flex items-center justify-center">
+                    <User size={18} className="text-(--color-primary)" />
                   </div>
                 )}
                 <div>
-                  <p className="text-sm font-medium text-blue-900">{selectedEmployeeData.name}</p>
-                  <p className="text-xs text-blue-600">{selectedEmployeeData.employeeId} {selectedEmployeeData.email}</p>
+                  <p className="text-sm font-medium text-(--color-primary-hover)">{selectedEmployeeData.name}</p>
+                  <p className="text-xs text-(--color-primary)">{selectedEmployeeData.employeeId} {selectedEmployeeData.email}</p>
                 </div>
               </div>
             )}
 
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Building2 size={14} className="text-blue-600" />
-                <span className="text-sm font-medium text-gray-700">Select Lead</span>
+                <Building2 size={14} className="text-(--color-primary)" />
+                <span className="text-sm font-medium text-(--color-text-secondary)">Select Lead</span>
               </div>
               <input
                 type="text"
                 placeholder="Search leads by name, company, phone..."
                 value={leadSearch}
                 onChange={(e) => setLeadSearch(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
               />
             </div>
 
             <div className="max-h-40 overflow-y-auto space-y-1">
-              {filteredLeads.map((c) => (
-                <button
-                  key={c._id}
-                  onClick={() => setSelectedLead(c)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                    selectedLead?._id === c._id
-                      ? "bg-blue-50 border border-blue-200"
-                      : "hover:bg-gray-50 border border-transparent"
-                  }`}
-                >
-                  <p className="font-medium text-gray-900">{c.name || c.companyName || "Unnamed"}</p>
-                  <p className="text-xs text-gray-500">
-                    {c.companyName && `${c.companyName}`}{c.city ? ` - ${c.city}` : ""}{c.phone ? ` | ${c.phone}` : ""}
-                  </p>
-                </button>
-              ))}
-              {filteredLeads.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">No leads found</p>
+              {loadingLeads ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 size={20} className="animate-spin text-(--color-primary)" />
+                </div>
+              ) : (
+                filteredLeads.map((c) => (
+                  <button
+                    key={c._id}
+                    onClick={() => setSelectedLead(c)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                      selectedLead?._id === c._id
+                        ? "bg-(--color-primary-light) border border-(--color-primary-light)"
+                        : "hover:bg-(--color-surface-hover) border border-transparent"
+                    }`}
+                  >
+                    <p className="font-medium text-(--color-text)">{c.name || c.companyName || "Unnamed"}</p>
+                    <p className="text-xs text-(--color-text-tertiary)">
+                      {c.companyName && `${c.companyName}`}{c.city ? ` - ${c.city}` : ""}{c.phone ? ` | ${c.phone}` : ""}
+                    </p>
+                  </button>
+                ))
+              )}
+              {!loadingLeads && filteredLeads.length === 0 && (
+                <p className="text-xs text-(--color-text-tertiary) text-center py-4">No leads found</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
+              <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">
                 <CalendarDays size={12} className="inline mr-1" /> Scheduled Date
               </label>
               <input
                 type="date"
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
+              <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">
                 <Clock size={12} className="inline mr-1" /> Scheduled Time
               </label>
               <input
@@ -459,21 +481,21 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
                 value={scheduledTime}
                 onChange={(e) => setScheduledTime(e.target.value)}
                 step="60"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
               />
             </div>
 
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => { setShowAdd(false); setSelectedLead(null); }}
-                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 text-sm text-(--color-text-secondary) border border-(--color-border) rounded-lg hover:bg-(--color-surface-hover)"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddVisit}
                 disabled={!selectedLead || adding}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                className="px-4 py-2 text-sm bg-(--color-primary) text-white rounded-lg hover:bg-(--color-primary-hover) disabled:opacity-50 flex items-center gap-1"
               >
                 {adding && <Loader2 size={14} className="animate-spin" />}
                 Schedule

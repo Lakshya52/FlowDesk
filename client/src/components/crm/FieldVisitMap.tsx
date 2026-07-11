@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { MapPin, User, Clock, AlertTriangle, RefreshCw, ExternalLink, Phone, Building2 } from "lucide-react";
-import io from "socket.io-client";
+import { MapPin, User, Clock, AlertTriangle,  ExternalLink, Phone, Building2, WifiOff } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../../lib/api";
+import { getSocket } from "../../hooks/useSocket";
+import { useAuthStore } from "../../store/authStore";
 
 interface ClientInfo {
   _id: string;
@@ -22,6 +23,7 @@ interface ActiveVisit {
   checkInTime: string;
   checkInLocation?: { coordinates: [number, number]; address: string };
   geoFenceBreached: boolean;
+  trackingLost?: boolean;
   scheduledDate?: string;
 }
 
@@ -41,9 +43,9 @@ function mapEmbedUrl(lat: number, lng: number): string {
 const MiniMap: React.FC<{ lat: number; lng: number; label: string }> = ({ lat, lng, label }) => {
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className="relative w-full h-36 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+    <div className="relative w-full h-36 rounded-lg overflow-hidden bg-(--color-surface-hover) border border-(--color-border)">
       {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">
+        <div className="absolute inset-0 flex items-center justify-center text-xs text-(--color-text-tertiary)">
           Loading map...
         </div>
       )}
@@ -58,7 +60,7 @@ const MiniMap: React.FC<{ lat: number; lng: number; label: string }> = ({ lat, l
         href={`https://www.google.com/maps?q=${lat},${lng}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="absolute bottom-1.5 right-1.5 bg-white/90 backdrop-blur rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 shadow-sm flex items-center gap-1 z-10"
+        className="absolute bottom-1.5 right-1.5 bg-(--color-surface)/90 backdrop-blur rounded-md px-2 py-1 text-xs font-medium text-(--color-primary) hover:text-(--color-primary-hover) shadow-sm flex items-center gap-1 z-10"
       >
         <ExternalLink size={12} /> Google Maps
       </a>
@@ -67,20 +69,31 @@ const MiniMap: React.FC<{ lat: number; lng: number; label: string }> = ({ lat, l
 };
 
 const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
+  const { user } = useAuthStore();
   const [visits, setVisits] = useState<ActiveVisit[]>([]);
   const [locations, setLocations] = useState<Record<string, LocationUpdate>>({});
   const [loading, setLoading] = useState(true);
 
+  const tenantId = typeof user?.tenantId === "object" ? (user.tenantId as any)?._id : user?.tenantId;
+
   useEffect(() => {
     fetchActiveVisits();
-    const socket = io(import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000");
-    const userData = JSON.parse(localStorage.getItem("flowdesk_user") || "{}");
+  }, [refreshKey]);
 
-    socket.on("connect", () => {
-      if (userData?._id) {
-        socket.emit("join_user", userData._id);
-      }
-    });
+  useEffect(() => {
+    if (!tenantId) return;
+
+    const socket = getSocket();
+
+    const handleConnect = () => {
+      socket.emit("join_tenant", tenantId);
+    };
+
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    socket.on("connect", handleConnect);
 
     socket.on("field-visit:checked-in", (visit: ActiveVisit) => {
       setVisits((prev) => {
@@ -102,10 +115,26 @@ const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
       toast.error(`Geo-fence breached by ${data.employeeName}!`, { duration: 5000 });
     });
 
+    socket.on("field-visit:tracking-lost", (data: { visitId: string; employeeName: string }) => {
+      setVisits((prev) => prev.map((v) => v._id === data.visitId ? { ...v, trackingLost: true } : v));
+      toast.error(`Tracking lost: ${data.employeeName}`, { duration: 4000 });
+    });
+
+    socket.on("field-visit:tracking-restored", (data: { visitId: string; employeeName: string }) => {
+      setVisits((prev) => prev.map((v) => v._id === data.visitId ? { ...v, trackingLost: false } : v));
+      toast.success(`Tracking restored for ${data.employeeName}`, { duration: 3000 });
+    });
+
     return () => {
-      socket.disconnect();
+      socket.off("connect", handleConnect);
+      socket.off("field-visit:checked-in");
+      socket.off("field-visit:checked-out");
+      socket.off("field-visit:location");
+      socket.off("field-visit:geo-breached");
+      socket.off("field-visit:tracking-lost");
+      socket.off("field-visit:tracking-restored");
     };
-  }, [refreshKey]);
+  }, [tenantId]);
 
   const fetchActiveVisits = async () => {
     try {
@@ -136,25 +165,25 @@ const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h3 className="font-semibold text-gray-900">Live Field Visit Tracking</h3>
-          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+          <h3 className="font-semibold text-(--color-text)">Live Field Visit Tracking</h3>
+          <span className="text-xs bg-(--color-primary-light) text-(--color-primary-hover) px-2 py-0.5 rounded-full font-medium">
             {visits.length} active
           </span>
         </div>
-        <button
+        {/* <button
           onClick={fetchActiveVisits}
-          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+          className="flex items-center gap-1 text-sm text-(--color-primary) hover:text-(--color-primary-hover)"
         >
           <RefreshCw size={14} /> Refresh
-        </button>
+        </button> */}
       </div>
 
       {loading ? (
-        <div className="text-center py-8 text-gray-500">Loading active visits...</div>
+        <div className="text-center py-8 text-(--color-text-tertiary)">Loading active visits...</div>
       ) : visits.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
-          <MapPin size={40} className="mx-auto text-gray-300 mb-2" />
-          <p className="text-gray-500">No active field visits right now</p>
+        <div className="text-center py-12 bg-(--color-surface-hover) rounded-xl border border-(--color-border)">
+          <MapPin size={40} className="mx-auto text-(--color-text-tertiary) mb-2" />
+          <p className="text-(--color-text-tertiary)">No active field visits right now</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -166,8 +195,8 @@ const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
             return (
               <div
                 key={visit._id}
-                className={`bg-white rounded-xl border overflow-hidden ${
-                  visit.geoFenceBreached ? "border-red-300" : "border-gray-200"
+                className={`bg-(--color-surface) rounded-xl border overflow-hidden ${
+                  visit.geoFenceBreached ? "border-(--color-danger)" : visit.trackingLost ? "border-(--color-warning)" : "border-(--color-border)"
                 }`}
               >
                 <div className="p-3 pb-0">
@@ -175,47 +204,53 @@ const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
                     {visit.employeeId?.avatar ? (
                       <img src={visit.employeeId.avatar} className="w-8 h-8 rounded-full object-cover" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                        <User size={14} className="text-blue-600" />
+                      <div className="w-8 h-8 rounded-full bg-(--color-primary-light) flex items-center justify-center">
+                        <User size={14} className="text-(--color-primary)" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p className="text-sm font-medium text-(--color-text) truncate">
                         {visit.employeeId?.name || "Unknown"}
                       </p>
                       <div className="flex items-center gap-2">
-                        <p className="text-xs text-gray-500">{visit.employeeId?.employeeId}</p>
-                        <span className="text-[10px] text-gray-300">•</span>
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                        <p className="text-xs text-(--color-text-tertiary)">{visit.employeeId?.employeeId}</p>
+                        <span className="text-[10px] text-(--color-text-tertiary)">•</span>
+                        <div className="flex items-center gap-1 text-xs text-(--color-text-tertiary)">
                           <Clock size={10} />
                           <span>{visit.checkInTime ? formatTime(visit.checkInTime) : ""}</span>
                         </div>
                       </div>
+                      {visit.trackingLost && (
+                        <span className="text-[10px] text-(--color-warning) font-medium flex items-center gap-1 mt-0.5">
+                          <WifiOff size={10} /> Tracking lost — GPS/internet off
+                        </span>
+                      )}
                     </div>
-                    {visit.geoFenceBreached && <AlertTriangle size={16} className="text-red-500 shrink-0" />}
+                    {visit.trackingLost && <WifiOff size={16} className="text-(--color-warning) shrink-0" aria-label="Tracking lost" />}
+                    {visit.geoFenceBreached && <AlertTriangle size={16} className="text-(--color-danger) shrink-0" />}
                   </div>
 
                   {lead ? (
-                    <div className="mb-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                      <p className="text-xs font-medium text-blue-800 truncate">
+                    <div className="mb-2 p-2 bg-(--color-primary-light) rounded-lg border border-(--color-primary-light)">
+                      <p className="text-xs font-medium text-(--color-primary-hover) truncate">
                         {lead.name || "Unnamed Lead"}
                       </p>
                       {lead.companyName && (
-                        <p className="text-[10px] text-blue-600 flex items-center gap-1 mt-0.5">
+                        <p className="text-[10px] text-(--color-primary) flex items-center gap-1 mt-0.5">
                           <Building2 size={10} /> {lead.companyName}
                         </p>
                       )}
                       {lead.phone && (
-                        <p className="text-[10px] text-blue-600 flex items-center gap-1">
+                        <p className="text-[10px] text-(--color-primary) flex items-center gap-1">
                           <Phone size={10} /> {lead.phone}
                         </p>
                       )}
                       {lead.city && (
-                        <p className="text-[10px] text-blue-600">{lead.city}{lead.state ? `, ${lead.state}` : ""}</p>
+                        <p className="text-[10px] text-(--color-primary)">{lead.city}{lead.state ? `, ${lead.state}` : ""}</p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs text-gray-600 mb-2">
+                    <p className="text-xs text-(--color-text-secondary) mb-2">
                       <span className="font-medium">Client:</span> {visit.clientName || "N/A"}
                     </p>
                   )}
@@ -224,8 +259,8 @@ const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
                 {lat !== 0 && lng !== 0 && <MiniMap lat={lat} lng={lng} label={visit.employeeId?.name || ""} />}
 
                 {(loc || visit.checkInLocation?.address) && (
-                  <div className="px-3 py-2 border-t border-gray-100 bg-gray-50/50">
-                    <p className="text-[11px] text-gray-400 leading-tight line-clamp-2">
+                  <div className="px-3 py-2 border-t border-(--color-border) bg-(--color-surface-hover)/50">
+                    <p className="text-[11px] text-(--color-text-tertiary) leading-tight line-clamp-2">
                       {(loc && `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`) || visit.checkInLocation?.address}
                     </p>
                   </div>

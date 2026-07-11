@@ -41,7 +41,7 @@ const TasksPage: React.FC = () => {
   };
   const [search, setSearch] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("");
-  const [currentTab, setCurrentTab] = useState<"all" | "my" | "review">("all");
+  const [currentTab, setCurrentTab] = useState<"all" | "my" | "review">("my");
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>({});
   const navigate = useNavigate();
@@ -247,7 +247,7 @@ const TasksPage: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col justify-between items-start gap-3 mb-6">
+    <div className="flex flex-col justify-between items-start gap-3 mb-6 ">
       {/* Header */}
       <div
         style={{
@@ -441,7 +441,7 @@ const TasksPage: React.FC = () => {
                   : "2px solid transparent",
                 transition: "all 0.2s ease",
               }}
-              className="w-full"
+              className="w-full min-h-[60dvh]"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, col.key)}
             >
@@ -497,6 +497,7 @@ const TasksPage: React.FC = () => {
                           className="card"
                           style={{
                             padding: "12px",
+                            borderRadius: "4px",
                             cursor:
                               canEdit || t.assignedTo?._id === user?._id
                                 ? "grab"

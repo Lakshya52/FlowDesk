@@ -27,3 +27,15 @@ export const emitFieldVisitUpdated = (tenantId: string, visit: any) => {
 export const emitFieldVisitCancelled = (tenantId: string, visitId: string) => {
     io.to(`tenant_${tenantId}`).emit("field-visit:cancelled", visitId);
 };
+
+export const emitFieldVisitTrackingLost = (tenantId: string, data: { visitId: string; employeeId: string; employeeName: string }) => {
+    io.to(`tenant_${tenantId}`).emit("field-visit:tracking-lost", data);
+};
+
+export const emitFieldVisitTrackingRestored = (tenantId: string, data: { visitId: string; employeeId: string; employeeName: string }) => {
+    io.to(`tenant_${tenantId}`).emit("field-visit:tracking-restored", data);
+};
+
+export const emitFieldVisitCompleted = (tenantId: string, data: { visitId: string; clientName: string; employeeName: string }) => {
+    io.to(`tenant_${tenantId}`).emit("field-visit:completed", data);
+};

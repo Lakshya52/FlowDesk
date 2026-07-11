@@ -55,7 +55,7 @@ export interface ILead extends Document {
 
 const leadSchema = new Schema<ILead>(
     {
-        campaignId: { type: Schema.Types.ObjectId, ref: 'Campaign', required: true },
+        campaignId: { type: Schema.Types.ObjectId, ref: 'Campaign' },
         tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true },
         name: { type: String, required: true, trim: true },
         designation: { type: String, trim: true },

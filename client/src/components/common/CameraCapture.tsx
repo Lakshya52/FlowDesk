@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback } from "react";
-import { Camera, RefreshCw } from "lucide-react";
+import { Camera, RefreshCw, X } from "lucide-react";
 
 interface CameraCaptureProps {
   onCapture: (blob: Blob) => void;
@@ -71,15 +71,19 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose }) => 
           <div className="flex gap-4 mt-4">
             <button
               onClick={capture}
-              className="bg-white text-black p-4 rounded-full shadow-lg hover:bg-gray-200"
+              className="bg-white text-black p-4 h-15 w-15 flex items-center justify-center cursor-pointer rounded-full shadow-lg hover:bg-gray-200"
             >
               <Camera size={32} />
             </button>
             <button
               onClick={() => setFacingMode((m) => (m === "user" ? "environment" : "user"))}
-              className="bg-gray-700 text-white p-3 rounded-full"
+              className="bg-gray-700 text-white p-3 h-15 w-15 flex items-center justify-center cursor-pointer rounded-full"
             >
               <RefreshCw size={24} />
+            </button>
+            <button onClick={onClose} className="bg-gray-700 text-white p-3 h-15 w-15 flex items-center justify-center cursor-pointer rounded-full"
+ >
+              <X size={24} />
             </button>
           </div>
         </>
@@ -96,9 +100,9 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose }) => 
           </div>
         </>
       )}
-      <button onClick={onClose} className="mt-4 text-white/60 text-sm hover:text-white">
+      {/* <button onClick={onClose} className="mt-4 text-white/60 text-sm hover:text-white">
         Cancel
-      </button>
+      </button> */}
     </div>
   );
 };
