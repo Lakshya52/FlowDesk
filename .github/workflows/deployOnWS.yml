@@ -61,7 +61,7 @@ jobs:
           Copy-Item -Path "$env:GITHUB_WORKSPACE\server\dist\*" -Destination "$backendPath\dist" -Recurse -Force
           Copy-Item -Path "$env:GITHUB_WORKSPACE\server\package.json" -Destination "$backendPath\package.json" -Force
 
-      - name: Grant Everyone full control on frontend folder
+      - name: Grant IIS permissions on frontend dist folder
         run: |
           icacls "D:\Softwares\FlowDesk\frontend\dist" /grant "IIS_IUSRS:(OI)(CI)F" /T
           icacls "D:\Softwares\FlowDesk\frontend\dist" /grant "IUSR:(OI)(CI)F" /T
@@ -73,5 +73,5 @@ jobs:
 
       - name: Restart PM2 services
         run: |
-          C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd restart flowdesk-backend
-          C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd restart flowdesk-prod-tunnel
+          & "C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd" restart flowdesk-backend
+          & "C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd" restart flowdesk-prod-tunnel
