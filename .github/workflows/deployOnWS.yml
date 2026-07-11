@@ -73,5 +73,5 @@ jobs:
 
       - name: Restart PM2 services
         run: |
-          pm2 restart flowdesk-backend
-          pm2 restart flowdesk-prod-tunnel
+          C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd restart flowdesk-backend
+          C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd restart flowdesk-prod-tunnel

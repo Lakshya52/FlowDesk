@@ -204,7 +204,7 @@ const TeamsPage: React.FC = () => {
                 </div>
                 {isAdmin && (
                     <button className="btn btn-primary" onClick={() => setShowCreate(true)} style={{ gap: 6 }}>
-                        <Plus size={15} /> New Team
+                        <Plus size={15} /> Create New Team
                     </button>
                 )}
             </div>
