@@ -52,14 +52,14 @@ jobs:
         run: |
           $dest = "D:\Softwares\FlowDesk\frontend\dist"
           New-Item -ItemType Directory -Path $dest -Force
-          Copy-Item -Path "$env:GITHUB_WORKSPACE\frontend\dist\*" -Destination $dest -Recurse -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\client\dist\*" -Destination $dest -Recurse -Force
 
       - name: Copy new backend dist and package.json
         run: |
           $backendPath = "D:\Softwares\FlowDesk\backend"
           New-Item -ItemType Directory -Path "$backendPath\dist" -Force
-          Copy-Item -Path "$env:GITHUB_WORKSPACE\backend\dist\*" -Destination "$backendPath\dist" -Recurse -Force
-          Copy-Item -Path "$env:GITHUB_WORKSPACE\backend\package.json" -Destination "$backendPath\package.json" -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\server\dist\*" -Destination "$backendPath\dist" -Recurse -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\server\package.json" -Destination "$backendPath\package.json" -Force
 
       - name: Grant Everyone full control on frontend folder
         run: |
