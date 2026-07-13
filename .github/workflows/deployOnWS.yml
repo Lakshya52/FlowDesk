@@ -79,3 +79,26 @@ jobs:
             pm2 restart flowdesk-backend
             pm2 restart flowdesk-prod-tunnel
             pm2 save
+
+      - name: Wait for processes to stabilize
+        run: Start-Sleep -Seconds 5
+
+      - name: Check PM2 status
+        run: |
+            $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
+            $env:PM2_HOME = "C:\ProgramData\pm2\home"
+            pm2 list
+
+      - name: Show flowdesk-backend logs
+        if: always()
+        run: |
+            $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
+            $env:PM2_HOME = "C:\ProgramData\pm2\home"
+            pm2 logs flowdesk-backend --lines 50 --nostream
+
+      - name: Show flowdesk-prod-tunnel logs
+        if: always()
+        run: |
+            $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
+            $env:PM2_HOME = "C:\ProgramData\pm2\home"
+            pm2 logs flowdesk-prod-tunnel --lines 50 --nostream
