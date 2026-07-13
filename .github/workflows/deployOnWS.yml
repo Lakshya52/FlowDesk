@@ -1,4 +1,4 @@
-name: Update code files on windows server 2016
+name: Deploy to Windows Server
 
 on:
   push:
