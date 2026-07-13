@@ -81,7 +81,7 @@ jobs:
             pm2 save
 
       - name: Wait for processes to stabilize
-        run: Start-Sleep -Seconds 5
+        run: Start-Sleep -Seconds 120
 
       - name: Check PM2 status
         run: |
