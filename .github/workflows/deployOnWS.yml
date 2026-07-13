@@ -74,9 +74,8 @@ jobs:
 
       - name: Restart PM2 services
         run: |
-          $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
-          $env:PM2_HOME = "C:\Users\Administrator\.pm2"
-          pm2 resurrect
-          pm2 restart flowdesk-backend
-          pm2 restart flowdesk-prod-tunnel
-          pm2 save
+            $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
+            $env:PM2_HOME = "C:\ProgramData\pm2\home"
+            pm2 restart flowdesk-backend
+            pm2 restart flowdesk-prod-tunnel
+            pm2 save
