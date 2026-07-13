@@ -71,7 +71,19 @@ jobs:
         run: |
           npm install
 
+      # we can remove this step later for now i am just testing
+      - name: Debug runner user and PM2
+        run: |
+          whoami
+          echo "USERPROFILE=$env:USERPROFILE"
+          echo "APPDATA=$env:APPDATA"
+          echo "PATH=$env:PATH"
+          where.exe pm2
+          pm2 -v
+          pm2 list
+
       - name: Restart PM2 services
         run: |
-          & "C:\Program Files\nodejs\node.exe" "C:\Users\Administrator\AppData\Roaming\npm\node_modules\pm2\bin\pm2" restart flowdesk-backend
-          & "C:\Program Files\nodejs\node.exe" "C:\Users\Administrator\AppData\Roaming\npm\node_modules\pm2\bin\pm2" restart flowdesk-prod-tunnel
+          & pm2 restart flowdesk-backend
+          & pm2 restart flowdesk-prod-tunnel
+          & pm2 save
