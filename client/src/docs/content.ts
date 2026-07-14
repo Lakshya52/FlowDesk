@@ -1,5 +1,5 @@
 export interface Section {
-  type: "h2" | "h3" | "p" | "list" | "ordered" | "code" | "callout" | "table" | "arch-cards"
+  type: "h2" | "h3" | "p" | "list" | "ordered" | "code" | "callout" | "table" | "arch-cards" | "image"
   id?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   content: any
@@ -18,30 +18,19 @@ export interface DocPage {
 }
 
 export const linkSlugs: Record<string, string> = {
-  Introduction: "introduction",
-  Quickstart: "quickstart",
-  Installation: "installation",
-  Configuration: "configuration",
-  "Ongoing Work": "ongoing-work",
-  "Completed Projects": "completed-projects",
-  "Recurring Blueprints": "recurring-blueprints",
-  Assignments: "assignments",
-  "Task States": "task-states",
-  Checkpoints: "checkpoints",
-  "Team Ownership": "team-ownership",
-  Deadlines: "deadlines",
+  "Welcome to FlowDesk": "introduction",
+  "Getting Started": "quickstart",
+  "Your Account": "account",
+  "Creating Projects": "creating-projects",
+  "Project Types": "project-types",
+  "Working with Tasks": "working-with-tasks",
+  "Deadlines & Notifications": "deadlines",
+  "Your Team": "your-team",
+  "Chat & Communication": "chat",
   "AI Buddy": "ai-buddy",
-  "Collaborative Canvas": "collaborative-canvas",
-  "Real-time Chat": "real-time-chat",
-  "Activity Logs": "activity-logs",
-  "RBAC Overview": "rbac-overview",
-  "Admin Role": "admin-role",
-  "Manager Role": "manager-role",
-  "Member Role": "member-role",
-  "Recurring Engine": "recurring-engine",
-  "No-Due-Date Logic": "no-due-date-logic",
-  "Glassmorphism UI": "glassmorphism-ui",
-  "Real-time Status": "real-time-status",
+  "Collaborative Canvas": "canvas",
+  "Understanding Roles": "roles",
+  "What You Can Do": "role-permissions",
 }
 
 function h2(id: string, text: string): Section {
@@ -64,20 +53,16 @@ function ordered(items: string[]): Section {
   return { type: "ordered", content: items }
 }
 
-function code(text: string): Section {
-  return { type: "code", content: text }
-}
-
 function callout(text: string): Section {
   return { type: "callout", content: text }
 }
 
-function table(headers: string[], rows: [string, string, string][]): Section {
+function table(headers: string[], rows: string[][]): Section {
   return { type: "table", content: { headers, rows } }
 }
 
-function archCards(items: [string, string][]): Section {
-  return { type: "arch-cards", content: items }
+function img(src: string, alt: string, caption?: string): Section {
+  return { type: "image", content: { src, alt, caption: caption || "" } }
 }
 
 const pages: Record<string, DocPage> = {}
@@ -94,7 +79,6 @@ function define(
   }
 }
 
-// Helper to look up title from a slug (needed for prev/next resolution)
 function pageTitle(slug: string): string {
   const reverse = Object.fromEntries(Object.entries(linkSlugs).map(([k, v]) => [v, k]))
   return reverse[slug] || slug
@@ -103,1027 +87,1084 @@ function pageTitle(slug: string): string {
 // ── GETTING STARTED ──────────────────────────────────────────
 
 define("introduction", {
-  title: "Introduction",
-  description: "An overview of FlowDesk — the internal management ecosystem for your organisation.",
+  title: "Welcome to FlowDesk",
+  description: "Your all-in-one workspace for managing projects, tasks, and team collaboration.",
   breadcrumbs: [
     { label: "Docs", slug: "introduction" },
     { label: "Getting Started" },
-    { label: "Introduction" },
+    { label: "Welcome" },
   ],
   lastUpdated: "June 15, 2026",
-  readingTime: "8 min read",
+  readingTime: "5 min read",
   sections: [
     h2("what-is-flowdesk", "What is FlowDesk?"),
     p(
-      "FlowDesk is a sophisticated, full-stack internal management ecosystem that centralises complex business operations — from high-level project management to granular day-to-day tasks — into a single, high-performance platform."
+      "FlowDesk is your team's central hub for managing projects, tracking tasks, and collaborating in real time. It brings everything together — assignments, deadlines, team communication, and progress tracking — in one easy-to-use workspace."
     ),
+    img("/docs/images/flowdesk-dashboard-overview.png", "FlowDesk dashboard overview showing projects, tasks, and activity feed", "Your FlowDesk dashboard — everything at a glance"),
     p(
-      "Built on a modern MERN-like stack with end-to-end TypeScript safety, FlowDesk delivers real-time collaboration, intelligent automation, and role-based access control. Whether you are tracking ongoing assignments, managing recurring project blueprints, or collaborating with your team on a digital canvas, FlowDesk provides a unified workspace tailored to your organisation's workflows."
+      "Whether you're managing a small team or coordinating across departments, FlowDesk helps you stay organised and keep projects moving forward. No more jumping between spreadsheets, chat apps, and email threads. Everything you need is in one place."
     ),
 
-    h2("modular-architecture", "Modular Architecture"),
-    p(
-      "FlowDesk is architected as a modular, full-stack application with clear separation of concerns. This design ensures maintainability, scalability, and type safety across every layer of the stack."
-    ),
-    archCards([
-      [
-        "Frontend",
-        "React + TypeScript with a custom CSS design system optimised for readability and performance. The glassmorphism UI provides a premium, semi-transparent aesthetic that reduces eye strain.",
-      ],
-      [
-        "Backend",
-        "Node.js + Express + Mongoose powering a robust RESTful API with full TypeScript types shared between client and server.",
-      ],
-      [
-        "Real-time",
-        "Socket.io integration enables instant updates for chats, notifications, and live presence indicators across the platform.",
-      ],
-      [
-        "Storage",
-        "MongoDB with GridFS integration for handling secure document attachments, file uploads, and media storage.",
-      ],
+    h2("key-features", "Key Features"),
+    p("FlowDesk comes packed with everything your team needs to work efficiently:"),
+    img("/docs/images/flowdesk-key-features.png", "Visual overview of FlowDesk key features including project management, task tracking, and collaboration", "Key features at a glance"),
+    list([
+      ["Project Management", "Create and track projects with full visibility into progress, deadlines, and team assignments. See everything at a glance on your dashboard."],
+      ["Task Tracking", "Break work into tasks with clear states (Todo → In Progress → Review → Completed), checkpoints, and priorities. Know exactly what's in progress and what's done."],
+      ["Team Collaboration", "Chat with your team, share files, use the collaborative canvas for brainstorming, and stay updated with automatic activity logs."],
+      ["AI Assistant", "Get help from AI Buddy — it can generate task descriptions, analyse project velocity, suggest deadlines, and answer questions about your project history."],
+      ["Role-Based Access", "Everyone sees exactly what they need. Admins have full control, Managers oversee teams and projects, and Members focus on task execution."],
+      ["Real-time Updates", "See changes as they happen. When a teammate updates a task, sends a message, or marks something complete, you'll see it instantly."],
+      ["Calendar Integration", "View all your tasks and deadlines on a calendar. Filter by project, team, or priority to focus on what matters most."],
+      ["Desktop App", "FlowDesk is available as a desktop application for Windows, giving you quick access without opening a browser."],
     ]),
 
-    h2("project-management", "Project Management"),
+    h2("who-is-it-for", "Who is FlowDesk for?"),
     p(
-      "Projects — called <strong>Assignments</strong> — are at the heart of FlowDesk. They are organised into three distinct categories."
+      "FlowDesk is designed for teams of all sizes — from small startups to large enterprises. It's built for:"
     ),
-    h3("Ongoing Work"),
+    list([
+      ["Project Managers", "Who need full visibility into project progress, team workload, and upcoming deadlines."],
+      ["Team Leads", "Who need to assign work, approve completed tasks, and keep their team aligned."],
+      ["Team Members", "Who need clear task ownership, easy collaboration, and a simple way to track their work."],
+      ["Organisations", "That want everything in one place — no more juggling multiple tools for projects, tasks, and communication."],
+    ]),
+
+    h2("how-it-works", "How FlowDesk Works"),
     p(
-      "Active projects currently being handled by teams. Each ongoing assignment tracks its progress, associated tasks, team members, and deadlines in real time."
+      "FlowDesk is organised into a few core concepts:"
     ),
-    h3("Completed Projects"),
+    img("/docs/images/flowdesk-core-concepts.png", "Diagram showing how Projects, Tasks, Teams, and Dashboard connect in FlowDesk", "How the core concepts work together"),
+    ordered([
+      "<strong>Projects</strong> are the top-level containers for work. Each project has a team, tasks, deadlines, and a chat.",
+      "<strong>Tasks</strong> are the individual units of work within a project. Each task has an owner, a status, and optional checkpoints.",
+      "<strong>Teams</strong> are groups of people who work together. Projects are assigned to teams, and tasks are assigned to individuals.",
+      "<strong>The Dashboard</strong> gives you a bird's-eye view of everything — your projects, upcoming deadlines, recent activity, and more.",
+    ]),
+
+    h2("accessing-flowdesk", "Accessing FlowDesk"),
     p(
-      "A permanent archive of finished projects for historical reference and auditing. All task data, activity logs, and file attachments are retained."
+      "You can access FlowDesk in two ways:"
     ),
-    h3("Recurring Blueprints"),
-    p(
-      "Blueprints act as templates that automatically spawn new project instances on a schedule — Daily, Weekly, Monthly, or Yearly — with pre-filled tasks, teams, and configurations."
+    list([
+      ["Web Browser", "Open your organisation's FlowDesk URL (e.g., flowdesk.raksco.in) in Chrome, Firefox, Edge, or Safari. Log in with your work email and password."],
+      ["Desktop App", "Download the FlowDesk desktop app for Windows from the download page. It provides quick access from your taskbar and supports native notifications."],
+    ]),
+    callout(
+      "Your login credentials are the same for both the web and desktop app. Your session is saved, so you don't need to log in every time you open the app."
     ),
 
-    h2("task-ecosystem", "Task Ecosystem"),
+    h2("getting-help", "Getting Help"),
     p(
-      "Tasks are the granular units of work within each project. They provide fine-grained visibility into what needs to be done, who is responsible, and where things stand."
+      "If you ever get stuck, there are a few ways to get help:"
     ),
-    h3("Task States"),
-    p(
-      "Every task progresses through a defined state machine: <code>Todo</code> → <code>In Progress</code> → <code>Review</code> → <code>Completed</code>. Each transition is logged in the activity feed."
-    ),
-    h3("Checkpoints"),
-    p(
-      "Each task supports subtask checklists for tracking multi-step processes. Complex deliverables can be broken down into verifiable sub-items."
-    ),
-
-    h2("ai-buddy-integration", "AI Buddy Integration"),
-    p(
-      "FlowDesk features a built-in AI assistant — <strong>AI Buddy</strong> — that helps team members work smarter and faster. It can analyse project velocity, generate task descriptions, and provide technical guidance based on project history."
-    ),
-
-    h2("collaborative-canvas", "Collaborative Canvas"),
-    p(
-      "The Collaborative Canvas is a digital whiteboard and note-taking space where teams can brainstorm, organise visual workflows, and capture ideas in real time with post-it style notes and visual workflow connectors."
-    ),
-
-    h2("security-and-permissions", "Security & Permissions"),
-    p(
-      "FlowDesk implements a strict Role-Based Access Control (RBAC) system. <strong>Admin</strong> users have full system control, <strong>Manager</strong> users oversee teams and assignments, and <strong>Member</strong> users focus on task execution and collaboration."
-    ),
-
-    h2("next-steps", "Next Steps"),
-    p(
-      "Head over to the <a>Quickstart</a> guide to set up your first project, or dive into <a>Task States</a> to understand the workflow model in detail."
-    ),
+    list([
+      ["AI Buddy", "Click the AI Buddy icon in the bottom-right corner of your screen. Ask it anything about how to use FlowDesk."],
+      ["This Documentation", "You're reading it right now! Use the sidebar to browse topics or the search bar to find specific information."],
+      ["Your Admin", "For account-specific questions (like permissions, billing, or setup), reach out to your team's Admin."],
+    ]),
   ],
 }, { next: "quickstart" })
 
 define("quickstart", {
-  title: "Quickstart",
-  description: "Set up your first project and invite your team in under 5 minutes.",
+  title: "Getting Started",
+  description: "Log in and complete your first task in under 5 minutes.",
   breadcrumbs: [
     { label: "Docs", slug: "introduction" },
     { label: "Getting Started" },
-    { label: "Quickstart" },
+    { label: "Getting Started" },
   ],
   lastUpdated: "June 14, 2026",
-  readingTime: "4 min read",
+  readingTime: "5 min read",
   sections: [
-    h2("create-your-account", "Create your account"),
+    h2("step-0-register", "Step 0 — Create your account"),
     p(
-      "Visit the FlowDesk login page and click <strong>Sign up</strong>. Enter your work email, full name, and create a strong password. You will receive a verification email — click the link to activate your account."
+      "Before you can log in, you need an account. There are two ways this happens:"
     ),
+    list([
+      ["Admin-Created Account", "Your Admin or team lead creates your account and sends you an email with your login credentials. Check your inbox for an invitation email with a temporary password."],
+      ["Self Registration", "If your organisation allows it, you can register yourself. Go to the FlowDesk login page and click <strong>Register</strong>. Enter your work email, choose a password, and complete your profile."],
+    ]),
+    img("/docs/images/flowdesk-registration.png", "FlowDesk registration page with email, password, and confirm password fields", "The registration screen"),
     callout(
-      "Use your official work email address to ensure automatic role assignment by your system administrator."
+      "Use your official work email address. Accounts created with personal emails may not be approved by your Admin."
     ),
 
-    h2("create-a-project", "Create a project"),
+    h2("step-1-log-in", "Step 1 — Log in"),
     p(
-      "Once logged in, click the <strong>+ New Project</strong> button in the sidebar. Fill in the project name, description, and select a category — Ongoing, Completed, or Recurring Blueprint. Set a deadline or leave it unset for open-ended work."
+      "Open FlowDesk in your browser or desktop app. You'll see the login page."
     ),
-    p(
-      "For recurring projects, choose a frequency (Daily, Weekly, Monthly, Yearly) and the system will automatically spawn new instances on schedule."
-    ),
-
-    h2("add-team-members", "Add team members"),
-    p(
-      "Navigate to the <strong>Members</strong> tab within your project. Search for colleagues by name or email and assign them a role — Admin, Manager, or Member. Members added to a project can immediately see and interact with its tasks."
-    ),
-
-    h2("create-your-first-task", "Create your first task"),
-    p(
-      "Inside the project, click <strong>Add Task</strong>. Give it a title, description, and assign it to a team member or an entire team. You can also attach files, set checkpoints, and choose a due date."
-    ),
-    code(`// Example: Creating a task via the API
-POST /api/projects/:projectId/tasks
-{
-  "title": "Design landing page mockups",
-  "description": "Create Figma mockups for the new landing page redesign.",
-  "assignedTo": ["user_abc123"],
-  "priority": "high",
-  "dueDate": "2026-07-01"
-}`),
-
-    h2("next-steps", "Next steps"),
-    p(
-      "Now that your first project is up and running, explore <a>Task States</a> to understand how work progresses, or check <a>Recurring Blueprints</a> to automate your workflows."
-    ),
-  ],
-}, { prev: "introduction", next: "installation" })
-
-define("installation", {
-  title: "Installation",
-  description: "Install the FlowDesk CLI and configure your development environment.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Getting Started" },
-    { label: "Installation" },
-  ],
-  lastUpdated: "June 12, 2026",
-  readingTime: "3 min read",
-  sections: [
-    h2("system-requirements", "System Requirements"),
-    list([
-      ["Node.js 18+", "FlowDesk CLI requires Node.js version 18 or higher. We recommend using nvm to manage your Node versions."],
-      ["npm or yarn", "The CLI is distributed via npm. Ensure you have npm 8+ or yarn 1.22+ installed."],
-      ["Git", "Version control is used to sync project configuration and track changes across team members."],
-    ]),
-
-    h2("install-the-cli", "Install the CLI"),
-    p("Open your terminal and run:"),
-    code(`npm install -g @flowdesk-cli`),
-    p("Verify the installation:"),
-    code(`flowdesk --version
-# Expected output: v2.1.4`),
-
-    h2("configure-authentication", "Configure authentication"),
-    p(
-      "Generate an API token from your FlowDesk account settings. Then configure the CLI:"
-    ),
-    code(`flowdesk login --token fd_api_xxxxxxxxxxxx`),
-    p(
-      "Your token is stored securely in your system keychain. You can also set it as the <code>FLOWDESK_API_TOKEN</code> environment variable."
-    ),
-
-    h2("browser-access", "Browser access"),
-    p(
-      "No installation is required for the web application. Simply navigate to your organisation's FlowDesk URL and log in with your credentials. The web app works best on Chrome, Firefox, and Edge."
-    ),
-
-    h2("troubleshooting", "Troubleshooting"),
-    callout(
-      "If you encounter a <code>EACCES</code> error during global npm installation, use <code>npm install -g @flowdesk-cli --unsafe-perm</code> or consult your IT administrator for sudo access."
-    ),
-  ],
-}, { prev: "quickstart", next: "configuration" })
-
-define("configuration", {
-  title: "Configuration",
-  description: "Configure FlowDesk settings, environment variables, and team preferences.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Getting Started" },
-    { label: "Configuration" },
-  ],
-  lastUpdated: "June 10, 2026",
-  readingTime: "4 min read",
-  sections: [
-    h2("environment-variables", "Environment Variables"),
-    p("FlowDesk supports the following environment variables for customising your local and production setup:"),
-    table(
-      ["Variable", "Description", "Default"],
-      [
-        ["FLOWDESK_API_URL", "Base URL for the FlowDesk API server", "https://api.flowdesk.io"],
-        ["FLOWDESK_API_TOKEN", "Your personal API authentication token", "—"],
-        ["FLOWDESK_ENV", "Environment name (development, staging, production)", "development"],
-        ["FLOWDESK_LOG_LEVEL", "Logging verbosity (debug, info, warn, error)", "info"],
-      ]
-    ),
-
-    h2("project-preferences", "Project Preferences"),
-    p(
-      "Each project can be configured with custom preferences. Navigate to <strong>Project Settings &gt; Preferences</strong> to adjust:"
-    ),
-    list([
-      ["Default task view", "Choose between Board, List, or Calendar as the default view for new tasks."],
-      ["Notification rules", "Control which events trigger in-app and email notifications for team members."],
-      ["Auto-archive duration", "Set how long completed projects are retained before automatic archiving."],
-    ]),
-
-    h2("team-settings", "Team Settings"),
-    p(
-      "Team settings allow managers to define working hours, holiday calendars, and default assignment rules. Changes apply to all current and future projects within the team."
-    ),
-
-    h2("update-preferences", "Update Preferences"),
-    p(
-      "FlowDesk auto-updates to the latest version by default. To stay on an older version, set <strong>Update: Mode</strong> to <code>manual</code> or <code>none</code> in your account settings."
-    ),
-  ],
-}, { prev: "installation", next: "ongoing-work" })
-
-// ── PROJECT MANAGEMENT ───────────────────────────────────────
-
-define("ongoing-work", {
-  title: "Ongoing Work",
-  description: "Manage active projects and monitor team progress in real time.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Project Management" },
-    { label: "Ongoing Work" },
-  ],
-  lastUpdated: "June 13, 2026",
-  readingTime: "3 min read",
-  sections: [
-    h2("overview", "Overview"),
-    p(
-      "The <strong>Ongoing Work</strong> section is the command centre for all active projects. Here you can view, filter, and manage every project currently being worked on by your teams."
-    ),
-
-    h2("dashboard-view", "Dashboard View"),
-    p(
-      "The dashboard displays each project as a card with its name, progress bar, assigned team members, deadline, and latest activity. Use the filters at the top to narrow down by team, priority, or date range."
-    ),
-
-    h2("tracking-progress", "Tracking Progress"),
-    p(
-      "Each project has a built-in progress tracker that aggregates task completion data. The percentage is calculated from the number of completed tasks divided by total tasks. Team leads can view velocity charts and forecast completion dates."
-    ),
-
-    h2("reassigning-work", "Reassigning Work"),
-    p(
-      "Projects can be reassigned to different teams or individual leads at any time. Navigate to <strong>Project Settings &gt; Team</strong> to change ownership. All task assignments and activity logs are preserved."
-    ),
-
-    h2("bulk-operations", "Bulk Operations"),
-    p("Managers can select multiple ongoing projects and perform bulk actions:"),
-    list([
-      ["Change priority", "Update the priority level of several projects at once."],
-      ["Extend deadlines", "Push back deadlines by a specified number of days."],
-      ["Archive", "Move completed or stalled projects to the archive."],
-    ]),
-  ],
-}, { prev: "configuration", next: "completed-projects" })
-
-define("completed-projects", {
-  title: "Completed Projects",
-  description: "Archive, review, and audit finished projects.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Project Management" },
-    { label: "Completed Projects" },
-  ],
-  lastUpdated: "June 11, 2026",
-  readingTime: "2 min read",
-  sections: [
-    h2("archive-overview", "Archive Overview"),
-    p(
-      "The <strong>Completed Projects</strong> section provides a permanent archive of all finished projects. Every detail — tasks, discussions, file attachments, and activity logs — is preserved for future reference."
-    ),
-
-    h2("audit-trail", "Audit Trail"),
-    p(
-      "Each completed project includes a full audit trail showing who did what and when. This is invaluable for compliance, post-mortem analysis, and performance reviews. The trail includes task state changes, file uploads, comment additions, and member changes."
-    ),
-
-    h2("search-and-filter", "Search and Filter"),
-    p(
-      "Use the search bar to find completed projects by name, team member, or date range. Filters allow you to narrow results by project category, priority, or completion date."
-    ),
-
-    h2("restoring-projects", "Restoring Projects"),
-    p(
-      "If a completed project needs to be reopened, managers can restore it to the Ongoing Work section. Restoring a project preserves all its data and task states."
-    ),
-  ],
-}, { prev: "ongoing-work", next: "recurring-blueprints" })
-
-define("recurring-blueprints", {
-  title: "Recurring Blueprints",
-  description: "Automate project creation with intelligent template blueprints.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Project Management" },
-    { label: "Recurring Blueprints" },
-  ],
-  lastUpdated: "June 14, 2026",
-  readingTime: "4 min read",
-  sections: [
-    h2("what-are-blueprints", "What are Blueprints?"),
-    p(
-      "Recurring Blueprints are project templates that automatically spawn new project instances on a defined schedule. They are ideal for repetitive workflows like weekly sprints, monthly reports, or quarterly reviews."
-    ),
-
-    h2("creating-a-blueprint", "Creating a Blueprint"),
-    p("To create a blueprint, navigate to <strong>Blueprints &gt; New Blueprint</strong> and configure:"),
-    list([
-      ["Template project", "Set up the initial project structure including tasks, team assignments, and attachments."],
-      ["Schedule", "Choose Daily, Weekly, Monthly, or Yearly recurrence. Optionally set a start date and end date."],
-      ["Auto-assignment", "Configure which team members are automatically added to each spawned instance."],
-    ]),
-
-    h2("intelligent-spawning", "Intelligent Spawning"),
-    p(
-      "The recurring engine is designed to be robust. It ensures no duplicate projects are created for the same cycle. If the system was offline during a scheduled spawn time, it automatically catches up by creating the missed instance when it comes back online."
-    ),
-    code(`// Server: Recurring engine catch-up logic
-async function catchUpMissedCycles(blueprintId) {
-  const blueprint = await Blueprint.findById(blueprintId);
-  const missedCycles = calculateMissedSince(blueprint.lastSpawned, blueprint.schedule);
-  for (const cycle of missedCycles) {
-    await spawnProjectFromBlueprint(blueprint, cycle);
-  }
-  await Blueprint.updateOne(
-    { _id: blueprintId },
-    { lastSpawned: new Date() }
-  );
-}`),
-
-    h2("managing-blueprints", "Managing Blueprints"),
-    p(
-      "Blueprints can be paused, edited, or deleted at any time. Pausing a blueprint prevents new instances from being spawned without deleting the template. Editing a blueprint applies changes to all future instances."
-    ),
-  ],
-}, { prev: "completed-projects", next: "assignments" })
-
-define("assignments", {
-  title: "Assignments",
-  description: "Create and manage project assignments across your organisation.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Project Management" },
-    { label: "Assignments" },
-  ],
-  lastUpdated: "June 10, 2026",
-  readingTime: "3 min read",
-  sections: [
-    h2("what-is-an-assignment", "What is an Assignment?"),
-    p(
-      "An <strong>Assignment</strong> is FlowDesk's term for a project. Each assignment bundles together tasks, team members, discussions, files, and deadlines into a single manageable unit."
-    ),
-
-    h2("creating-assignments", "Creating Assignments"),
-    p("Assignments can be created from the dashboard or within a team workspace:"),
+    img("/docs/images/flowdesk-login-page.png", "FlowDesk login page with email and password fields", "The FlowDesk login screen"),
     ordered([
-      "Click <strong>+ New Project</strong> from the sidebar or dashboard.",
-      "Choose a category: Ongoing, Completed, or Recurring Blueprint.",
-      "Fill in the project name, description, and optional deadline.",
-      "Add team members and assign roles (Admin, Manager, Member).",
-      "Click <strong>Create</strong> — the assignment is immediately available to all members.",
+      "Enter your <strong>work email address</strong> (the one your Admin set up or you registered with).",
+      "Enter your <strong>password</strong>.",
+      "Click <strong>Sign in</strong>.",
     ]),
-
-    h2("assignment-status", "Assignment Status"),
     p(
-      "Each assignment has a status indicator: <strong>Active</strong>, <strong>At Risk</strong> (past deadline or blocked), <strong>Completed</strong>, or <strong>Archived</strong>. Status is automatically updated based on task completion and deadline proximity."
+      "If your organisation uses Google login, you can click <strong>Sign in with Google</strong> instead and use your Google account credentials."
+    ),
+    callout(
+      "If you forgot your password, click \"Forgot Password\" on the login page. You'll receive a 6-digit code via email to reset it."
     ),
 
-    h2("assignment-templates", "Assignment Templates"),
+    h2("step-2-explore-dashboard", "Step 2 — Explore your Dashboard"),
     p(
-      "Frequently used project structures can be saved as templates. When creating a new assignment, select a template to pre-populate tasks, teams, and settings."
+      "After logging in, you'll land on your <strong>Dashboard</strong>. This is your home base. Here's what you'll see:"
     ),
-  ],
-}, { prev: "recurring-blueprints", next: "task-states" })
-
-// ── TASK ECOSYSTEM ───────────────────────────────────────────
-
-define("task-states", {
-  title: "Task States",
-  description: "Understand the task lifecycle and state transitions.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Task Ecosystem" },
-    { label: "Task States" },
-  ],
-  lastUpdated: "June 13, 2026",
-  readingTime: "3 min read",
-  sections: [
-    h2("state-machine", "State Machine"),
+    img("/docs/images/flowdesk-dashboard-annotated.png", "Annotated FlowDesk dashboard showing projects, deadlines, activity feed, and quick actions", "Your dashboard after logging in"),
+    list([
+      ["Your Projects", "A list of all projects you're assigned to, with their current status and progress."],
+      ["Upcoming Deadlines", "Tasks and projects that are due soon, highlighted so nothing slips through the cracks."],
+      ["Recent Activity", "A feed of what's happened recently — task updates, new comments, file uploads, and more."],
+      ["Quick Actions", "Shortcuts to create new projects, add tasks, or jump to specific sections."],
+    ]),
     p(
-      "Every task in FlowDesk progresses through a four-state lifecycle. Each transition is logged and can trigger notifications to relevant team members."
+      "Take a moment to look around. The sidebar on the left gives you access to all major sections of FlowDesk."
     ),
 
+    h2("step-3-navigate-sidebar", "Step 3 — Navigate the Sidebar"),
+    p(
+      "The sidebar is your main navigation. Here's what each section does:"
+    ),
+    img("/docs/images/flowdesk-sidebar-navigation.png", "FlowDesk sidebar showing Dashboard, Assignments, Tasks, Calendar, Chat, and Settings sections", "The sidebar navigation"),
     table(
-      ["State", "Description", "Actions available"],
+      ["Section", "What it's for"],
       [
-        ["Todo", "Task has been created but work has not started", "Assign, edit, move to In Progress"],
-        ["In Progress", "Work is actively being done on the task", "Add checkpoints, move to Review"],
-        ["Review", "Work is complete and awaiting approval", "Comment, approve, request changes"],
-        ["Completed", "Task has been approved and finished", "Archive, reopen if needed"],
+        ["Dashboard", "Your home page with an overview of everything."],
+        ["Assignments", "All your projects — ongoing, completed, and recurring."],
+        ["Tasks", "All tasks assigned to you across all projects."],
+        ["Calendar", "A calendar view of your tasks and deadlines."],
+        ["Chat", "Direct messages and team conversations."],
+        ["Settings", "Your profile, preferences, and account settings."],
       ]
     ),
 
-    h2("state-transitions", "State Transitions"),
+    h2("step-4-find-your-project", "Step 4 — Find your project"),
     p(
-      "Tasks can only move forward through the state machine (Todo → In Progress → Review → Completed). However, managers can move a task back to a previous state if rework is needed."
+      "Click <strong>Assignments</strong> in the sidebar to see all your projects. Projects are grouped into categories:"
     ),
-    p(
-      "When a task transitions to <strong>Review</strong>, assigned reviewers are notified. They can approve it to mark it <strong>Completed</strong> or request changes, which sends it back to <strong>In Progress</strong>."
-    ),
-
-    h2("automation-rules", "Automation Rules"),
-    p(
-      "Blueprint templates can include automation rules that automatically transition tasks based on conditions. For example, a task can be moved to <strong>Review</strong> when all its checkpoints are marked complete."
-    ),
-  ],
-}, { prev: "assignments", next: "checkpoints" })
-
-define("checkpoints", {
-  title: "Checkpoints",
-  description: "Break complex tasks into manageable subtasks with checkpoints.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Task Ecosystem" },
-    { label: "Checkpoints" },
-  ],
-  lastUpdated: "June 11, 2026",
-  readingTime: "2 min read",
-  sections: [
-    h2("what-are-checkpoints", "What are Checkpoints?"),
-    p(
-      "Checkpoints are subtask checklists within a task. They allow you to break complex deliverables into smaller, verifiable steps. A task can only be marked <strong>Completed</strong> when all its checkpoints are done."
-    ),
-
-    h2("adding-checkpoints", "Adding Checkpoints"),
-    p(
-      "Open any task and scroll to the <strong>Checkpoints</strong> section. Click <strong>+ Add Checkpoint</strong> and enter a description. You can reorder checkpoints by dragging them."
-    ),
+    img("/docs/images/flowdesk-assignments-page.png", "FlowDesk Assignments page showing Ongoing, Completed, and Recurring Blueprint project categories", "Your projects in the Assignments view"),
     list([
-      ["Descriptive titles", "Use clear, action-oriented language (e.g. 'Draft API documentation' rather than 'Docs')."],
-      ["Assign owners", "Each checkpoint can be assigned to a different team member."],
-      ["Add estimates", "Optionally set time estimates for each checkpoint to track effort."],
+      ["Ongoing", "Active projects currently being worked on. This is where you'll spend most of your time."],
+      ["Completed", "Finished projects preserved for reference. All data, files, and discussions are kept."],
+      ["Recurring Blueprints", "Templates that automatically create new projects on a schedule (weekly sprints, monthly reports, etc.)."],
+    ]),
+    p(
+      "Click on any project to open it and see its tasks, team members, chat, and activity logs."
+    ),
+
+    h2("step-5-create-a-task", "Step 5 — Create a task"),
+    p(
+      "Open any project and click <strong>Add Task</strong>. Here's how to create a good task:"
+    ),
+    img("/docs/images/flowdesk-create-task.png", "FlowDesk task creation form with title, description, assignee, due date, priority, and checkpoints fields", "Creating a new task"),
+    ordered([
+      "Give it a <strong>clear title</strong> that describes what needs to be done.",
+      "Add a <strong>description</strong> with any relevant details, requirements, or links.",
+      "Assign it to <strong>a team member</strong> (or leave it unassigned for someone to claim).",
+      "Set a <strong>due date</strong> if there's a deadline.",
+      "Add <strong>checkpoints</strong> if the task has multiple steps (see <a>Working with Tasks</a>).",
+      "Click <strong>Create</strong> — the task appears in the project immediately.",
     ]),
 
-    h2("progress-tracking", "Progress Tracking"),
+    h2("step-6-track-progress", "Step 6 — Track progress"),
     p(
-      "The parent task shows a progress bar based on completed checkpoints. This gives an instant visual indicator of how far along a task is, even before it reaches the <strong>Review</strong> state."
+      "As work progresses, update the task status to keep everyone in the loop:"
     ),
-  ],
-}, { prev: "task-states", next: "team-ownership" })
+    img("/docs/images/flowdesk-task-status-flow.png", "Visual diagram showing task status flow: Todo → In Progress → Review → Completed", "The task lifecycle workflow"),
+    ordered([
+      "<strong>Todo</strong> → <strong>In Progress</strong>: Start working on the task.",
+      "<strong>In Progress</strong> → <strong>Review</strong>: Work is done, needs approval.",
+      "<strong>Review</strong> → <strong>Completed</strong>: Work is approved and finished.",
+    ]),
+    p(
+      "Each status change is logged in the activity feed, so your team always knows what's happening without needing to ask."
+    ),
 
-define("team-ownership", {
-  title: "Team Ownership",
-  description: "Assign tasks to individuals or entire teams for flexible workload management.",
+    h2("next-steps", "What's next?"),
+    p(
+      "Now that you know the basics, here are some things to explore next:"
+    ),
+    list([
+      ["<a>Your Account</a>", "Personalise your profile, notification preferences, and appearance settings."],
+      ["<a>Creating Projects</a>", "Set up your first project and learn about team management."],
+      ["<a>Working with Tasks</a>", "Master the task lifecycle, checkpoints, and assignment options."],
+      ["<a>AI Buddy</a>", "Discover how the AI assistant can help you work smarter."],
+    ]),
+  ],
+}, { prev: "introduction", next: "account" })
+
+define("account", {
+  title: "Your Account",
+  description: "Manage your profile, notification preferences, and personal settings.",
   breadcrumbs: [
     { label: "Docs", slug: "introduction" },
-    { label: "Task Ecosystem" },
-    { label: "Team Ownership" },
+    { label: "Getting Started" },
+    { label: "Your Account" },
   ],
   lastUpdated: "June 12, 2026",
-  readingTime: "2 min read",
+  readingTime: "4 min read",
   sections: [
-    h2("individual-assignment", "Individual Assignment"),
+    h2("profile-settings", "Profile Settings"),
     p(
-      "Tasks can be assigned to a specific person. The assignee is responsible for completing the task and updating its status. They receive notifications for any changes or comments on the task."
+      "Click your avatar in the top-right corner and select <strong>Settings</strong> to manage your profile. You can update the following:"
+    ),
+    img("/docs/images/flowdesk-profile-settings.png", "FlowDesk profile settings page showing display name, email, profile picture, and employee ID fields", "Your profile settings"),
+    list([
+      ["Display Name", "Your name as it appears to other users across FlowDesk."],
+      ["Email Address", "Your work email. Contact your Admin if you need to change this."],
+      ["Profile Picture", "Upload a photo so teammates can easily recognise you."],
+      ["Employee ID", "Your unique identifier within the organisation."],
+    ]),
+    p(
+      "Changes are saved automatically. Your updated profile picture and name will be visible to all team members immediately."
     ),
 
-    h2("team-assignment", "Team Assignment"),
+    h2("notification-preferences", "Notification Preferences"),
     p(
-      "Tasks can also be assigned to an entire team. In this case, any member of that team can pick up the work, update its state, add checkpoints, and mark it complete. This is useful for shared responsibilities where the first available person should handle the work."
+      "FlowDesk keeps you informed about what matters. You can customise exactly what you're notified about and how:"
+    ),
+    img("/docs/images/flowdesk-notification-settings.png", "FlowDesk notification preferences page with toggles for in-app, email, and desktop notifications", "Configure your notification preferences"),
+
+    h3("Notification Types"),
+    list([
+      ["In-app Notifications", "Real-time alerts that appear in the notification bell icon in the top-right corner. These are always on and include task assignments, mentions, deadline reminders, and chat messages."],
+      ["Email Notifications", "Optional email summaries for important events. Useful if you're not always logged into FlowDesk. You can choose to receive emails for new assignments, approaching deadlines, and mentions."],
+      ["Desktop Notifications", "Pop-up alerts from the desktop app when FlowDesk is in the background. Great for staying aware without constantly checking the app."],
+    ]),
+
+    h3("Managing Notifications"),
+    p(
+      "Go to <strong>Settings > Notifications</strong> to configure your preferences. You can toggle each notification type on or off independently. For example, you might want in-app notifications but not email notifications."
+    ),
+    callout(
+      "Even with notifications turned off, you'll still see all activity when you open FlowDesk. Notifications are just about how you're alerted — the data is always there."
     ),
 
-    h2("unassigned-tasks", "Unassigned Tasks"),
+    h2("appearance", "Appearance"),
     p(
-      "Tasks without an assignee appear in the <strong>Unassigned</strong> view. Managers can bulk-assign unassigned tasks to team members or leave them in the pool for anyone to claim."
+      "FlowDesk supports both <strong>light</strong> and <strong>dark</strong> themes. Toggle between them from the settings panel or the theme icon in the sidebar."
+    ),
+    img("/docs/images/flowdesk-appearance-toggle.png", "FlowDesk light and dark theme comparison side by side", "Switch between light and dark mode"),
+    list([
+      ["Light Mode", "Clean, bright interface. Best for well-lit environments and daytime use."],
+      ["Dark Mode", "Reduced brightness with darker backgrounds. Easier on the eyes in low-light environments and during extended work sessions."],
+    ]),
+    p(
+      "Your theme preference is saved automatically and persists across sessions. The theme applies to the entire platform — all pages, modals, and components."
     ),
 
-    h2("ownership-transfer", "Ownership Transfer"),
+    h2("changing-your-password", "Changing Your Password"),
     p(
-      "Task ownership can be transferred at any time. Simply edit the task and select a new assignee or team. All checkpoint assignments, comments, and activity logs remain intact."
+      "It's a good practice to change your password periodically. Here's how:"
+    ),
+    ordered([
+      "Go to <strong>Settings > Security</strong>.",
+      "Click <strong>Change Password</strong>.",
+      "Enter your <strong>current password</strong>.",
+      "Enter your <strong>new password</strong> (at least 6 characters).",
+      "Enter the new password again to <strong>confirm</strong>.",
+      "Click <strong>Update Password</strong>.",
+    ]),
+    callout(
+      "If you forget your password, use the \"Forgot Password\" link on the login page. You'll receive a 6-digit code via email to reset it."
+    ),
+
+    h2("logging-out", "Logging Out"),
+    p(
+      "To log out, click your avatar in the top-right corner and select <strong>Log out</strong>. This signs you out of the current device. If you're using the desktop app, closing the window will minimise it to the system tray — you'll stay logged in until you explicitly quit the app."
     ),
   ],
-}, { prev: "checkpoints", next: "deadlines" })
+}, { prev: "quickstart", next: "creating-projects" })
+
+// ── WORKING WITH PROJECTS ──────────────────────────────────────
+
+define("creating-projects", {
+  title: "Creating Projects",
+  description: "Set up new projects, assign teams, and get work started.",
+  breadcrumbs: [
+    { label: "Docs", slug: "introduction" },
+    { label: "Working with Projects" },
+    { label: "Creating Projects" },
+  ],
+  lastUpdated: "June 13, 2026",
+  readingTime: "5 min read",
+  sections: [
+    h2("creating-a-new-project", "Creating a New Project"),
+    p(
+      "Creating a project in FlowDesk is straightforward. Click <strong>+ New Project</strong> from the sidebar or dashboard to get started."
+    ),
+    img("/docs/images/flowdesk-create-project.png", "FlowDesk new project form with name, description, category, deadline, and team member fields", "Creating a new project"),
+    ordered([
+      "Enter a <strong>project name</strong> — something descriptive that tells your team what the project is about.",
+      "Add a <strong>description</strong> (optional) — provide context about the project's goals, scope, or key deliverables.",
+      "Choose a <strong>category</strong>:",
+    ]),
+    list([
+      ["Ongoing", "For active projects that your team is currently working on. These appear in your main project list."],
+      ["Completed", "For projects that are already finished. Useful for archiving work that's done but needs to be preserved."],
+      ["Recurring Blueprint", "For projects that repeat on a schedule. Create the template once, and FlowDesk will automatically spawn new instances."],
+    ]),
+    ordered([
+      "Set a <strong>deadline</strong> (optional) — the target completion date. Leave blank for open-ended work.",
+      "Add <strong>team members</strong> — search by name or email and assign roles (see below).",
+      "Click <strong>Create</strong> — your project is live immediately and visible to all added members.",
+    ]),
+
+    h2("adding-team-members", "Adding Team Members"),
+    p(
+      "Every project needs a team. After creating a project, go to the <strong>Members</strong> tab to add people:"
+    ),
+    img("/docs/images/flowdesk-project-members.png", "FlowDesk project members tab showing team members with their roles and options to add or remove", "Managing team members"),
+    ordered([
+      "Click <strong>Add Member</strong>.",
+      "Search for a colleague by <strong>name</strong> or <strong>email address</strong>.",
+      "Select their <strong>role</strong> within this project:",
+    ]),
+    list([
+      ["Admin", "Full control over the project. Can edit settings, manage members, and delete the project."],
+      ["Manager", "Can create tasks, approve work, manage team members, and view reports."],
+      ["Member", "Can work on assigned tasks, chat, and upload files."],
+    ]),
+    p(
+      "Team members you add can immediately see and interact with the project's tasks, chat, and files."
+    ),
+
+    h2("project-status", "Project Status"),
+    p(
+      "Each project has a status indicator that updates automatically based on task completion and deadline proximity:"
+    ),
+    table(
+      ["Status", "Meaning", "When it appears"],
+      [
+        ["Active", "Work is in progress", "Default status for ongoing projects"],
+        ["At Risk", "Deadline approaching or tasks blocked", "When a deadline is within 3 days or tasks are overdue"],
+        ["Completed", "All tasks are finished", "When all tasks reach the Completed state"],
+        ["Archived", "Project moved to archive", "When manually archived by a Manager or Admin"],
+      ]
+    ),
+
+    h2("project-dashboard", "The Project Dashboard"),
+    p(
+      "When you open a project, you'll see its dashboard. This gives you a complete overview:"
+    ),
+    img("/docs/images/flowdesk-project-dashboard.png", "FlowDesk project dashboard showing progress bar, task summary, team members, and recent activity", "Inside a project dashboard"),
+    list([
+      ["Progress Bar", "Shows the percentage of tasks completed. Calculated automatically from task status."],
+      ["Task Summary", "Counts of tasks in each state (Todo, In Progress, Review, Completed)."],
+      ["Team Members", "Who's assigned to this project and their roles."],
+      ["Recent Activity", "Latest changes — task updates, comments, file uploads, and status changes."],
+      ["Upcoming Deadlines", "Tasks and milestones that are due soon."],
+    ]),
+
+    h2("project-templates", "Saving as Template"),
+    p(
+      "If you create similar projects frequently, you can save a project as a <strong>template</strong>. This copies the project structure — tasks, team assignments, settings — so you don't have to start from scratch."
+    ),
+    p(
+      "To save a project as a template, open the project settings and select <strong>Save as Template</strong>. When creating a new project, you'll see your templates as an option."
+    ),
+
+    h2("deleting-projects", "Deleting Projects"),
+    p(
+      "Only Admins and Managers can delete projects. Deleted projects are moved to the archive first — they're not permanently removed immediately. This gives you a chance to restore them if needed."
+    ),
+    callout(
+      "If you're unsure whether to delete a project, archive it instead. Archived projects preserve all data and can be restored at any time."
+    ),
+  ],
+}, { prev: "account", next: "project-types" })
+
+define("project-types", {
+  title: "Project Types",
+  description: "Understand the three types of projects and how recurring blueprints work.",
+  breadcrumbs: [
+    { label: "Docs", slug: "introduction" },
+    { label: "Working with Projects" },
+    { label: "Project Types" },
+  ],
+  lastUpdated: "June 14, 2026",
+  readingTime: "5 min read",
+  sections: [
+    h2("ongoing-projects", "Ongoing Projects"),
+    p(
+      "These are your active projects — work currently being handled by your teams. The <strong>Ongoing Work</strong> section is your command centre for active work."
+    ),
+    img("/docs/images/flowdesk-ongoing-projects.png", "FlowDesk ongoing projects list showing project cards with progress bars, team avatars, and deadlines", "Your ongoing projects"),
+    p(
+      "Each project card shows:"
+    ),
+    list([
+      ["Project Name", "The title of the project."],
+      ["Progress Bar", "Visual indicator of how many tasks are completed."],
+      ["Assigned Team", "Avatars of team members working on this project."],
+      ["Deadline", "The target completion date (if set)."],
+      ["Latest Activity", "The most recent change — a task update, comment, or file upload."],
+    ]),
+    p(
+      "Use the filters at the top of the page to narrow down by team, priority, or date range. This is especially useful when you have many projects and need to focus on specific ones."
+    ),
+
+    h2("completed-projects", "Completed Projects"),
+    p(
+      "When all tasks in a project are done, it moves to <strong>Completed Projects</strong>. This serves as a permanent archive of finished work."
+    ),
+    p("All data is preserved:"),
+    list([
+      ["Tasks", "All tasks and their complete history — status changes, comments, and assignments."],
+      ["Files", "All uploaded documents, images, and attachments remain accessible."],
+      ["Discussions", "Chat messages and task comments are kept for future reference."],
+      ["Activity Logs", "A complete audit trail of everything that happened during the project."],
+    ]),
+    p(
+      "You can <strong>restore</strong> a completed project back to Ongoing if it needs to be reopened. Restoring preserves all data and puts the project back into active status."
+    ),
+
+    h2("recurring-blueprints", "Recurring Blueprints"),
+    p(
+      "Blueprints are project templates that automatically create new project instances on a schedule. They're perfect for repetitive workflows like:"
+    ),
+    img("/docs/images/flowdesk-recurring-blueprint.png", "FlowDesk recurring blueprint configuration showing schedule, start date, template tasks, and auto-assignment", "Setting up a recurring blueprint"),
+    list([
+      ["Weekly Sprints", "Automatically create a new sprint project every Monday with pre-defined tasks."],
+      ["Monthly Reports", "Spawn a new reporting project on the 1st of each month."],
+      ["Quarterly Reviews", "Create review projects every 3 months with standard checklists."],
+      ["Daily Standups", "Generate daily standup projects with consistent task structures."],
+    ]),
+
+    h3("Setting up a Blueprint"),
+    p("To create a recurring project, select <strong>Recurring Blueprint</strong> when creating a new project and configure:"),
+    list([
+      ["Schedule", "Choose how often new projects are created: Daily, Weekly, Monthly, or Yearly."],
+      ["Start Date", "When the first instance should be created."],
+      ["End Date", "Optional — when to stop creating new instances. Leave blank for ongoing recurrence."],
+      ["Template Tasks", "Set up the initial task list that will be copied to each new project."],
+      ["Auto-assignment", "Choose which team members are automatically added to each new instance."],
+    ]),
+
+    h3("How Blueprints Work"),
+    p(
+      "FlowDesk automatically creates new project instances based on your schedule. The system is designed to be reliable:"
+    ),
+    list([
+      ["Duplicate Prevention", "The system checks if an instance for the current cycle already exists before creating a new one."],
+      ["Automatic Catch-up", "If the system was offline during a scheduled creation, it catches up automatically when it comes back online — no cycles are ever missed."],
+      ["Notifications", "Team members assigned to the blueprint are notified when a new instance is created."],
+    ]),
+    p(
+      "You can pause, edit, or delete a blueprint at any time. Pausing prevents new instances without deleting the template. Editing a blueprint applies changes to all future instances."
+    ),
+
+    h2("switching-types", "Switching Project Types"),
+    p(
+      "You can change a project's type after creation. For example, if an ongoing project is finished, you can mark it as completed. Go to <strong>Project Settings > Category</strong> to change the type."
+    ),
+  ],
+}, { prev: "creating-projects", next: "working-with-tasks" })
+
+define("working-with-tasks", {
+  title: "Working with Tasks",
+  description: "Create tasks, track progress, and manage work with checkpoints.",
+  breadcrumbs: [
+    { label: "Docs", slug: "introduction" },
+    { label: "Working with Projects" },
+    { label: "Working with Tasks" },
+  ],
+  lastUpdated: "June 13, 2026",
+  readingTime: "6 min read",
+  sections: [
+    h2("task-lifecycle", "Task Lifecycle"),
+    p(
+      "Every task in FlowDesk moves through a simple workflow. Understanding this flow helps you and your team stay aligned:"
+    ),
+    img("/docs/images/flowdesk-task-lifecycle.png", "FlowDesk task lifecycle diagram showing Todo, In Progress, Review, and Completed stages with transitions", "The task lifecycle"),
+    table(
+      ["Stage", "What it means", "What you can do"],
+      [
+        ["Todo", "Task is created but work hasn't started yet", "Assign someone, edit details, set priority, start working"],
+        ["In Progress", "Work is actively being done on the task", "Add checkpoints, update status when ready for review, comment"],
+        ["Review", "Work is complete and awaiting approval", "Approve it to mark complete, or send back for changes"],
+        ["Completed", "Task has been approved and finished", "Reopen if needed later, view history"],
+      ]
+    ),
+    p(
+      "Tasks normally move forward through these stages. However, if rework is needed, a Manager can send a task back to a previous stage. For example, a task in Review can be sent back to In Progress if changes are required."
+    ),
+
+    h2("creating-tasks", "Creating Tasks"),
+    p(
+      "Open any project and click <strong>Add Task</strong>. Here's how to create effective tasks:"
+    ),
+    img("/docs/images/flowdesk-task-form.png", "FlowDesk task creation form with title, description, assignee dropdown, due date picker, and priority selector", "Filling out the task form"),
+    ordered([
+      "Write a <strong>clear, action-oriented title</strong>. Instead of \"Website\", use \"Redesign the landing page hero section\".",
+      "Add a <strong>description</strong> with relevant details — requirements, links to designs, acceptance criteria, or context.",
+      "Choose an <strong>assignee</strong> — pick a team member or leave it unassigned for someone to claim.",
+      "Set a <strong>due date</strong> if there's a deadline. Leave blank for open-ended tasks.",
+      "Set a <strong>priority</strong> — Low, Medium, High, or Urgent. This helps with filtering and visibility.",
+      "Add <strong>checkpoints</strong> if the task has multiple steps (see below).",
+      "Attach <strong>files</strong> — drag and drop or click the attachment icon.",
+    ]),
+
+    h2("checkpoints", "Checkpoints (Subtasks)"),
+    p(
+      "Checkpoints let you break a task into smaller, verifiable steps. They're perfect for complex tasks that need to be done in stages."
+    ),
+    img("/docs/images/flowdesk-checkpoints.png", "FlowDesk task with checkpoints showing subtasks, completion status, and progress bar", "Checkpoints within a task"),
+    p("To add checkpoints:"),
+    ordered([
+      "Open any task.",
+      "Scroll to the <strong>Checkpoints</strong> section.",
+      "Click <strong>+ Add Checkpoint</strong>.",
+      "Enter a description for the subtask.",
+      "Optionally assign it to a specific team member.",
+      "Optionally set a time estimate.",
+    ]),
+    list([
+      ["Track Granular Progress", "See how far along a task is based on completed checkpoints. The parent task shows a progress bar."],
+      ["Assign Owners", "Each checkpoint can be assigned to a different team member, so different people can work on different parts."],
+      ["Set Estimates", "Optionally add time estimates to each checkpoint to track effort and plan work."],
+      ["Reorder Steps", "Drag checkpoints to reorder them. The order reflects the sequence work should be done."],
+    ]),
+    callout(
+      "A task can only be marked Completed when all its checkpoints are done. This ensures nothing is forgotten before a task is considered finished."
+    ),
+
+    h2("task-priority", "Task Priority"),
+    p(
+      "Every task can be assigned a priority level. Priority affects how tasks appear in filters and dashboards:"
+    ),
+    table(
+      ["Priority", "When to use", "Visibility"],
+      [
+        ["Urgent", "Critical tasks that need immediate attention", "Highlighted in red across the dashboard"],
+        ["High", "Important tasks that should be done soon", "Highlighted in orange"],
+        ["Medium", "Standard tasks with normal importance", "Default priority, neutral styling"],
+        ["Low", "Tasks that can wait or are nice-to-have", "Subtle styling, lower in lists"],
+      ]
+    ),
+
+    h2("assigning-work", "Assigning Work"),
+    p(
+      "Tasks can be assigned in different ways depending on your needs:"
+    ),
+    list([
+      ["Individual Assignment", "Assign a task to a specific person. They're responsible for completing it and updating its status. They receive all notifications for this task."],
+      ["Team Assignment", "Assign a task to an entire team. Any member of that team can pick up the work. Useful for shared responsibilities where the first available person should handle it."],
+      ["Unassigned", "Leave a task without an assignee. It appears in the <strong>Unassigned</strong> view where team members can claim it. Managers can also bulk-assign unassigned tasks."],
+    ]),
+    p(
+      "Task ownership can be transferred at any time. Edit the task and select a new assignee. All checkpoint assignments, comments, and activity logs remain intact."
+    ),
+
+    h2("viewing-tasks", "Viewing Tasks"),
+    p(
+      "FlowDesk provides multiple ways to view your tasks:"
+    ),
+    img("/docs/images/flowdesk-task-views.png", "FlowDesk task views showing My Tasks, Project Tasks, Calendar View, and Unassigned options", "Different ways to view your tasks"),
+    list([
+      ["My Tasks", "A personal view showing all tasks assigned to you across all projects. Great for daily planning."],
+      ["Project Tasks", "Tasks within a specific project. Filter by status, assignee, or priority."],
+      ["Calendar View", "See your tasks laid out on a calendar based on due dates. Helps with time management."],
+      ["Unassigned", "Tasks without an assignee, waiting for someone to claim them."],
+    ]),
+
+    h2("bulk-actions", "Bulk Actions"),
+    p(
+      "Save time by performing actions on multiple tasks at once. Select tasks using the checkboxes, then choose from:"
+    ),
+    list([
+      ["Change Priority", "Update the priority level of several tasks at once."],
+      ["Extend Deadlines", "Push back deadlines by a specified number of days."],
+      ["Reassign", "Move multiple tasks to a different team member."],
+      ["Change Status", "Move several tasks to a different state simultaneously."],
+      ["Archive", "Move completed or cancelled tasks to the archive."],
+    ]),
+  ],
+}, { prev: "project-types", next: "deadlines" })
 
 define("deadlines", {
-  title: "Deadlines",
-  description: "Manage task and project deadlines, including special handling for open-ended work.",
+  title: "Deadlines & Notifications",
+  description: "Set deadlines and stay informed with automatic notifications.",
   breadcrumbs: [
     { label: "Docs", slug: "introduction" },
-    { label: "Task Ecosystem" },
+    { label: "Working with Projects" },
     { label: "Deadlines" },
   ],
   lastUpdated: "June 10, 2026",
-  readingTime: "3 min read",
+  readingTime: "5 min read",
   sections: [
     h2("setting-deadlines", "Setting Deadlines"),
     p(
-      "Deadlines can be set at both the project and task level. Project deadlines serve as the target completion date, while task deadlines act as intermediate milestones. Both are displayed in the project dashboard with visual indicators for approaching and overdue dates."
+      "Deadlines can be set at both the <strong>project</strong> and <strong>task</strong> level. They help your team stay on track and ensure work is completed on time."
+    ),
+    img("/docs/images/flowdesk-deadlines.png", "FlowDesk deadline configuration showing project and task deadline date pickers", "Setting deadlines for projects and tasks"),
+    list([
+      ["Project Deadlines", "The overall target completion date for the entire project. Displayed prominently on the project dashboard and in project lists."],
+      ["Task Deadlines", "Intermediate milestones within a project. Each task can have its own due date, which appears on the calendar and in task lists."],
+    ]),
+    p(
+      "Tasks and projects without deadlines are handled gracefully. They appear in dedicated <strong>Unscheduled</strong> views and never trigger false alerts or overdue notifications."
     ),
 
-    h2("no-due-date-handling", "No-Due-Date Handling"),
+    h2("deadline-notifications", "How Notifications Work"),
     p(
-      "FlowDesk includes specialised logic for projects and tasks without finite deadlines. This prevents the common <strong>Unix Epoch (1970)</strong> bug where missing dates default to January 1, 1970. Tasks without due dates are handled gracefully throughout the system, appearing in dedicated views and never triggering false deadline alerts."
+      "FlowDesk keeps you informed as deadlines approach. You'll receive notifications at key milestones:"
     ),
-    code(`// Server: Safe date handling
-function getTaskDeadline(task) {
-  if (!task.dueDate || task.dueDate.getTime() === 0) {
-    return null; // Explicitly null, not Unix epoch
-  }
-  return task.dueDate;
-}`),
-
-    h2("deadline-notifications", "Deadline Notifications"),
+    table(
+      ["Timing", "Type", "What you receive"],
+      [
+        ["7 days before", "Heads-up", "A warning that the deadline is coming up. Time to start wrapping up or adjust plans."],
+        ["48 hours before", "Reminder", "A reminder to start finalising work. Good time to check in with the team."],
+        ["On the due date", "Alert", "An alert that the deadline is today. Priority notifications for urgent tasks."],
+        ["After due date", "Overdue", "Daily reminders until the task is completed or the deadline is extended."],
+      ]
+    ),
     p(
-      "FlowDesk sends automatic notifications as deadlines approach: a warning at 7 days, a reminder at 48 hours, and an alert on the due date. Managers receive a daily digest of all upcoming and overdue deadlines across their projects."
+      "Managers also receive a <strong>daily digest</strong> — a summary email of all upcoming and overdue deadlines across their projects. This gives managers a quick overview without having to check each project individually."
+    ),
+
+    h2("viewing-deadlines", "Viewing Deadlines"),
+    p(
+      "There are several ways to see your deadlines:"
+    ),
+    img("/docs/images/flowdesk-calendar-view.png", "FlowDesk calendar view showing tasks and deadlines laid out across the month", "Calendar view of your deadlines"),
+    list([
+      ["Dashboard", "Your home page shows upcoming deadlines at a glance, highlighted by urgency."],
+      ["Calendar View", "See all tasks and projects laid out on a calendar. Filter by project, team, or priority. Drag tasks to reschedule."],
+      ["Project Dashboard", "Each project shows its deadline and the deadlines of its tasks."],
+      ["My Tasks", "Your personal task list shows due dates for all your assigned tasks."],
+    ]),
+
+    h2("changing-deadlines", "Changing Deadlines"),
+    p(
+      "Deadlines can be updated at any time by Managers and Admins. Click on a task or project deadline to edit it. All changes are logged in the activity feed, so the team can see when and why a deadline was adjusted."
+    ),
+    p(
+      "If a deadline needs to be pushed back significantly, it's a good practice to leave a comment explaining why. This helps the team understand context and make better estimates in the future."
     ),
   ],
-}, { prev: "team-ownership", next: "ai-buddy" })
+}, { prev: "working-with-tasks", next: "your-team" })
 
 // ── COLLABORATION ────────────────────────────────────────────
 
+define("your-team", {
+  title: "Your Team",
+  description: "Collaborate with your team, track activity, and manage ownership.",
+  breadcrumbs: [
+    { label: "Docs", slug: "introduction" },
+    { label: "Collaboration" },
+    { label: "Your Team" },
+  ],
+  lastUpdated: "June 12, 2026",
+  readingTime: "5 min read",
+  sections: [
+    h2("team-collaboration", "Working Together"),
+    p(
+      "FlowDesk is built for teamwork. Every project, task, and conversation is shared with the relevant team members. You can see who's online, who's working on what, and what's changed — all in real time."
+    ),
+    img("/docs/images/flowdesk-team-collaboration.png", "FlowDesk team collaboration view showing online members, shared projects, and real-time activity", "Working together in FlowDesk"),
+    p(
+      "The key to effective collaboration in FlowDesk is visibility. When everyone can see the full picture — what's being worked on, what's done, and what's coming next — the team stays aligned without constant meetings or status updates."
+    ),
+
+    h2("online-status", "Online Status"),
+    p(
+      "FlowDesk shows when your teammates are online, idle, or offline. This helps you know who's available for a quick question or review."
+    ),
+    list([
+      ["Online (Green)", "The user is actively using FlowDesk right now. Great time to reach out."],
+      ["Idle (Yellow)", "The user hasn't interacted for a few minutes. They might be away from their desk."],
+      ["Offline (Gray)", "The user is not currently connected. Messages will be waiting when they return."],
+    ]),
+    p(
+      "Status updates happen automatically based on user activity. You don't need to manually set your status."
+    ),
+
+    h2("activity-logs", "Activity Logs"),
+    p(
+      "Every change in FlowDesk is recorded in the activity log. This provides a complete audit trail of everything that happened in a project — who did what, and when."
+    ),
+    img("/docs/images/flowdesk-activity-logs.png", "FlowDesk activity log showing task events, project events, file uploads, and chat messages with timestamps", "Activity logs in a project"),
+    p("What gets logged:"),
+    list([
+      ["Task Events", "Creation, status changes, checkpoint completion, assignment changes, priority updates, and deletions."],
+      ["Project Events", "Creation, category changes, deadline updates, team membership changes, and settings modifications."],
+      ["File Events", "Uploads, downloads, and deletions of attachments and documents."],
+      ["Chat Events", "Messages sent, files shared, and mentions made in project chat."],
+      ["System Events", "User logins, role changes, and blueprint spawns."],
+    ]),
+    p(
+      "Activity logs are accessible from the <strong>Activity</strong> tab in any project. Each entry shows who performed the action, what changed, and exactly when it happened."
+    ),
+    p(
+      "Managers and Admins can filter logs by event type, user, and date range. They can also export logs as CSV for external reporting and compliance purposes."
+    ),
+
+    h2("file-sharing", "File Sharing"),
+    p(
+      "FlowDesk supports file sharing within projects and tasks. You can attach files to tasks, share them in chat, and store project-related documents."
+    ),
+    list([
+      ["Task Attachments", "Attach files directly to tasks. Useful for designs, documents, or reference materials."],
+      ["Chat Files", "Share files in project chat. Drag and drop or click the attachment icon."],
+      ["Project Files", "Store project-level documents that the whole team can access."],
+    ]),
+    p(
+      "All files are stored securely and can be downloaded at any time. There's no limit on file sizes, and all common file types are supported."
+    ),
+  ],
+}, { prev: "deadlines", next: "chat" })
+
+define("chat", {
+  title: "Chat & Communication",
+  description: "Send messages, share files, and stay connected with your team.",
+  breadcrumbs: [
+    { label: "Docs", slug: "introduction" },
+    { label: "Collaboration" },
+    { label: "Chat" },
+  ],
+  lastUpdated: "June 12, 2026",
+  readingTime: "4 min read",
+  sections: [
+    h2("project-chat", "Project Chat"),
+    p(
+      "Every project in FlowDesk has a built-in <strong>Chat</strong> tab. This is your team's dedicated space for discussing project-related topics, sharing updates, and coordinating work — all without leaving FlowDesk."
+    ),
+    img("/docs/images/flowdesk-project-chat.png", "FlowDesk project chat showing messages, file attachments, and team member avatars", "The project chat interface"),
+    p(
+      "Project chat keeps conversations in context. Instead of digging through email threads or Slack channels, everything related to a project is in one place."
+    ),
+
+    h2("real-time-messaging", "Real-time Messaging"),
+    p(
+      "Messages appear instantly for everyone in the project. You'll see:"
+    ),
+    list([
+      ["Typing Indicators", "When someone is composing a message, you'll see a typing indicator so you know they're about to respond."],
+      ["Read Receipts", "See who has read your messages. This helps confirm that important updates have been seen."],
+      ["Message History", "All messages are persisted and searchable. You can scroll back through the entire conversation history."],
+    ]),
+
+    h2("sending-messages", "Sending Messages"),
+    p(
+      "Type your message in the chat input at the bottom of the chat panel and press Enter to send. Here's what you can do:"
+    ),
+    img("/docs/images/flowdesk-chat-input.png", "FlowDesk chat input with file attachment, emoji picker, and mention autocomplete", "Composing a message"),
+    list([
+      ["Share Files", "Drag and drop files directly into the chat, or click the attachment icon to upload documents, images, or any file type."],
+      ["Mention Teammates", "Use @username to mention a specific person. They'll receive a notification even if they're not actively watching the chat."],
+      ["Use Emoji", "Add emoji to make conversations more expressive and fun. Click the emoji icon or type emoji directly."],
+      ["Format Text", "Use basic formatting like bold, italic, and code blocks to make your messages clearer."],
+    ]),
+
+    h2("mentions-and-notifications", "Mentions & Notifications"),
+    p(
+      "When you mention someone with @username, they receive an in-app notification and, if configured, an email alert. This ensures important messages don't get lost."
+    ),
+    p(
+      "Mentions are clickable — clicking a mention takes you directly to that user's profile. This makes it easy to see their role, other projects they're working on, and how to contact them."
+    ),
+
+    h2("searching-messages", "Finding Old Messages"),
+    p(
+      "Use the search bar at the top of the chat panel to find messages. You can search by:"
+    ),
+    list([
+      ["Keyword", "Find messages containing specific words or phrases."],
+      ["Sender", "Find all messages from a specific team member."],
+      ["Date Range", "Narrow down to messages from a specific time period."],
+    ]),
+    p(
+      "Search results include surrounding messages for context, so you can understand the conversation flow around the match."
+    ),
+  ],
+}, { prev: "your-team", next: "ai-buddy" })
+
 define("ai-buddy", {
   title: "AI Buddy",
-  description: "Your intelligent assistant for project analysis, task creation, and technical guidance.",
+  description: "Your intelligent assistant for project analysis, task creation, and guidance.",
   breadcrumbs: [
     { label: "Docs", slug: "introduction" },
     { label: "Collaboration" },
     { label: "AI Buddy" },
   ],
   lastUpdated: "June 15, 2026",
-  readingTime: "3 min read",
+  readingTime: "4 min read",
   sections: [
     h2("what-is-ai-buddy", "What is AI Buddy?"),
     p(
-      "AI Buddy is a built-in intelligent assistant that helps team members work smarter and faster. Integrated directly into the project workspace, it leverages project history and contextual data to provide relevant assistance."
+      "AI Buddy is a built-in intelligent assistant that helps you work smarter and faster. It understands your project context, team history, and work patterns to provide relevant, actionable assistance."
+    ),
+    img("/docs/images/flowdesk-ai-buddy.png", "FlowDesk AI Buddy panel in the bottom-right corner showing a conversation with analysis results", "AI Buddy in action"),
+    p(
+      "Think of AI Buddy as a knowledgeable teammate who's always available. It can analyse your projects, generate content, answer questions, and help you make better decisions — all based on your actual project data."
     ),
 
-    h2("capabilities", "Capabilities"),
+    h2("what-ai-buddy-can-do", "What AI Buddy Can Do"),
+    p("AI Buddy has several key capabilities:"),
     list([
-      ["Project analysis and forecasting", "AI Buddy analyses current velocity and historical data to predict realistic completion dates and identify bottlenecks."],
-      ["Task description generation", "Turn a one-line summary into a detailed, structured task description with acceptance criteria and subtask suggestions."],
-      ["Technical guidance", "Provides context-aware answers based on previous project history, resolved issues, and documentation."],
-      ["Deadline optimisation", "Suggests optimal deadlines based on team workload and past performance."],
+      ["Analyse Projects", "Get insights on project velocity, estimated completion dates, and potential bottlenecks. AI Buddy looks at how fast your team is completing tasks and predicts when the project will be done."],
+      ["Generate Task Descriptions", "Turn a quick one-line summary into a detailed, structured task description with acceptance criteria, subtask suggestions, and relevant context."],
+      ["Answer Questions", "Ask about project history, past decisions, or how things were done before. AI Buddy searches through your project data to find relevant answers."],
+      ["Suggest Deadlines", "Get recommended deadlines based on team workload, past performance, and task complexity. Helps you set realistic expectations."],
+      ["Summarise Activity", "Get a quick summary of what's happened in a project — who did what, what's changed, and what needs attention."],
+      ["Provide Guidance", "Ask how to use FlowDesk features, and AI Buddy will guide you through the process step by step."],
     ]),
 
-    h2("how-to-use", "How to Use"),
-    p(
-      "You can invoke AI Buddy from any task or project view by pressing <code>Cmd + B</code> or clicking the AI icon in the toolbar. Type your question or request in natural language — AI Buddy understands context and responds accordingly."
-    ),
+    h2("how-to-use", "How to Use AI Buddy"),
+    p("Getting started with AI Buddy is easy:"),
+    img("/docs/images/flowdesk-ai-buddy-shortcut.png", "FlowDesk showing the AI Buddy icon and Ctrl+B keyboard shortcut", "Open AI Buddy with a click or keyboard shortcut"),
+    ordered([
+      "Click the <strong>AI Buddy icon</strong> in the bottom-right corner of your screen.",
+      "Or press <strong>Cmd + B</strong> (Mac) / <strong>Ctrl + B</strong> (Windows) as a keyboard shortcut.",
+      "Type your question or request in <strong>natural language</strong>. You don't need to use special commands.",
+      "AI Buddy will respond with a helpful answer, analysis, or generated content.",
+    ]),
+    p("Here are some example prompts:"),
+    list([
+      ["\"How is the Q3 Marketing project progressing?\"", "AI Buddy will analyse task completion rates and give you a progress summary."],
+      ["\"Write a task description for redesigning the user dashboard\"", "AI Buddy will generate a detailed task with acceptance criteria."],
+      ["\"What deadlines are coming up this week?\"", "AI Buddy will list all tasks and projects due in the next 7 days."],
+      ["\"Who hasn't updated their tasks in the last 3 days?\"", "AI Buddy will identify overdue tasks and their assignees."],
+    ]),
 
-    h2("privacy", "Privacy"),
+    h2("privacy", "Your Data is Safe"),
     callout(
-      "AI Buddy processes data within your organisation's workspace. No project data is used for model training or shared externally. You can disable AI Buddy in your account settings at any time."
+      "AI Buddy processes data within your organisation's workspace only. Your project data is never shared externally, used for model training, or accessible to other organisations. You can disable AI Buddy in your account settings at any time."
     ),
   ],
-}, { prev: "deadlines", next: "collaborative-canvas" })
+}, { prev: "chat", next: "canvas" })
 
-define("collaborative-canvas", {
+define("canvas", {
   title: "Collaborative Canvas",
   description: "A digital whiteboard for brainstorming, visual workflows, and real-time collaboration.",
   breadcrumbs: [
     { label: "Docs", slug: "introduction" },
     { label: "Collaboration" },
-    { label: "Collaborative Canvas" },
+    { label: "Canvas" },
   ],
   lastUpdated: "June 13, 2026",
-  readingTime: "3 min read",
+  readingTime: "4 min read",
   sections: [
     h2("what-is-the-canvas", "What is the Canvas?"),
     p(
-      "The Collaborative Canvas is a digital whiteboard and note-taking space. Teams can create post-it style notes, connect ideas with arrows, and build visual workflows on an infinite canvas."
+      "The Collaborative Canvas is a digital whiteboard where you can brainstorm ideas, create visual workflows, and collaborate with your team in real time. Think of it as a shared space for notes, diagrams, and planning."
     ),
-
-    h2("post-it-notes", "Post-it Notes"),
+    img("/docs/images/flowdesk-canvas-overview.png", "FlowDesk collaborative canvas showing colour-coded notes, arrows connecting ideas, and team cursors", "The collaborative canvas"),
     p(
-      "Click anywhere on the canvas to create a new note. Each note supports rich text, colour coding, and attachments. Drag notes to rearrange them — the canvas auto-saves all changes."
+      "It's perfect for sprint planning, brainstorming sessions, process mapping, or any time your team needs to visualise ideas together."
     ),
 
-    h2("visual-workflows", "Visual Workflows"),
+    h2("creating-notes", "Creating Notes"),
     p(
-      "Connect notes with arrows to create flowcharts, mind maps, or process diagrams. Select a note and drag from the connection handle to another note to create a link. Links are preserved when notes are moved."
+      "Click anywhere on the canvas to create a new note. Each note is like a digital sticky note with powerful features:"
     ),
-
-    h2("personal-vs-collaborative", "Personal vs Collaborative"),
-    p(
-      "Switch between <strong>Personal</strong> mode for private drafting and brainstorming, and <strong>Collaborative</strong> mode for real-time team sessions. In Collaborative mode, changes are synced instantly via Socket.io — you can see teammates' cursors and edits as they happen."
-    ),
-  ],
-}, { prev: "ai-buddy", next: "real-time-chat" })
-
-define("real-time-chat", {
-  title: "Real-time Chat",
-  description: "Instant messaging within projects, powered by Socket.io.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Collaboration" },
-    { label: "Real-time Chat" },
-  ],
-  lastUpdated: "June 12, 2026",
-  readingTime: "3 min read",
-  sections: [
-    h2("project-chat", "Project Chat"),
-    p(
-      "Every project in FlowDesk has a dedicated chat room. Team members can send messages, share files, and discuss project-related topics without leaving the platform. Messages are persisted and searchable."
-    ),
-
-    h2("real-time-messaging", "Real-time Messaging"),
-    p(
-      "Powered by Socket.io, messages appear instantly on all connected clients. Read receipts show who has seen each message. Typing indicators let you know when someone is composing a reply."
-    ),
-    code(`// Client: Joining a project chat room
-const socket = io(FLOWDESK_API_URL, {
-  auth: { token: userApiToken }
-});
-
-socket.emit("chat:join", { projectId: "proj_abc123" });
-
-socket.on("chat:message", (message) => {
-  appendMessageToChat(message);
-});
-
-function sendMessage(text) {
-  socket.emit("chat:send", {
-    projectId: "proj_abc123",
-    text,
-  });
-}`),
-
-    h2("mentions-and-notifications", "Mentions and Notifications"),
-    p(
-      "Use <code>@username</code> to mention a team member in chat. They will receive an in-app notification and, if configured, an email alert. Mentions are clickable and link directly to the user's profile."
-    ),
-
-    h2("search", "Search"),
-    p(
-      "The chat search bar allows you to find messages by keyword, sender, or date. Search results include context from surrounding messages for better readability."
-    ),
-  ],
-}, { prev: "collaborative-canvas", next: "activity-logs" })
-
-define("activity-logs", {
-  title: "Activity Logs",
-  description: "A comprehensive audit trail of every change made across the platform.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Collaboration" },
-    { label: "Activity Logs" },
-  ],
-  lastUpdated: "June 11, 2026",
-  readingTime: "2 min read",
-  sections: [
-    h2("what-is-logged", "What is Logged?"),
-    p(
-      "Every change to a project, task, or setting is recorded in the activity log. This includes task state transitions, file uploads, comment additions, member changes, and configuration updates."
-    ),
+    img("/docs/images/flowdesk-canvas-notes.png", "FlowDesk canvas notes showing rich text formatting, colour options, and drag handles", "Creating and editing notes on the canvas"),
     list([
-      ["Task events", "Creation, state changes, checkpoint completion, assignment changes."],
-      ["Project events", "Creation, category changes, deadline updates, team membership changes."],
-      ["File events", "Uploads, deletions, downloads of attachments and documents."],
-      ["System events", "User logins, role changes, integration connections, blueprint spawns."],
+      ["Rich Text", "Format your text with bold, italic, lists, and more to make notes clear and structured."],
+      ["Colour Coding", "Choose from different colours to categorise notes — e.g., blue for ideas, green for actions, red for blockers."],
+      ["Attachments", "Add files, links, or images directly to notes for reference."],
+      ["Drag & Drop", "Move notes around freely. The canvas auto-saves all changes instantly."],
+      ["Resize", "Drag the edges of a note to make it larger or smaller depending on content."],
     ]),
 
-    h2("viewing-logs", "Viewing Logs"),
+    h2("connecting-ideas", "Connecting Ideas"),
     p(
-      "Activity logs are accessible from the project dashboard under the <strong>Activity</strong> tab. Each entry shows who performed the action, what changed, and when. Logs can be filtered by event type, user, and date range."
+      "Draw arrows between notes to show relationships and create visual workflows:"
     ),
-
-    h2("exporting-logs", "Exporting Logs"),
-    p(
-      "Managers and Admins can export activity logs as CSV or JSON for external auditing and compliance purposes. The export includes all filters currently applied."
-    ),
-  ],
-}, { prev: "real-time-chat", next: "rbac-overview" })
-
-// ── SECURITY & ROLES ─────────────────────────────────────────
-
-define("rbac-overview", {
-  title: "RBAC Overview",
-  description: "Understand FlowDesk's Role-Based Access Control system.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Security & Roles" },
-    { label: "RBAC Overview" },
-  ],
-  lastUpdated: "June 14, 2026",
-  readingTime: "3 min read",
-  sections: [
-    h2("what-is-rbac", "What is RBAC?"),
-    p(
-      "FlowDesk implements a strict <strong>Role-Based Access Control (RBAC)</strong> system to ensure every user sees only what they need to see and can act only within their authorised scope."
-    ),
-
-    h2("role-hierarchy", "Role Hierarchy"),
-    p("There are three primary roles, each with increasing levels of access:"),
-    table(
-      ["Role", "Scope", "Key Permissions"],
-      [
-        ["Admin", "System-wide", "User management, financial reports, role assignments, system settings"],
-        ["Manager", "Team & Projects", "Create assignments, approve work, view analytics, manage team members"],
-        ["Member", "Assigned projects", "Task execution, status updates, collaboration, file uploads"],
-      ]
-    ),
-
-    h2("how-permissions-work", "How Permissions Work"),
-    p(
-      "Permissions are enforced at every API endpoint and UI component. The frontend conditionally renders actions based on the user's role, while the backend validates every request against the RBAC policy before executing."
-    ),
-    code(`// Server: RBAC middleware example
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
-        error: "Insufficient permissions",
-        required: roles,
-        current: req.user.role,
-      });
-    }
-    next();
-  };
-}
-
-// Usage
-router.delete("/users/:id", requireRole("admin"), deleteUser);`),
-
-    h2("role-inheritance", "Role Inheritance"),
-    p(
-      "Roles are hierarchical: Admins inherit all Manager permissions, and Managers inherit all Member permissions. This ensures upward compatibility while maintaining strict downward access control."
-    ),
-  ],
-}, { prev: "activity-logs", next: "admin-role" })
-
-define("admin-role", {
-  title: "Admin Role",
-  description: "Full system control, user management, and configuration.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Security & Roles" },
-    { label: "Admin Role" },
-  ],
-  lastUpdated: "June 13, 2026",
-  readingTime: "2 min read",
-  sections: [
-    h2("admin-capabilities", "Admin Capabilities"),
-    p("Administrators have full, unrestricted access to the entire FlowDesk platform:"),
-    list([
-      ["User management", "Create, suspend, or delete user accounts. Assign roles and manage permissions."],
-      ["Financial reports", "Access billing, usage statistics, and financial dashboards."],
-      ["System settings", "Configure global platform settings, integrations, and security policies."],
-      ["Audit logs", "View and export all activity logs across every project and team."],
-    ]),
-
-    h2("best-practices", "Best Practices"),
-    p(
-      "We recommend limiting the number of Admin accounts to essential personnel only. Most day-to-day operations can be handled by Managers. Admins should use their elevated privileges only when necessary."
-    ),
-
-    h2("becoming-an-admin", "Becoming an Admin"),
-    p(
-      "Only existing Admins can grant the Admin role. If you need Admin access, contact your system administrator. Initial Admin accounts are configured during platform setup."
-    ),
-  ],
-}, { prev: "rbac-overview", next: "manager-role" })
-
-define("manager-role", {
-  title: "Manager Role",
-  description: "Oversee teams, create assignments, and approve completed work.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Security & Roles" },
-    { label: "Manager Role" },
-  ],
-  lastUpdated: "June 12, 2026",
-  readingTime: "2 min read",
-  sections: [
-    h2("manager-capabilities", "Manager Capabilities"),
-    p("Managers are responsible for overseeing teams and driving projects to completion:"),
-    list([
-      ["Create assignments", "Start new projects, set deadlines, and assign teams."],
-      ["Approve work", "Review and approve completed tasks. Move tasks back for rework if needed."],
-      ["Team management", "Add or remove team members from projects. View team workload and availability."],
-      ["Analytics", "Access project velocity reports, team performance metrics, and deadline forecasts."],
-    ]),
-
-    h2("scope-of-access", "Scope of Access"),
-    p(
-      "Managers have full access to projects they own or are assigned to. They cannot access projects belonging to other teams unless explicitly granted cross-team permissions by an Admin."
-    ),
-
-    h2("reports-and-analytics", "Reports and Analytics"),
-    p(
-      "Managers can generate custom reports for their projects, including burndown charts, velocity trends, and individual contributor summaries. Reports can be exported as PDF or CSV."
-    ),
-  ],
-}, { prev: "admin-role", next: "member-role" })
-
-define("member-role", {
-  title: "Member Role",
-  description: "Focus on task execution, updates, and collaboration within assigned projects.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Security & Roles" },
-    { label: "Member Role" },
-  ],
-  lastUpdated: "June 12, 2026",
-  readingTime: "2 min read",
-  sections: [
-    h2("member-capabilities", "Member Capabilities"),
-    p("Members are the primary contributors who execute work within projects:"),
-    list([
-      ["Task execution", "View assigned tasks, update their state, add checkpoints, and mark them complete."],
-      ["Collaboration", "Participate in project chats, comment on tasks, and use the Collaborative Canvas."],
-      ["File management", "Upload, download, and manage files within assigned projects."],
-      ["Notifications", "Receive alerts for assignments, mentions, and approaching deadlines."],
-    ]),
-
-    h2("member-limitations", "Member Limitations"),
-    p(
-      "Members cannot create projects, manage team membership, or access projects they are not assigned to. They cannot delete tasks or projects, and cannot modify project-level settings."
-    ),
-
-    h2("becoming-a-member", "Becoming a Member"),
-    p(
-      "New users are typically assigned the Member role by default. A Manager or Admin can promote a Member to Manager if needed. Members can request role changes through their team lead."
-    ),
-  ],
-}, { prev: "manager-role", next: "recurring-engine" })
-
-// ── ADVANCED ─────────────────────────────────────────────────
-
-define("recurring-engine", {
-  title: "Recurring Engine",
-  description: "Deep dive into the intelligent blueprint spawning system.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Advanced" },
-    { label: "Recurring Engine" },
-  ],
-  lastUpdated: "June 14, 2026",
-  readingTime: "3 min read",
-  sections: [
-    h2("how-it-works", "How it Works"),
-    p(
-      "The Recurring Engine is a background service that continuously checks for blueprints due to spawn. Each blueprint has a schedule configuration — Daily, Weekly, Monthly, or Yearly — along with a start date and optional end date."
-    ),
-
-    h2("spawn-process", "Spawn Process"),
-    p("When a blueprint is triggered, the engine performs the following steps:"),
+    img("/docs/images/flowdesk-canvas-connections.png", "FlowDesk canvas showing notes connected with arrows forming a flowchart", "Connecting notes with arrows"),
     ordered([
-      "Check if an instance for the current cycle already exists (duplicate prevention).",
-      "Clone the blueprint template — copy all tasks, checkpoints, and configurations.",
-      "Assign team members according to the blueprint's auto-assignment rules.",
-      "Set the project start date to the current cycle date.",
-      "Log the spawn event and notify assigned team members.",
+      "Select a note by clicking on it.",
+      "Drag from the <strong>connection handle</strong> (the small circle on the edge of the note).",
+      "Drop it on another note to create a link.",
+      "The arrow stays connected when you move either note.",
     ]),
-
-    h2("catch-up-mechanism", "Catch-Up Mechanism"),
     p(
-      "If the system is offline during a scheduled spawn, the engine calculates missed cycles on restart and creates all outstanding instances. This ensures no cycle is ever skipped."
-    ),
-    code(`// Simplified catch-up calculation
-function calculateMissedSince(lastSpawned, schedule) {
-  const now = new Date();
-  const missed = [];
-  let cursor = new Date(lastSpawned);
-
-  while (addInterval(cursor, schedule) < now) {
-    cursor = addInterval(cursor, schedule);
-    missed.push(new Date(cursor));
-  }
-
-  return missed;
-}`),
-
-    h2("monitoring", "Monitoring"),
-    p(
-      "Admins can view the spawn history of any blueprint, including timestamps, success/failure status, and the project IDs of spawned instances. Failed spawns are automatically retried up to three times."
-    ),
-  ],
-}, { prev: "member-role", next: "no-due-date-logic" })
-
-define("no-due-date-logic", {
-  title: "No-Due-Date Logic",
-  description: "How FlowDesk handles projects and tasks without finite deadlines.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Advanced" },
-    { label: "No-Due-Date Logic" },
-  ],
-  lastUpdated: "June 10, 2026",
-  readingTime: "2 min read",
-  sections: [
-    h2("the-problem", "The Problem"),
-    p(
-      "A common bug in project management systems is the <strong>Unix Epoch (1970)</strong> issue: when a date field is left empty, some systems default to January 1, 1970. This causes tasks to appear overdue, triggers false notifications, and clutters date-based views."
+      "This is great for creating flowcharts, mind maps, process diagrams, or showing how different ideas relate to each other."
     ),
 
-    h2("the-solution", "The Solution"),
-    p(
-      "FlowDesk handles missing dates explicitly. When a task or project is created without a due date, the system stores <code>null</code> instead of a default timestamp. All date-related logic checks for null values before performing calculations."
-    ),
-    code(`// Server: Safe date comparison
-function isOverdue(dueDate) {
-  if (!dueDate) return false; // No due date = not overdue
-  if (dueDate.getTime() === 0) return false; // Guard against epoch
-  return dueDate < new Date();
-}`),
-
-    h2("user-experience", "User Experience"),
-    p(
-      "Tasks without due dates appear in a dedicated <strong>Unscheduled</strong> view. They never trigger deadline notifications or appear in overdue reports. Managers can bulk-assign due dates to unscheduled tasks when priorities are established."
-    ),
-  ],
-}, { prev: "recurring-engine", next: "glassmorphism-ui" })
-
-define("glassmorphism-ui", {
-  title: "Glassmorphism UI",
-  description: "The design language and visual aesthetic of the FlowDesk platform.",
-  breadcrumbs: [
-    { label: "Docs", slug: "introduction" },
-    { label: "Advanced" },
-    { label: "Glassmorphism UI" },
-  ],
-  lastUpdated: "June 11, 2026",
-  readingTime: "2 min read",
-  sections: [
-    h2("design-philosophy", "Design Philosophy"),
-    p(
-      "FlowDesk features a premium <strong>glassmorphism</strong> design language. Semi-transparent surfaces with backdrop blur effects create a modern, layered aesthetic that reduces visual noise and eye strain during extended use."
-    ),
-
-    h2("key-characteristics", "Key Characteristics"),
+    h2("personal-vs-team", "Personal vs Team Mode"),
+    p("The canvas supports two modes:"),
     list([
-      ["Frosted glass effect", "UI elements use semi-transparent backgrounds (bg-opacity 10-30%) with backdrop-filter blur for a frosted glass appearance."],
-      ["Layered depth", "Content is organised into visual layers that create a sense of depth and hierarchy without relying on heavy shadows."],
-      ["Reduced eye strain", "The translucent design reduces harsh contrasts, making it easier to work for long sessions."],
-      ["Customisable", "The design system is fully customisable through CSS custom properties (variables), allowing theme customisation."],
+      ["Personal Mode", "Your private canvas for drafting and brainstorming. Only you can see your notes. Perfect for organising your thoughts before sharing with the team."],
+      ["Team Mode", "Collaborate in real time with your teammates. See everyone's cursors and edits as they happen. Changes sync instantly across all connected devices."],
     ]),
-
-    h2("customisation", "Customisation"),
     p(
-      "Admins can customise the UI theme through the settings panel. Available options include primary colour, surface opacity, blur intensity, and dark mode. Changes apply globally across the platform."
+      "You can switch between modes at any time. When you're ready to share your personal canvas with the team, switch to Team mode and your notes become visible to everyone."
     ),
-  ],
-}, { prev: "no-due-date-logic", next: "real-time-status" })
 
-define("real-time-status", {
-  title: "Real-time Status",
-  description: "How FlowDesk detects and broadcasts online/offline presence in real time.",
+    h2("canvas-tips", "Tips for Effective Canvas Use"),
+    list([
+      ["Use Colour Wisely", "Assign colours to categories (e.g., red = blockers, green = completed, blue = ideas) for visual clarity."],
+      ["Keep Notes Concise", "Write brief, actionable points. You can always add detail in the note body."],
+      ["Group Related Ideas", "Place related notes close together and connect them with arrows."],
+      ["Use it for Standups", "Start each standup with a canvas overview of what's in progress, what's done, and what's blocked."],
+    ]),
+  ],
+}, { prev: "ai-buddy", next: "roles" })
+
+// ── ROLES & PERMISSIONS ──────────────────────────────────────
+
+define("roles", {
+  title: "Understanding Roles",
+  description: "Learn about the three user roles and what each one can access.",
   breadcrumbs: [
     { label: "Docs", slug: "introduction" },
-    { label: "Advanced" },
-    { label: "Real-time Status" },
+    { label: "Roles & Permissions" },
+    { label: "Understanding Roles" },
   ],
   lastUpdated: "June 14, 2026",
   readingTime: "4 min read",
   sections: [
-    h2("presence-system", "Presence System"),
+    h2("why-roles-matter", "Why Roles Matter"),
     p(
-      "FlowDesk's real-time status system uses <strong>Socket.io</strong> to broadcast online, offline, and idle states. Every connected client periodically sends a heartbeat to the server, which tracks the connection state of all users."
+      "FlowDesk uses roles to make sure everyone sees exactly what they need — no more, no less. Your role determines what you can view, create, and manage across the platform."
+    ),
+    p(
+      "This isn't about restricting access — it's about keeping things focused. A team member working on tasks doesn't need to see billing information, and a project manager doesn't need to configure system settings. Roles help everyone focus on their work."
     ),
 
-    h2("how-it-works", "How it Works"),
-    p("When a user connects to FlowDesk, the following sequence occurs:"),
+    h2("the-three-roles", "The Three Roles"),
+    img("/docs/images/flowdesk-role-hierarchy.png", "Visual hierarchy diagram showing Admin, Manager, and Member roles with their key abilities", "The three roles in FlowDesk"),
+    table(
+      ["Role", "Who it's for", "Key abilities"],
+      [
+        ["Admin", "System administrators and IT leads", "Full platform access, user management, system settings, billing, audit logs"],
+        ["Manager", "Project leads and team supervisors", "Create projects, approve work, manage team members, view reports, set deadlines"],
+        ["Member", "Individual contributors and team members", "Work on assigned tasks, collaborate, chat, upload files, view own activity"],
+      ]
+    ),
+
+    h2("role-hierarchy", "How Roles Work"),
+    p(
+      "Roles are hierarchical. This means higher roles include all the capabilities of lower roles:"
+    ),
+    img("/docs/images/flowdesk-role-inheritance.png", "Diagram showing role inheritance: Admin includes Manager includes Member capabilities", "Roles inherit from lower levels"),
     ordered([
-      "The client establishes a WebSocket connection via Socket.io, sending an auth token.",
-      "The server verifies the token and registers the user as online, broadcasting the status change.",
-      "The client sends periodic heartbeats (every 30 seconds) to confirm it is still active.",
-      "If the server does not receive a heartbeat for 60 seconds, the user is marked as idle.",
-      "When the tab is closed or the network disconnects, the socket closes and the user is marked offline.",
+      "<strong>Admins</strong> can do everything a Manager can, plus system-level tasks.",
+      "<strong>Managers</strong> can do everything a Member can, plus project and team management.",
+      "<strong>Members</strong> can work on assigned tasks and collaborate within their scope.",
     ]),
-
-    h2("smart-filtering", "Smart Filtering"),
     p(
-      "A critical aspect of the presence system is filtering. When your own status changes (e.g. you open the app), the system must avoid highlighting all your conversations as if your colleagues are online."
+      "This hierarchy ensures smooth escalation while keeping access appropriately scoped. A Manager doesn't need Admin access to do their job, but an Admin can step in to handle Manager-level tasks when needed."
     ),
-    code(`// Client: Zustand store filtering logic
-handleUserStatusChange(userId, status, currentUserId) {
-  set((state) => ({
-    conversations: state.conversations.map((conv) => {
-      // Find if the status update is for the OTHER participant
-      const otherParticipant = conv.participants.find(
-        (p) => p._id === userId && p._id !== currentUserId
-      );
-      if (!otherParticipant) return conv; // Skip — it's our own status
-      return {
-        ...conv,
-        participantStatus: { ...conv.participantStatus, [userId]: status },
-      };
-    }),
-  }));
-}`),
 
-    h2("idle-detection", "Idle Detection"),
+    h2("how-permissions-are-assigned", "How Permissions Are Assigned"),
     p(
-      "The client monitors user activity (mouse movement, keyboard input, tab focus). After 5 minutes of inactivity, it sends an <strong>idle</strong> status update. This helps team members know who is actively available vs. away from their desk."
+      "Your Admin assigns roles when setting up the platform or when onboarding new team members. The process is:"
+    ),
+    ordered([
+      "An Admin creates a new user account or accepts a registration request.",
+      "The Admin assigns a role — Admin, Manager, or Member.",
+      "The user receives their login credentials and can start using FlowDesk immediately.",
+    ]),
+    p(
+      "If you need a different role, contact your team lead or Admin. For example, if you're a Member who's been promoted to a team lead, you can request a role change to Manager."
+    ),
+    callout(
+      "Only existing Admins can grant the Admin role. This is a security measure to prevent unauthorised access to system-level settings."
+    ),
+
+    h2("default-role", "Default Role"),
+    p(
+      "New users are typically assigned the <strong>Member</strong> role by default. This gives them enough access to start working on tasks and collaborating, without the ability to create projects or manage teams."
+    ),
+    p(
+      "A Manager or Admin can promote a Member to Manager at any time if their responsibilities expand."
     ),
   ],
-}, { prev: "glassmorphism-ui" })
+}, { prev: "canvas", next: "role-permissions" })
+
+define("role-permissions", {
+  title: "What You Can Do",
+  description: "A quick reference for what each role allows you to do.",
+  breadcrumbs: [
+    { label: "Docs", slug: "introduction" },
+    { label: "Roles & Permissions" },
+    { label: "What You Can Do" },
+  ],
+  lastUpdated: "June 12, 2026",
+  readingTime: "5 min read",
+  sections: [
+    h2("admin-permissions", "Admin Permissions"),
+    p("As an Admin, you have full control over the platform. This includes:"),
+    img("/docs/images/flowdesk-admin-panel.png", "FlowDesk admin panel showing user management, system settings, and audit logs", "The admin control panel"),
+    list([
+      ["User Management", "Create, suspend, or delete user accounts. Assign and change roles. Reset passwords. Manage invitations."],
+      ["System Settings", "Configure global platform settings, integrations, email templates, and security policies."],
+      ["Financial Access", "View billing information, usage statistics, and financial dashboards. Manage subscriptions and payment methods."],
+      ["Audit Logs", "View and export all activity logs across every project and team. Essential for compliance and security reviews."],
+      ["Platform Configuration", "Set up single sign-on (SSO), configure email providers, manage API keys, and customise the platform."],
+      ["Data Management", "Export all platform data, manage backups, and handle data retention policies."],
+    ]),
+    p(
+      "We recommend limiting the number of Admin accounts to essential personnel only. Most day-to-day operations can be handled by Managers."
+    ),
+
+    h2("manager-permissions", "Manager Permissions"),
+    p("Managers are responsible for driving projects and overseeing teams. Their capabilities include:"),
+    img("/docs/images/flowdesk-manager-view.png", "FlowDesk manager dashboard showing project creation, team management, and approval workflows", "A manager's view of FlowDesk"),
+    list([
+      ["Create Projects", "Start new projects, set deadlines, choose categories, and configure project settings."],
+      ["Approve Work", "Review completed tasks, approve them, or send them back for rework if needed."],
+      ["Manage Teams", "Add or remove members from projects. Assign roles within projects. View team workload and availability."],
+      ["Reports & Analytics", "Generate custom reports for their projects, including burndown charts, velocity trends, and individual contributor summaries."],
+      ["Set Priorities", "Assign priority levels to tasks and projects. Adjust priorities as work progresses."],
+      ["Manage Deadlines", "Set and modify deadlines for projects and tasks. Extend deadlines when necessary."],
+      ["Export Data", "Export project data, reports, and activity logs as CSV or PDF for external use."],
+    ]),
+    p(
+      "Managers have full access to projects they own or are assigned to. They cannot access projects belonging to other teams unless explicitly granted cross-team permissions by an Admin."
+    ),
+
+    h2("member-permissions", "Member Permissions"),
+    p("Members are the core contributors who execute work within projects:"),
+    list([
+      ["Task Execution", "View and work on assigned tasks. Update task status, add checkpoints, and mark tasks complete."],
+      ["Collaboration", "Participate in project chats, comment on tasks, use the Collaborative Canvas, and mention teammates."],
+      ["File Management", "Upload, download, and manage files within assigned projects. Attach files to tasks and share in chat."],
+      ["Notifications", "Receive alerts for assignments, mentions, approaching deadlines, and task updates."],
+      ["Personal Settings", "Manage their own profile, notification preferences, and appearance settings."],
+      ["View Activity", "See activity logs for projects they're assigned to. Understand what changed and when."],
+    ]),
+
+    h2("member-scope", "What Members Can't Do"),
+    p(
+      "Members have a focused scope to keep things simple. They cannot:"
+    ),
+    list([
+      ["Create Projects", "Only Managers and Admins can create new projects."],
+      ["Manage Teams", "Members can't add or remove people from projects."],
+      ["Access Other Projects", "Members can only see projects they're assigned to."],
+      ["Delete Content", "Members can't delete tasks, projects, or files (they can archive instead)."],
+      ["Modify Settings", "Project-level and system-level settings are off-limits."],
+      ["View Reports", "Analytics and reports are available to Managers and Admins only."],
+    ]),
+    p(
+      "If you need any of these capabilities, talk to your Manager or Admin. They can adjust your role or grant specific permissions as needed."
+    ),
+
+    h2("permissions-summary", "Quick Permissions Reference"),
+    table(
+      ["Action", "Admin", "Manager", "Member"],
+      [
+        ["Create projects", "Yes", "Yes", "No"],
+        ["Delete projects", "Yes", "Yes (own)", "No"],
+        ["Manage team members", "Yes", "Yes (own projects)", "No"],
+        ["Create tasks", "Yes", "Yes", "Yes (own projects)"],
+        ["Assign tasks", "Yes", "Yes", "No"],
+        ["Approve tasks", "Yes", "Yes", "No"],
+        ["Chat & collaborate", "Yes", "Yes", "Yes"],
+        ["Upload files", "Yes", "Yes", "Yes"],
+        ["View reports", "Yes", "Yes (own projects)", "No"],
+        ["Manage users", "Yes", "No", "No"],
+        ["System settings", "Yes", "No", "No"],
+        ["Export data", "Yes", "Yes (own projects)", "No"],
+      ]
+    ),
+  ],
+}, { prev: "roles" })
 
 export default pages

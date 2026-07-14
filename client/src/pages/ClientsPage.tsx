@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate , useLocation  } from "react-router-dom";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from "../lib/api";
 import Modal from "../components/common/Modal";
@@ -35,6 +35,7 @@ interface Contact {
 }
 
 const ClientsPage: React.FC = () => {
+    const location = useLocation();
     const queryClient = useQueryClient();
 
     const { data: companiesData, isLoading: loading } = useQuery({
@@ -79,6 +80,18 @@ const ClientsPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+
+    // Safety: close export dropdown on Escape or route change
+    React.useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setIsExportDropdownOpen(false);
+        };
+        window.addEventListener("keydown", handleEscape);
+        return () => {
+            window.removeEventListener("keydown", handleEscape);
+            setIsExportDropdownOpen(false);
+        };
+    }, [location.pathname]);
     const [isSelectDataMode, setIsSelectDataMode] = useState(false);
 
     // for debugging
@@ -1709,8 +1722,7 @@ const CreateCompanyModal = ({
     );
 };
 
-const ContactModal = ({
-    // showContactForm,
+const ContactModal = ({ 
     setShowContactForm, editingContact, contactForm, setContactForm, handleSave }: any) => (
     <Modal isOpen={true} onClose={() => setShowContactForm(false)} zIndex={1000}>
         <div className="card" style={{ padding: 24, width: 550 }}>

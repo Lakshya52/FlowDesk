@@ -24,21 +24,6 @@ const STATUS_LABELS: Record<string, string> = {
 const TasksPage: React.FC = () => {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const [visibleCounts, setVisibleCounts] = React.useState<
-    Record<string, number>
-  >({
-    todo: 2,
-    in_progress: 2,
-    review: 2,
-    completed: 2,
-  });
-
-  const loadMore = (key: string) => {
-    setVisibleCounts((prev) => ({
-      ...prev,
-      [key]: (prev[key] || 5) + 5,
-    }));
-  };
   const [search, setSearch] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("");
   const [currentTab, setCurrentTab] = useState<"all" | "my" | "review">("my");
@@ -106,6 +91,17 @@ const TasksPage: React.FC = () => {
     },
   });
   const tasks = tasksData || [];
+
+  const { data: reviewTasksData } = useQuery({
+    queryKey: ["tasks-review-count", selectedCompany],
+    queryFn: async () => {
+      const params: any = { status: "review" };
+      if (selectedCompany) params.companyId = selectedCompany;
+      const { data } = await api.get("/tasks", { params });
+      return data.tasks || [];
+    },
+  });
+  const reviewCount = reviewTasksData?.length || 0;
 
   const updateStatus = async (taskId: string, status: string) => {
     try {
@@ -359,7 +355,7 @@ const TasksPage: React.FC = () => {
             }}
           >
             Under&nbsp;Review
-            {tasks.filter((t: any) => t.status === "review").length > 0 && (
+            {reviewCount > 0 && (
               <span
                 style={{
                   backgroundColor: "#ef4444",
@@ -371,7 +367,7 @@ const TasksPage: React.FC = () => {
                   textAlign: "center",
                 }}
               >
-                {tasks.filter((t: any) => t.status === "review").length}
+                {reviewCount}
               </span>
             )}
           </button>
@@ -490,7 +486,6 @@ const TasksPage: React.FC = () => {
                 ) : (
                   <>
                     {(grouped as any)[col.key]
-                      .slice(0, visibleCounts[col.key] || 7)
                       .map((t: any) => (
                         <div
                           key={t._id}
@@ -819,37 +814,7 @@ const TasksPage: React.FC = () => {
                             </>
                           )}
                         </div>
-                      ))}
-                    {(grouped as any)[col.key].length >
-                      (visibleCounts[col.key] || 7) && (
-                      <div
-                        style={{
-                          marginTop: 8,
-                          textAlign: "center",
-                          cursor: "pointer",
-                          position: "relative",
-                          color: "var(--color-primary)",
-                          fontWeight: 500,
-                          fontSize: "0.75rem",
-                          padding: 8,
-                        }}
-                        onClick={() => loadMore(col.key)}
-                      >
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: -20,
-                            left: 0,
-                            right: 0,
-                            height: 20,
-                            background:
-                              "linear-gradient(to bottom, transparent, var(--color-surface-hover))",
-                            pointerEvents: "none",
-                          }}
-                        />
-                        Show more
-                      </div>
-                    )}
+                      )                    )}
                   </>
                 )}
               </div>

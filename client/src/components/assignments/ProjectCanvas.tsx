@@ -259,9 +259,10 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
     }, [isDraggingNode, isResizing, draggedNoteId, resizingNoteId, recordEdit, saveCanvas]);
 
     useEffect(() => {
+        if (!isDraggingNode && !isResizing) return;
         window.addEventListener('mouseup', handleMouseUp);
         return () => window.removeEventListener('mouseup', handleMouseUp);
-    }, [handleMouseUp]);
+    }, [handleMouseUp, isDraggingNode, isResizing]);
 
     const addNoteAt = (x: number, y: number) => {
         const newNote: Note = {

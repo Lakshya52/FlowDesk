@@ -11,6 +11,7 @@ import {
     recordLocation,
     getLocationTrack,
     getActiveVisits,
+    getActiveVisitLocations,
     addExpense,
     removeExpense,
     getVisitReports,
@@ -26,6 +27,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/active', getActiveVisits);
+router.get('/active/locations', authorize('admin', 'manager'), getActiveVisitLocations);
 router.get('/reports', authorize('admin', 'manager'), getVisitReports);
 router.post('/optimize-route', authorize('admin', 'manager'), optimizeRoute);
 

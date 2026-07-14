@@ -534,6 +534,36 @@ export const getActiveVisits = async (req: AuthRequest, res: Response): Promise<
     }
 };
 
+export const getActiveVisitLocations = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const tenantId = getTenantId(req.user);
+        const activeVisits = await FieldVisit.find({ tenantId, status: 'checked_in' }).select('_id').lean();
+        const visitIds = activeVisits.map((v) => v._id);
+
+        const tracks = await LocationTrack.find({
+            visitId: { $in: visitIds },
+            endedAt: { $exists: false },
+        }).lean();
+
+        const latestLocations: Record<string, { lat: number; lng: number; timestamp: string; employeeId: string }> = {};
+        for (const track of tracks) {
+            const lastPoint = track.points[track.points.length - 1];
+            if (lastPoint) {
+                latestLocations[track.visitId.toString()] = {
+                    lat: lastPoint.lat,
+                    lng: lastPoint.lng,
+                    timestamp: lastPoint.timestamp.toISOString(),
+                    employeeId: track.employeeId.toString(),
+                };
+            }
+        }
+
+        res.json({ success: true, locations: latestLocations });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 export const addExpense = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const tenantId = getTenantId(req.user);

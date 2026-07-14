@@ -50,6 +50,13 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     };
   }, [isOpen, onClose]);
 
+    // Safety net: reset overflow when modal is closed
+  useEffect(() => {
+    if (!isOpen) {
+      document.body.style.overflow = "";
+    }
+  }, [isOpen]);
+
   // Reset zoom when scale goes to 1
   useEffect(() => {
     if (scale <= 1) setPosition({ x: 0, y: 0 });

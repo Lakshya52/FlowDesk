@@ -108,6 +108,19 @@ const AssignmentsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [companySearch, setCompanySearch] = useState("");
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+
+    // Safety: close company dropdown on Escape
+    React.useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setShowCompanyDropdown(false);
+        };
+        window.addEventListener("keydown", handleEscape);
+        return () => {
+            window.removeEventListener("keydown", handleEscape);
+            setShowCompanyDropdown(false);
+        };
+    }, []);
+
   const [confirmState, setConfirmState] = useState<
     "none" | "create_company" | "navigate_clients"
   >("none");

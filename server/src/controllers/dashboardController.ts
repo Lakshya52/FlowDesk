@@ -202,6 +202,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
         });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
+        console.log(error)
     }
 };
 

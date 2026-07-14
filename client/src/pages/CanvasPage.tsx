@@ -474,13 +474,15 @@ const CanvasPage: React.FC = () => {
   }, [isDraggingNode, isResizing, draggedNoteId, resizingNoteId]);
 
   useEffect(() => {
+    // Only register global listeners when actively dragging/resizing/panning
+    if (!isDraggingNode && !isResizing && !isPanning) return;
     window.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("touchend", handleMouseUp);
     return () => {
       window.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("touchend", handleMouseUp);
     };
-  }, [handleMouseUp]);
+  }, [handleMouseUp, isDraggingNode, isResizing, isPanning]);
 
   const addNoteAt = async (x: number, y: number) => {
     const newNoteData = {

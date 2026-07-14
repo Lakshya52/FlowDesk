@@ -193,6 +193,13 @@ const App: React.FC = () => {
   );
 };
 
+const LandingOrDashboard: React.FC = () => {
+    const { user } = useAuthStore();
+    if (user) return <Navigate to="/dashboard" replace />;
+    return <LandingPageNew />;
+};
+
+
 // ADD:
 const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user } = useAuthStore();
@@ -227,13 +234,25 @@ const AppInner: React.FC = () => {
   React.useEffect(() => {
     document.body.style.overflow = "";
   }, [location.pathname]);
+
+  // Periodic safety net: reset overflow every 2 seconds if no modal is open
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      const anyModalOpen = document.querySelector('[role="dialog"]') ||
+        document.querySelector('.fixed[class*="z-"]');
+      if (!anyModalOpen && document.body.style.overflow === "hidden") {
+        document.body.style.overflow = "";
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
   // const showFooter = location.pathname !== "/documentation" && !location.pathname.startsWith("/documentation/"); 
 
   return (
     <>
       {showNavbar && <Navbar />}
       <Routes>
-        <Route path="/" element={<LandingPageNew />} />
+        <Route path="/" element={<LandingOrDashboard  />} />
         <Route path="/release" element={<Release />} />
         <Route path="/documentation/:slug?" element={<Documentation />} />
         <Route path="/login" element={<LoginPage />} />

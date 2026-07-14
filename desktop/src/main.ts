@@ -89,7 +89,7 @@ function createMainWindow() {
     },
   });
 
-  mainWindow.loadURL(FRONTEND_URL);
+  mainWindow.loadURL(`${FRONTEND_URL}/#/dashboard`);
 
   mainWindow.once("ready-to-show", () => {
     if (loadingWindow) loadingWindow.close();

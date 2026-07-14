@@ -25,8 +25,16 @@ const Modal: React.FC<ModalProps> = ({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
+      document.body.style.overflow = ""; // double-clear for safety
     };
   }, [isOpen, onClose]);
+
+  // Safety net: if this modal is not open, ensure body overflow is reset
+  useEffect(() => {
+    if (!isOpen) {
+      document.body.style.overflow = "";
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

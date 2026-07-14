@@ -858,7 +858,7 @@ const TeamsPage: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Modal footer */}
+                        {/* Modal footer
                         <div style={{
                             padding: '12px 20px', borderTop: '1px solid var(--color-border, #e2e8f0)',
                             display: 'flex', justifyContent: 'flex-end', flexShrink: 0,
@@ -866,7 +866,7 @@ const TeamsPage: React.FC = () => {
                             <button className="btn btn-secondary btn-sm" onClick={() => setShowManage(false)}>
                                 Close
                             </button>
-                        </div>
+                        </div> */}
                     </div>
                 </div>
             )}

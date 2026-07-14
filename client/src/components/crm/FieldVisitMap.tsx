@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MapPin, User, Clock, AlertTriangle,  ExternalLink, Phone, Building2, WifiOff } from "lucide-react";
+import { MapPin, User, Clock, AlertTriangle,  ExternalLink, Phone, Building2, WifiOff, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../../lib/api";
 import { getSocket } from "../../hooks/useSocket";
@@ -73,6 +73,7 @@ const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
   const [visits, setVisits] = useState<ActiveVisit[]>([]);
   const [locations, setLocations] = useState<Record<string, LocationUpdate>>({});
   const [loading, setLoading] = useState(true);
+  const [refetching, setRefetching] = useState(false);
 
   const tenantId = typeof user?.tenantId === "object" ? (user.tenantId as any)?._id : user?.tenantId;
 
@@ -147,6 +148,41 @@ const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
     }
   };
 
+  const fetchActiveLocations = async (): Promise<Record<string, LocationUpdate>> => {
+    try {
+      const res = await api.get("/field-visits/active/locations");
+      return res.data.locations || {};
+    } catch {
+      return {};
+    }
+  };
+
+  const refetchLocations = async () => {
+    setRefetching(true);
+    try {
+      const socket = getSocket();
+      if (tenantId && !socket.connected) {
+        socket.connect();
+      }
+      if (tenantId) {
+        socket.emit("join_tenant", tenantId);
+      }
+
+      const [freshVisits, freshLocations] = await Promise.all([
+        api.get("/field-visits/active").then((r) => r.data.visits || []),
+        fetchActiveLocations(),
+      ]);
+
+      setVisits(freshVisits);
+      setLocations(freshLocations);
+      toast.success("Locations refetched", { duration: 2000 });
+    } catch {
+      toast.error("Failed to refetch locations");
+    } finally {
+      setRefetching(false);
+    }
+  };
+
   const formatTime = (t: string) => {
     const diff = Date.now() - new Date(t).getTime();
     const mins = Math.floor(diff / 60000);
@@ -170,12 +206,14 @@ const FieldVisitMap: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
             {visits.length} active
           </span>
         </div>
-        {/* <button
-          onClick={fetchActiveVisits}
-          className="flex items-center gap-1 text-sm text-(--color-primary) hover:text-(--color-primary-hover)"
+        <button
+          onClick={refetchLocations}
+          disabled={refetching}
+          className="flex items-center gap-1.5 text-sm font-medium text-(--color-primary) hover:text-(--color-primary-hover) disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          <RefreshCw size={14} /> Refresh
-        </button> */}
+          <RefreshCw size={14} className={refetching ? "animate-spin" : ""} />
+          {refetching ? "Refetching..." : "Refetch Locations"}
+        </button>
       </div>
 
       {loading ? (

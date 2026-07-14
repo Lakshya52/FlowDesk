@@ -1,14 +1,14 @@
-name: Deploy to Windows Server
+# name: Deploy to Windows Server
 
-on:
-  push:
-    branches: [ main ]
+# on:
+#   push:
+#     branches: [ main ]
 
-jobs:
-  deploy:
-    runs-on: self-hosted
+# jobs:
+#   deploy:
+#     runs-on: self-hosted
 
-    steps:
+#     steps:
       # - name: Checkout code
       #   uses: actions/checkout@v4
 
@@ -72,33 +72,33 @@ jobs:
       #     npm install
       #     npm install
 
-      - name: Restart PM2 services
-        run: |
-            $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
-            $env:PM2_HOME = "C:\ProgramData\pm2\home"
-            pm2 restart flowdesk-backend
-            pm2 restart flowdesk-prod-tunnel
-            pm2 save
+      # - name: Restart PM2 services
+      #   run: |
+      #       $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
+      #       $env:PM2_HOME = "C:\ProgramData\pm2\home"
+      #       pm2 restart flowdesk-backend
+      #       pm2 restart flowdesk-prod-tunnel
+      #       pm2 save
 
-      - name: Wait for processes to stabilize
-        run: Start-Sleep -Seconds 120
+      # - name: Wait for processes to stabilize
+      #   run: Start-Sleep -Seconds 120
 
-      - name: Check PM2 status
-        run: |
-            $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
-            $env:PM2_HOME = "C:\ProgramData\pm2\home"
-            pm2 list
+      # - name: Check PM2 status
+      #   run: |
+      #       $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
+      #       $env:PM2_HOME = "C:\ProgramData\pm2\home"
+      #       pm2 list
 
-      - name: Show flowdesk-backend logs
-        if: always()
-        run: |
-            $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
-            $env:PM2_HOME = "C:\ProgramData\pm2\home"
-            pm2 logs flowdesk-backend --lines 50 --nostream
+      # - name: Show flowdesk-backend logs
+      #   if: always()
+      #   run: |
+      #       $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
+      #       $env:PM2_HOME = "C:\ProgramData\pm2\home"
+      #       pm2 logs flowdesk-backend --lines 50 --nostream
 
-      - name: Show flowdesk-prod-tunnel logs
-        if: always()
-        run: |
-            $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
-            $env:PM2_HOME = "C:\ProgramData\pm2\home"
-            pm2 logs flowdesk-prod-tunnel --lines 50 --nostream
+      # - name: Show flowdesk-prod-tunnel logs
+      #   if: always()
+      #   run: |
+      #       $env:PATH += ";C:\Users\Administrator\AppData\Roaming\npm"
+      #       $env:PM2_HOME = "C:\ProgramData\pm2\home"
+      #       pm2 logs flowdesk-prod-tunnel --lines 50 --nostream

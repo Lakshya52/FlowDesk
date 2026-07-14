@@ -38,14 +38,16 @@ const AppLayout: React.FC = () => {
         }
     }, [sidebarWidth, isResizing, isMobile]);
 
+        const stopResizing = React.useCallback(() => {
+        setIsResizing(false);
+    }, []);
+
     const startResizing = React.useCallback(() => {
         if (isMobile) return;
         setIsResizing(true);
+        // Safety: auto-reset after 5s in case mouseup is missed
+        setTimeout(() => setIsResizing(false), 5000);
     }, [isMobile]);
-
-    const stopResizing = React.useCallback(() => {
-        setIsResizing(false);
-    }, []);
 
     const resize = React.useCallback(
         (mouseMoveEvent: MouseEvent) => {
@@ -59,11 +61,16 @@ const AppLayout: React.FC = () => {
         [isResizing, isMobile]
     );
     React.useEffect(() => {
+        const handleBlur = () => setIsResizing(false);
         window.addEventListener("mousemove", resize);
         window.addEventListener("mouseup", stopResizing);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("mouseleave", handleBlur);
         return () => {
             window.removeEventListener("mousemove", resize);
             window.removeEventListener("mouseup", stopResizing);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("mouseleave", handleBlur);
         };
     }, [resize, stopResizing]);
 

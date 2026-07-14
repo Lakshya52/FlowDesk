@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import api from '../lib/api';
 import Avatar from '../components/common/Avatar';
 import { useAuthStore } from '../store/authStore';
-import { ArrowLeft, Plus, Paperclip, MessageSquare, Upload, Download, Trash2, Send, Users, Edit3, FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload, Download, Trash2, Send, Users, Edit3, FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import ProjectCanvas from '../components/assignments/ProjectCanvas';
 import FilePreviewModal from '../components/common/FilePreviewModal';
@@ -62,6 +62,8 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const [mentionIndex, setMentionIndex] = useState(0);
     const [canvasUnlocked, setCanvasUnlocked] = useState(false);
     const [previewFile, setPreviewFile] = useState<{ url: string, type: string, name: string } | null>(null);
+
+    const[manageTeamErrorMsg,setManageTeamErrorMsg] = useState("")
 
     // Auto-switch tabs and scroll based on URL params
     useEffect(() => {
@@ -181,6 +183,18 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const [allCompanies, setAllCompanies] = useState<any[]>([]);
     const [companySearch, setCompanySearch] = useState('');
     const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+
+        // Safety: close company dropdown on Escape
+    React.useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setShowCompanyDropdown(false);
+        };
+        window.addEventListener("keydown", handleEscape);
+        return () => {
+            window.removeEventListener("keydown", handleEscape);
+            setShowCompanyDropdown(false);
+        };
+    }, []);
 
     const filteredCompanies = allCompanies.filter(c =>
         c.name.toLowerCase().includes(companySearch.toLowerCase())
@@ -392,7 +406,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         try {
             const { data } = await api.put(`/assignments/${id}`, { team: teamIds });
             setAssignment(data.assignment);
-            setShowTeamModal(false);
+            // setShowTeamModal(false);
         } catch (e: any) {
             alert(e.response?.data?.message || 'Failed to update team');
         } finally {
@@ -664,7 +678,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         { key: 'tasks', label: 'Tasks', count: tasks.length },
         { key: 'chat', label: 'Chat', count: chatMessages.length },
         { key: 'files', label: 'Files', count: files.length },
-        { key: 'notes', label: 'Whiteboard', count: 0, new: true },
+        { key: 'notes', label: 'Whiteboard', count: assignment.canvasData?.length || 0, new: true },
     ];
 
     return (
@@ -939,24 +953,47 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                 )}
 
                 {/* Team Members */}
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap mb-2">
                     <div className="flex gap-1.5 flex-wrap">
                         {assignment.team?.map((m: any) => (
-                            <span key={m._id} style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
-                                borderRadius: 6, background: 'var(--color-surface-hover)', fontSize: '0.75rem', fontWeight: 500,
-                            }}>
+                            <span key={m._id}
+                                onClick={() => {
+                                    if(m.name != user?.name){
+                                        const currentIds = assignment.team?.map((tm: any) => tm._id || tm) || [];
+                                        handleUpdateTeam(currentIds.filter((tid: string) => tid !== m._id));
+                                    }else{
+                                        setManageTeamErrorMsg("You can not delete yourself from the project");
+                                        setTimeout(() => setManageTeamErrorMsg(""), 3000);
+                                    }
+                                }}
+                                className={`group relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-(--color-surface-hover) text-xs font-medium transition-colors ${ m.name != user?.name ? "hover:bg-red-500/10 hover:text-red-500" : null } cursor-pointer `}>
                                 <Avatar src={m.avatar} name={m.name} size={20} />
                                 {m.name}
+
+                                {/* can edit and the name is not the current logged in user name */}
+                                {canEdit && (m.name != user?.name ) && (
+                                    <>
+                                        <button
+                                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex cursor-pointer items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity scale-75 group-hover:scale-100"
+                                            title={`Remove ${m.name}`}
+                                        >
+                                            <X size={10} />
+                                        </button>
+                                    </>
+                                )}
                             </span>
                         ))}
                     </div>
+                    
                     {canEdit && (
                         <button className="btn btn-ghost btn-xs" style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }} onClick={() => setShowTeamModal(true)}>
                             Manage Team
                         </button>
                     )}
                 </div>
+                <span className='text-(--color-danger) text-sm transition-opacity duration-300' style={{ opacity: manageTeamErrorMsg ? 1 : 0 }}>
+                    {manageTeamErrorMsg}
+                </span>
             </div>
 
             {/* Tabs */}
@@ -1709,55 +1746,68 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
 
             {/* Manage Team Modal */}
             <Modal isOpen={showTeamModal} onClose={() => setShowTeamModal(false)} zIndex={100}>
-                <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 400, padding: 24 }}>
-                            <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: 16 }}>Manage Team Members</h2>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflow: 'auto', marginBottom: 20 } as React.CSSProperties}>
-                                {users.filter(u => u._id !== user?._id).map(u => {
-                                    const isManualMember = assignment.team?.some((m: any) => m._id === u._id);
-                                    const assignedTeam = assignment.teams?.find((t: any) =>
-                                        t.manager?._id === u._id ||
-                                        t.members?.some((m: any) => m._id === u._id) ||
-                                        t.manager === u._id ||
-                                        t.members?.includes(u._id)
-                                    );
+                <div className="card animate-fade-in w-full min-w-[30dvw] p-6  " style={{
+                    background: "color-mix(in srgb, var(--color-surface) 85%, transparent)",
+                }} >
+                    <div className='flex items-center justify-between mb-5' >
 
-                                    return (
-                                        <div key={u._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, background: 'var(--color-surface-hover)' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                <Avatar src={u.avatar} name={u.name} size={28} />
-                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{u.name}</span>
-                                                    {assignedTeam && (
-                                                        <span style={{ fontSize: '0.65rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                                                            Team: {assignedTeam.name}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <button
-                                                className={`btn btn-xs ${isManualMember ? 'btn-secondary' : 'btn-primary'}`}
-                                                disabled={updatingTeam}
-                                                onClick={() => {
-                                                    const currentIds = assignment.team?.map((m: any) => m._id || m) || [];
-                                                    const nextIds = isManualMember
-                                                        ? currentIds.filter((tid: string) => tid !== u._id)
-                                                        : [...currentIds, u._id];
-                                                    handleUpdateTeam(nextIds);
-                                                }}
-                                            >
-                                                {isManualMember ? 'Remove' : 'Add'}
-                                            </button>
-
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <button className="btn btn-secondary btn-sm" onClick={() => setShowTeamModal(false)}>Close</button>
-                            </div>
+                        <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Manage Team Members</h2>
+                        <div className='flex justify-end hover:bg-(--color-surface-hover) p-2 rounded-xl ' >
+                            <Plus className='rotate-45 cursor-pointer ' onClick={() => setShowTeamModal(false)}/>
                         </div>
-                    </Modal>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflow: 'auto', marginBottom: 20 } as React.CSSProperties}>
+                        {users.filter(u => u._id !== user?._id).map(u => {
+                            const isManualMember = assignment.team?.some((m: any) => m._id === u._id);
+                            const assignedTeam = assignment.teams?.find((t: any) =>
+                                t.manager?._id === u._id ||
+                                t.members?.some((m: any) => m._id === u._id) ||
+                                t.manager === u._id ||
+                                t.members?.includes(u._id)
+                            );
+
+                            return (
+                                <div key={u._id} className='flex items-center justify-between bg-(--color-surface-hover) w-full rounded-xl py-2 px-4' >
+                                    <div className="flex items-center gap-2.5">
+                                        <Avatar src={u.avatar} name={u.name} size={28} />
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{u.name}</span>
+                                            {assignedTeam && (
+                                                <span style={{ fontSize: '0.65rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                                                    Team: {assignedTeam.name}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        disabled={updatingTeam}
+                                        onClick={() => {
+                                            const currentIds = assignment.team?.map((m: any) => m._id || m) || [];
+                                            const nextIds = isManualMember
+                                                ? currentIds.filter((tid: string) => tid !== u._id)
+                                                : [...currentIds, u._id];
+                                            handleUpdateTeam(nextIds);
+                                        }}
+                                    >
+                                        {isManualMember ? (
+                                            <span className='flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>
+                                                <Minus size={14} /> Remove
+                                            </span>
+                                        ) : (
+                                            <span className='flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>
+                                                <Plus size={14} /> Add
+                                            </span>
+                                        )}
+                                    </button>
+
+                                </div>
+                            );
+                        })}
+                    </div>
+                    
+                </div>
+            </Modal>
         </div >
     );
 };
