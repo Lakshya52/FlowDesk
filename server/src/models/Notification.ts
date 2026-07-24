@@ -13,6 +13,7 @@ export enum NotificationType {
     CALENDAR_REMINDER = 'calendar_reminder',
     CALENDAR_SHARED = 'calendar_shared',
     EVENT_INVITE = 'event_invite',
+    BOARD_INVITED = 'board_invited',
 }
 
 export interface INotification extends Document {

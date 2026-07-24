@@ -158,9 +158,9 @@ const CrmDashboard = () => {
         <div style={{ maxWidth: 1200 }}>
             <div className="flex flex-col sm:flex-row items-start sm:items-end sm:justify-between gap-4" style={{ marginBottom: 20 }}>
                 <div>
-                    <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>Dashboard</h1>
+                    <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>Overview</h1>
                     <p style={{ color: "var(--color-text-secondary)", fontSize: "0.875rem", marginTop: 4 }}>
-                        Here's an overview of your CRM leads and queue.
+                        Here's an overview of your CRM leads and queues.
                     </p>
                 </div>
             </div>

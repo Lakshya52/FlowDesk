@@ -892,11 +892,12 @@ export const getLeadCounts = async (
 		if (state) baseFilter.state = state;
 		if (pincode) baseFilter.pincode = pincode;
 		if (search) {
-			const regex = new RegExp(String(search), "i");
+			const q = String(search).trim();
+			const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const digits = q.replace(/\D/g, '');
+			const regex = new RegExp(escaped, "i");
 			searchOr = [
 				{ name: regex },
-				{ phone: regex },
-				{ alternatePhone: regex },
 				{ companyName: regex },
 				{ email: regex },
 				{ designation: regex },
@@ -907,6 +908,11 @@ export const getLeadCounts = async (
 				{ state: regex },
 				{ pincode: regex },
 			];
+			if (digits.length >= 3) {
+				const digitsRegex = new RegExp(digits, "i");
+				searchOr.push({ phone: digitsRegex });
+				searchOr.push({ alternatePhone: digitsRegex });
+			}
 		}
 
 		if (campaignOr && searchOr) {
@@ -1202,6 +1208,108 @@ export const getLeadStats = async (req: AuthRequest, res: Response): Promise<voi
 				active: stats[0]?.active || 0,
 				totalCallDuration: stats[0]?.totalCallDuration || 0,
 				statusCounts,
+			},
+		});
+	} catch (error: any) {
+		res.status(500).json({ success: false, message: error.message });
+	}
+};
+
+export const getLeadFilterOptions = async (
+	req: AuthRequest,
+	res: Response,
+): Promise<void> => {
+	try {
+		const tenantId = getTenantId(req.user);
+		const { campaignId, status, search } = req.query;
+
+		const filter: any = { tenantId };
+		let campaignOr: any[] | null = null;
+		let searchOr: any[] | null = null;
+
+		if (campaignId === '__none__') {
+			const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
+			filter.campaignId = { $nin: allCampaignIds };
+		} else {
+			if (campaignId) filter.campaignId = campaignId;
+
+			const accessible = await getAccessibleCampaignIds(req.user, tenantId);
+			if (accessible) {
+				if (campaignId) {
+					const hasAccess = accessible.some((id: any) => id.toString() === campaignId);
+					if (!hasAccess) {
+						res.json({ success: true, options: { industries: [], sources: [], cities: [], states: [], pincodes: [] } });
+						return;
+					}
+				} else {
+					const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
+					campaignOr = [
+						{ campaignId: { $in: accessible } },
+						{ campaignId: { $nin: allCampaignIds } },
+					];
+				}
+			}
+		}
+
+		if (status) {
+			const statuses = String(status).split(",").map(s => s.trim()).filter(Boolean);
+			if (statuses.length === 1) {
+				filter.status = statuses[0];
+			} else if (statuses.length > 1) {
+				filter.status = { $in: statuses };
+			}
+		}
+
+		if (search) {
+			const q = String(search).trim();
+			const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			searchOr = [
+				{ name: { $regex: escaped, $options: 'i' } },
+				{ companyName: { $regex: escaped, $options: 'i' } },
+				{ email: { $regex: escaped, $options: 'i' } },
+				{ designation: { $regex: escaped, $options: 'i' } },
+				{ companyPan: { $regex: escaped, $options: 'i' } },
+				{ companyGst: { $regex: escaped, $options: 'i' } },
+				{ addressLine: { $regex: escaped, $options: 'i' } },
+				{ city: { $regex: escaped, $options: 'i' } },
+				{ state: { $regex: escaped, $options: 'i' } },
+				{ pincode: { $regex: escaped, $options: 'i' } },
+			];
+		}
+
+		if (campaignOr && searchOr) {
+			filter.$and = [{ $or: campaignOr }, { $or: searchOr }];
+		} else if (campaignOr) {
+			filter.$or = campaignOr;
+		} else if (searchOr) {
+			filter.$or = searchOr;
+		}
+
+		const [result] = await Lead.aggregate([
+			{ $match: filter },
+			{
+				$group: {
+					_id: null,
+					industries: { $addToSet: "$industry" },
+					sources: { $addToSet: "$source" },
+					cities: { $addToSet: "$city" },
+					states: { $addToSet: "$state" },
+					pincodes: { $addToSet: "$pincode" },
+				},
+			},
+		]);
+
+		const clean = (arr: any[]) =>
+			(arr || []).filter(Boolean).map(String).sort();
+
+		res.json({
+			success: true,
+			options: {
+				industries: clean(result?.industries),
+				sources: clean(result?.sources),
+				cities: clean(result?.cities),
+				states: clean(result?.states),
+				pincodes: clean(result?.pincodes),
 			},
 		});
 	} catch (error: any) {

@@ -47,13 +47,13 @@ const SECTIONS = [
     component: Schedule,
     description: "Upcoming follow-ups & meetings",
   },
-  {
-    id: "plan",
-    label: "Plan",
-    icon: <ClipboardList size={18} />,
-    component: Plan,
-    description: "Planning & strategy",
-  },
+  // {
+  //   id: "plan",
+  //   label: "Plan",
+  //   icon: <ClipboardList size={18} />,
+  //   component: Plan,
+  //   description: "Planning & strategy",
+  // },
   {
     id: "summary",
     label: "Summary",

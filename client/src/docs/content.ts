@@ -108,7 +108,7 @@ define("introduction", {
 
     h2("key-features", "Key Features"),
     p("FlowDesk comes packed with everything your team needs to work efficiently:"),
-    img("/docs/images/flowdesk-key-features.png", "Visual overview of FlowDesk key features including project management, task tracking, and collaboration", "Key features at a glance"),
+    // img("/docs/images/flowdesk-key-features.png", "Visual overview of FlowDesk key features including project management, task tracking, and collaboration", "Key features at a glance"),
     list([
       ["Project Management", "Create and track projects with full visibility into progress, deadlines, and team assignments. See everything at a glance on your dashboard."],
       ["Task Tracking", "Break work into tasks with clear states (Todo → In Progress → Review → Completed), checkpoints, and priorities. Know exactly what's in progress and what's done."],
@@ -135,7 +135,7 @@ define("introduction", {
     p(
       "FlowDesk is organised into a few core concepts:"
     ),
-    img("/docs/images/flowdesk-core-concepts.png", "Diagram showing how Projects, Tasks, Teams, and Dashboard connect in FlowDesk", "How the core concepts work together"),
+    // img("/docs/images/flowdesk-core-concepts.png", "Diagram showing how Projects, Tasks, Teams, and Dashboard connect in FlowDesk", "How the core concepts work together"),
     ordered([
       "<strong>Projects</strong> are the top-level containers for work. Each project has a team, tasks, deadlines, and a chat.",
       "<strong>Tasks</strong> are the individual units of work within a project. Each task has an owner, a status, and optional checkpoints.",
@@ -186,7 +186,7 @@ define("quickstart", {
       ["Admin-Created Account", "Your Admin or team lead creates your account and sends you an email with your login credentials. Check your inbox for an invitation email with a temporary password."],
       ["Self Registration", "If your organisation allows it, you can register yourself. Go to the FlowDesk login page and click <strong>Register</strong>. Enter your work email, choose a password, and complete your profile."],
     ]),
-    img("/docs/images/flowdesk-registration.png", "FlowDesk registration page with email, password, and confirm password fields", "The registration screen"),
+    img("/docs/images/registration-screen.png", "FlowDesk registration page with email, password, and confirm password fields", "The registration screen"),
     callout(
       "Use your official work email address. Accounts created with personal emails may not be approved by your Admin."
     ),
@@ -195,7 +195,7 @@ define("quickstart", {
     p(
       "Open FlowDesk in your browser or desktop app. You'll see the login page."
     ),
-    img("/docs/images/flowdesk-login-page.png", "FlowDesk login page with email and password fields", "The FlowDesk login screen"),
+    img("/docs/images/login-screen.png", "FlowDesk login page with email and password fields", "The FlowDesk login screen"),
     ordered([
       "Enter your <strong>work email address</strong> (the one your Admin set up or you registered with).",
       "Enter your <strong>password</strong>.",
@@ -212,7 +212,7 @@ define("quickstart", {
     p(
       "After logging in, you'll land on your <strong>Dashboard</strong>. This is your home base. Here's what you'll see:"
     ),
-    img("/docs/images/flowdesk-dashboard-annotated.png", "Annotated FlowDesk dashboard showing projects, deadlines, activity feed, and quick actions", "Your dashboard after logging in"),
+    // img("/docs/images/flowdesk-dashboard-annotated.png", "Annotated FlowDesk dashboard showing projects, deadlines, activity feed, and quick actions", "Your dashboard after logging in"),
     list([
       ["Your Projects", "A list of all projects you're assigned to, with their current status and progress."],
       ["Upcoming Deadlines", "Tasks and projects that are due soon, highlighted so nothing slips through the cracks."],
@@ -227,7 +227,7 @@ define("quickstart", {
     p(
       "The sidebar is your main navigation. Here's what each section does:"
     ),
-    img("/docs/images/flowdesk-sidebar-navigation.png", "FlowDesk sidebar showing Dashboard, Assignments, Tasks, Calendar, Chat, and Settings sections", "The sidebar navigation"),
+    img("/docs/images/sidebar.png", "FlowDesk sidebar showing Dashboard, Assignments, Tasks, Calendar, Chat, and Settings sections", "The sidebar navigation"),
     table(
       ["Section", "What it's for"],
       [
@@ -244,7 +244,7 @@ define("quickstart", {
     p(
       "Click <strong>Assignments</strong> in the sidebar to see all your projects. Projects are grouped into categories:"
     ),
-    img("/docs/images/flowdesk-assignments-page.png", "FlowDesk Assignments page showing Ongoing, Completed, and Recurring Blueprint project categories", "Your projects in the Assignments view"),
+    img("/docs/images/projects-dashboard.png", "FlowDesk Assignments page showing Ongoing, Completed, and Recurring Blueprint project categories", "Your projects in the Assignments view"),
     list([
       ["Ongoing", "Active projects currently being worked on. This is where you'll spend most of your time."],
       ["Completed", "Finished projects preserved for reference. All data, files, and discussions are kept."],

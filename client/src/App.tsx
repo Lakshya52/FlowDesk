@@ -15,6 +15,7 @@ import DashboardPage from "./pages/DashboardPage";
 import AssignmentsPage from "./pages/AssignmentsPage";
 import AssignmentDetailPage from "./pages/AssignmentDetailPage";
 import TasksPage from "./pages/TasksPage";
+import BoardsPage from "./pages/BoardsPage";
 import CalendarPage from "./pages/CalendarPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -202,33 +203,49 @@ const LandingOrDashboard: React.FC = () => {
 
 // ADD:
 const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { user } = useAuthStore();
-    const location = useLocation();
+  const { user } = useAuthStore();
+  const location = useLocation();
 
-    if (!user) return <Navigate to="/login" replace />;
-    if (user.role === 'admin') return <>{children}</>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === 'admin') return <>{children}</>;
 
-    const allowed = user.permissions?.allowedTabs ?? [];
-    // Match the parent tab (handles /reports/:reportType, /assignments/:id, etc.)
-    const currentTopLevel = '/' + location.pathname.split('/')[1];
-    const isExactOrParentMatch = allowed.includes(currentTopLevel) || allowed.includes(location.pathname);
+  const allowed = user.permissions?.allowedTabs ?? [];
 
-    // Also check if the path is a subItem of an already-allowed parent (e.g. /tasks under /assignments)
-    const isSubItemOfAllowedParent = !isExactOrParentMatch && navItems.some(item =>
-        !item.break && allowed.includes(item.to) && item.subItems?.some(sub => sub.to === location.pathname)
-    );
+  console.log('[RouteGuard]', location.pathname, '| allowedTabs:', allowed, '| includes /tasks:', allowed.includes('/tasks'));
 
-    if (!isExactOrParentMatch && !isSubItemOfAllowedParent) {
-        return <Navigate to={getFirstAllowedRoute(user)} replace />;
-    }
+  // Match the parent tab (handles /reports/:reportType, /assignments/:id, etc.)
+  const currentTopLevel = '/' + location.pathname.split('/')[1];
+  const isExactOrParentMatch = allowed.includes(currentTopLevel) || allowed.includes(location.pathname);
 
-    return <>{children}</>;
+  // Also check if the path is a sibling subItem under the same parent (e.g. /tasks is sibling of /boards under Productivity)
+  const isSubItemOfAllowedParent = !isExactOrParentMatch && navItems.some(item =>
+      !item.break && item.subItems?.some(sub =>
+          allowed.includes(sub.to) &&
+          (sub.to === location.pathname || location.pathname.startsWith(sub.to + '/'))
+      )
+  );
+
+  if (!isExactOrParentMatch && !isSubItemOfAllowedParent) {
+      console.log('[RouteGuard] BLOCKED — redirecting to', getFirstAllowedRoute(user));
+      return <Navigate to={getFirstAllowedRoute(user)} replace />;
+  }
+
+  return <>{children}</>;
 };
 
 const AppInner: React.FC = () => {
   const location = useLocation();
+  const { token, loadUser } = useAuthStore();
   const showNavbar = ["/", "/release", "/404"].includes(location.pathname);
   const showFooter = ["/", "/release", "/login", "/register"].includes(location.pathname);
+  // Re-sync user (and permissions) from the server on load, so permission
+  // changes made by an admin are picked up without requiring re-login.
+  React.useEffect(() => {
+    if (token) {
+      loadUser();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // Safety net: reset body overflow on route change in case a modal leaked it
   React.useEffect(() => {
@@ -262,6 +279,8 @@ const AppInner: React.FC = () => {
           <Route path="/assignments" element={<RouteGuard><AssignmentsPage /></RouteGuard>} />
           <Route path="/assignments/:id" element={<RouteGuard><AssignmentDetailPage /></RouteGuard>} />
           <Route path="/tasks" element={<RouteGuard><TasksPage /></RouteGuard>} />
+          <Route path="/tasks/:id" element={<RouteGuard><TasksPage /></RouteGuard>} />
+          <Route path="/boards" element={<RouteGuard><BoardsPage /></RouteGuard>} />
           <Route path="/clients" element={<RouteGuard><ClientsPage /></RouteGuard>} />
           <Route path="/calendar" element={<RouteGuard><CalendarPage /></RouteGuard>} />
           <Route

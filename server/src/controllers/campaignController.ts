@@ -12,13 +12,16 @@ export const createCampaign = async (req: AuthRequest, res: Response): Promise<v
         const { name, purpose, description, people } = req.body;
         const tenantId = (req.user as any).tenantId?._id || (req.user as any).tenantId;
 
+        const creatorId = req.user!._id;
+        const peopleWithCreator = [...new Set([creatorId.toString(), ...(people || [])])];
+
         const campaign = await Campaign.create({
             name,
             purpose,
             description,
-            people: people || [],
+            people: peopleWithCreator,
             tenantId,
-            createdBy: req.user!._id,
+            createdBy: creatorId,
         });
 
         await ActivityLog.create({
@@ -102,6 +105,15 @@ export const updateCampaign = async (req: AuthRequest, res: Response): Promise<v
 
         const changedFields = Object.keys(req.body);
         Object.assign(campaign, req.body);
+
+        if (req.body.people) {
+            const creatorId = campaign.createdBy.toString();
+            if (!req.body.people.includes(creatorId)) {
+                req.body.people.push(creatorId);
+            }
+            campaign.people = [...new Set(req.body.people)];
+        }
+
         await campaign.save();
 
         const populated = await Campaign.findById(campaign._id).populate('people', 'name email avatar');

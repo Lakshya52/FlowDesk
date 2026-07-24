@@ -25,9 +25,11 @@ export interface ITask extends Document {
     assignment?: mongoose.Types.ObjectId;
     assignedTo: mongoose.Types.ObjectId;
     createdBy: mongoose.Types.ObjectId;
+    board?: mongoose.Types.ObjectId;
     dueDate: Date;
     priority: Priority;
-    status: TaskStatus;
+    status: string;
+    rank: number;
     subtasks: ISubtask[];
     dependencies: mongoose.Types.ObjectId[];
     timeEstimate?: number;
@@ -50,7 +52,9 @@ const taskSchema = new Schema<ITask>(
         createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
         dueDate: { type: Date },
         priority: { type: String, enum: Object.values(Priority), default: Priority.MEDIUM },
-        status: { type: String, enum: Object.values(TaskStatus), default: TaskStatus.TODO },
+        status: { type: String, default: TaskStatus.TODO },
+        rank: { type: Number, default: 0 },
+        board: { type: Schema.Types.ObjectId, ref: 'Board' },
         subtasks: [subtaskSchema],
         dependencies: [{ type: Schema.Types.ObjectId, ref: 'Task' }],
         timeEstimate: { type: Number },
@@ -63,5 +67,6 @@ taskSchema.index({ assignment: 1 });
 taskSchema.index({ assignedTo: 1 });
 taskSchema.index({ status: 1 });
 taskSchema.index({ dueDate: 1 });
+taskSchema.index({ board: 1 });
 
 export default mongoose.model<ITask>('Task', taskSchema);

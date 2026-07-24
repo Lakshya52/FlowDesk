@@ -229,6 +229,8 @@ const handlePincodeChange = async (value: string) => {
 };
 
 	useEffect(() => {
+		setIsCalling(false);
+		setCallDuration(0);
 		if (selectedLead) {
 			setIsEditingLead(false);
 			const hasMeeting = selectedLead.meetingAt;
@@ -264,6 +266,7 @@ const handlePincodeChange = async (value: string) => {
 	const handleToggleCall = () => {
 		if (isCalling) {
 			setIsCalling(false);
+			setCallDuration(0);
 			if (selectedLead) {
 				handleRecordCall(selectedLead._id);
 			}
@@ -358,6 +361,32 @@ const handlePincodeChange = async (value: string) => {
 			return data.success ? data.campaigns : [];
 		},
 	});
+
+	const filterOptionsContext = useMemo(
+		() => ({
+			filterCampaign,
+			searchQuery,
+			tabStatus: getTabStatusParam(activeTab),
+		}),
+		[filterCampaign, searchQuery, activeTab],
+	);
+
+	const { data: filterOptions = { industries: [], sources: [], cities: [], states: [], pincodes: [] } } =
+		useQuery({
+			queryKey: ["leads", "filter-options", filterOptionsContext],
+			queryFn: async () => {
+				const params: any = {};
+				if (filterCampaign) params.campaignId = filterCampaign;
+				if (searchQuery) params.search = searchQuery;
+				const tabStatus = getTabStatusParam(activeTab);
+				if (tabStatus) params.status = tabStatus;
+				const { data } = await api.get("/leads/filter-options", { params });
+				return data.success
+					? data.options
+					: { industries: [], sources: [], cities: [], states: [], pincodes: [] };
+			},
+			staleTime: 60000,
+		});
 
 	const countsParams = useMemo(
 		() => ({
@@ -490,6 +519,7 @@ const handlePincodeChange = async (value: string) => {
 			if (e.key === "Escape" && selectedLead) {
 				setSelectedLead(null);
 				setIsCalling(false);
+				setCallDuration(0);
 			}
 		};
 		document.addEventListener("keydown", handleEsc);
@@ -554,10 +584,11 @@ const handlePincodeChange = async (value: string) => {
 	) => {
 		if (status === "closed_won" && selectedLead) {
 			setProjectForm({
-				title: `Project - ${selectedLead.companyName || selectedLead.name || "Lead"}`,
+				title: `Converted - ${selectedLead.companyName || selectedLead.name || "Lead"}`,
 				clientName: selectedLead.companyName || "",
 				assignmentType: "transactional",
-				description: `Project from lead: ${selectedLead.name || ""}${selectedLead.companyName ? ` (${selectedLead.companyName})` : ""}`,
+				// description: `Project from lead: ${selectedLead.name || ""}${selectedLead.companyName ? ` (${selectedLead.companyName})` : ""}`,
+				description: `Successfully converted : ${selectedLead.name || ""}${selectedLead.companyName ? ` (${selectedLead.companyName})` : ""}`,
 				priority: "medium",
 				startDate: new Date().toISOString().split("T")[0],
 				dueDate: "",
@@ -570,7 +601,7 @@ const handlePincodeChange = async (value: string) => {
 		}
 		setUpdatingLead(true);
 		try {
-			const { data } = await api.put(`/leads/${leadId}`, { status });
+			const { data }  = await api.put(`/leads/${leadId}`, { status });
 			if (data.success) {
 				if (selectedLead?._id === leadId) setSelectedLead(data.lead);
 				queryClient.invalidateQueries({ queryKey: ["leads"] });
@@ -1115,13 +1146,7 @@ const handlePincodeChange = async (value: string) => {
 						onChange={(e) => setFilterIndustry(e.target.value)}
 					>
 						<option value="">All Industries</option>
-						{[
-							...new Set(
-								leads
-									.map((l: any) => l.industry)
-									.filter(Boolean) as string[],
-							),
-						].map((ind) => (
+						{filterOptions.industries.map((ind: string) => (
 							<option key={ind} value={ind}>
 								{ind}
 							</option>
@@ -1138,13 +1163,7 @@ const handlePincodeChange = async (value: string) => {
 						onChange={(e) => setFilterSource(e.target.value)}
 					>
 						<option value="">All Sources</option>
-						{[
-							...new Set(
-								leads
-									.map((l: any) => l.source)
-									.filter(Boolean) as string[],
-							),
-						].map((src) => (
+						{filterOptions.sources.map((src: string) => (
 							<option key={src} value={src}>
 								{src}
 							</option>
@@ -1177,13 +1196,7 @@ const handlePincodeChange = async (value: string) => {
 						onChange={(e) => setFilterCity(e.target.value)}
 					>
 						<option value="">All Cities</option>
-						{[
-							...new Set(
-								leads
-									.map((l: any) => l.city)
-									.filter(Boolean) as string[],
-							),
-						].map((c) => (
+						{filterOptions.cities.map((c: string) => (
 							<option key={c} value={c}>
 								{c}
 							</option>
@@ -1200,13 +1213,7 @@ const handlePincodeChange = async (value: string) => {
 						onChange={(e) => setFilterState(e.target.value)}
 					>
 						<option value="">All States</option>
-						{[
-							...new Set(
-								leads
-									.map((l: any) => l.state)
-									.filter(Boolean) as string[],
-							),
-						].map((s) => (
+						{filterOptions.states.map((s: string) => (
 							<option key={s} value={s}>
 								{s}
 							</option>
@@ -1223,21 +1230,34 @@ const handlePincodeChange = async (value: string) => {
 						onChange={(e) => setFilterPincode(e.target.value)}
 					>
 						<option value="">All Pincodes</option>
-						{[
-							...new Set(
-								leads
-									.map((l: any) => l.pincode)
-									.filter(Boolean) as string[],
-							),
-						].map((p) => (
+						{filterOptions.pincodes.map((p: string) => (
 							<option key={p} value={p}>
 								{p}
 							</option>
 						))}
 					</select>
+					<button
+						type="button"
+						onClick={() => {
+							setFilterCampaign("");
+							setFilterStatus("");
+							setFilterIndustry("");
+							setFilterSource("");
+							setFilterPriority("");
+							setFilterCity("");
+							setFilterState("");
+							setFilterPincode("");
+							setSearchInput("");
+							setSearchQuery("");
+							setActiveTab("all");
+							setPage(1);
+						}}
+						className="flex items-center gap-1 bg-(--color-surface) border border-(--color-border) rounded-lg px-3 py-1.5 text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg) transition-colors cursor-pointer"
+					>
+						<X size={12} />
+						Reset Filters
+					</button>
 				</div>
-
-				{/* pagination selector */}
 				<div
 				className="flex items-center gap-2 w-full justify-end mb-4 border-b border-(--color-border) pb-4"
 					// style={{
@@ -1522,6 +1542,7 @@ const handlePincodeChange = async (value: string) => {
 			<LeadDetailModal
 				selectedLead={selectedLead}
 				setSelectedLead={setSelectedLead}
+				setUpdatingLead={setUpdatingLead}
 				isAdmin={isAdmin}
 				isManager={isManager}
 				isCalling={isCalling}

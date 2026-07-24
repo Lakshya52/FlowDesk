@@ -65,11 +65,11 @@ export const navItems: NavItem[] = [
 		icon: Headset,
 		label: "CRM",
 		subItems: [
-			{ to: "/crm/dashboard", label: "Dashboard" },
+			{ to: "/crm/dashboard", label: "Overview" },
 			{ to: "/crm/campaigns", label: "Campaigns" },
 			{ to: "/crm/dial", label: "Dial Queue" },
 			{ to: "/crm/schedule", label: "Schedule" },
-			{ to: "/crm/plan", label: "Plan" },
+			// { to: "/crm/plan", label: "Plan" },
 			{ to: "/crm/summary", label: "Summary" },
 			{ to: "/crm/logs", label: "Logs" },
 			{ to: "/crm/field-visits", label: "Field Visits" },
@@ -79,10 +79,11 @@ export const navItems: NavItem[] = [
 	{
 		to: "/assignments",
 		icon: FolderKanban,
-		label: "Projects",
+		label: "Productivity",
 		subItems: [
-			{ to: "/assignments", label: "Projects" },
-			{ to: "/tasks", label: "Kanban Board" },
+			{ to: "/assignments", label: "Porjects" },
+			{ to: "/tasks", label: "Kanban View" },
+			{ to: "/boards", label: "Sprints" },
 		],
 	},
 	{ to: "/teams", icon: Users, label: "Our Teams" },
@@ -155,7 +156,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                         user?.permissions?.allowedTabs ??
                         navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
                     if (item.break) return true;
-                    return allowedTabs.includes(item.to);
+                    if (allowedTabs.includes(item.to)) return true;
+                    if (item.subItems && item.subItems.some(sub => allowedTabs.includes(sub.to))) return true;
+                    return false;
                 });
 
 	const toggleExpand = (to: string) => {

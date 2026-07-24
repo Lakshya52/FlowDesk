@@ -70,6 +70,7 @@ const userSchema = new Schema<IUser>(
                     '/teams',
                     '/assignments',
                     '/tasks',
+                    '/boards',
                     '/clients',
                     '/bulk-email',
                     '/canvas',

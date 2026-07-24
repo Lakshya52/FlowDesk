@@ -451,6 +451,27 @@ export const deleteUser = async (
 	}
 };
 
+export const activateUser = async (
+	req: AuthRequest,
+	res: Response,
+): Promise<void> => {
+	try {
+		const { id } = req.params;
+		const user = await User.findByIdAndUpdate(
+			id,
+			{ isActive: true },
+			{ returnDocument: "after" },
+		);
+		if (!user) {
+			res.status(404).json({ message: "User not found" });
+			return;
+		}
+		res.json({ message: "User activated successfully" });
+	} catch (error: any) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 export const permanentDeleteUser = async (
 	req: AuthRequest,
 	res: Response,

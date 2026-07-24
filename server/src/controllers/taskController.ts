@@ -2,6 +2,7 @@ import { Response } from 'express';
 import mongooseLib from 'mongoose';
 const mongoose = mongooseLib;
 import Task from '../models/Task';
+import Board from '../models/Board';
 import ActivityLog, { EntityType } from '../models/ActivityLog';
 import { AuthRequest } from '../middlewares/auth';
 import { createNotification } from '../services/notificationService';
@@ -34,8 +35,17 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
             }
         }
 
+        let rank = req.body.rank ?? 0;
+        if (req.body.board && req.body.status) {
+            const maxRankTask = await Task.findOne({ board: req.body.board, status: req.body.status })
+                .sort({ rank: -1 })
+                .select('rank');
+            rank = (maxRankTask?.rank ?? -1) + 1;
+        }
+
         const task = await Task.create({
             ...req.body,
+            rank,
             createdBy: req.user!._id,
         });
 
@@ -73,14 +83,35 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
 
 export const getTasks = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const { assignment: assignmentId, status, priority, assignedTo, search, companyId } = req.query;
+        const { assignment: assignmentId, status, priority, assignedTo, search, companyId, board: boardId } = req.query;
+
+        // Determine board membership up front — board membership is
+        // explicitly allowed to cross tenant boundaries (see getBoards/getBoard),
+        // so it must be able to bypass the tenant filter below.
+        let isBoardMember = false;
+        if (boardId) {
+            const board = await Board.findById(boardId).select('members createdBy');
+            if (board) {
+                const uid = req.user!._id.toString();
+                isBoardMember =
+                    board.createdBy.toString() === uid ||
+                    board.members.some((m: any) => m.toString() === uid);
+            }
+        }
+
         const tenantUserIds = await getTenantUserIds(req.user);
-        let andConditions: any[] = [
-            // Base tenant filter: task assigned to or created by users in this tenant
-            { $or: [{ assignedTo: { $in: tenantUserIds } }, { createdBy: { $in: tenantUserIds } }] }
-        ];
+        let andConditions: any[] = [];
+
+        if (!isBoardMember) {
+            // Base tenant filter: task assigned to or created by users in this tenant.
+            // Skipped for board members since boards can include cross-tenant users.
+            andConditions.push({
+                $or: [{ assignedTo: { $in: tenantUserIds } }, { createdBy: { $in: tenantUserIds } }]
+            });
+        }
 
         if (assignmentId) andConditions.push({ assignment: assignmentId });
+        if (boardId) andConditions.push({ board: boardId });
         if (status) andConditions.push({ status: status });
         if (priority) andConditions.push({ priority: priority });
         if (assignedTo) andConditions.push({ assignedTo: assignedTo });
@@ -110,7 +141,11 @@ export const getTasks = async (req: AuthRequest, res: Response): Promise<void> =
         }
 
         // Roles and permissions visibility enforcement
-        if (req.user!.role === 'member') {
+        // (isBoardMember already computed above)
+        if (isBoardMember) {
+            // Board membership already grants visibility into every task
+            // scoped to this board; skip the assignment/assignedTo filter.
+        } else if (req.user!.role === 'member') {
             // Employees see tasks assigned to them OR tasks in projects where they are in the team
             const AssignmentModel = (await import('../models/Assignment')).default;
             const myProjectIds = await AssignmentModel.find({
@@ -159,7 +194,8 @@ export const getTasks = async (req: AuthRequest, res: Response): Promise<void> =
             .populate('assignedTo', 'name email avatar')
             .populate('createdBy', 'name email')
             .populate('assignment', 'title')
-            .sort({ createdAt: -1 });
+            .populate('board', 'title color')
+            .sort({ rank: 1, createdAt: -1 });
 
         res.json({ tasks });
     } catch (error: any) {
@@ -208,6 +244,7 @@ export const getTask = async (req: AuthRequest, res: Response): Promise<void> =>
         }
 
         res.json({ task });
+        console.log("this is the probleeeemmmmmmmm.......!!!!!!!!!!!!!")
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -249,14 +286,6 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
             if (!authorized) {
                 res.status(403).json({ message: 'Insufficient permissions.' });
                 return;
-            }
-        }
-
-        // Security check for status override
-        if (req.user!.role === 'member') {
-            // Member CANNOT set status to completed directly
-            if (req.body.status === 'completed') {
-                req.body.status = 'review';
             }
         }
 
@@ -304,6 +333,29 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
         });
 
         res.json({ task });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const reorderTasks = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const { updates } = req.body;
+        if (!Array.isArray(updates) || updates.length === 0) {
+            res.status(400).json({ message: 'updates must be a non-empty array of { taskId, rank }' });
+            return;
+        }
+
+        const bulkOps = updates.map(({ taskId, rank }: { taskId: string; rank: number }) => ({
+            updateOne: {
+                filter: { _id: taskId },
+                update: { rank },
+            },
+        }));
+
+        await Task.bulkWrite(bulkOps);
+
+        res.json({ message: 'Tasks reordered successfully' });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }

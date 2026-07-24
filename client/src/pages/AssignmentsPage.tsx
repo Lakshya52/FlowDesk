@@ -147,7 +147,7 @@ const AssignmentsPage: React.FC = () => {
       const params: any = {};
       if (search) params.search = search;
       if (companyFilter) params.companyId = companyFilter;
-
+      
       const { data } = await api.get("/assignments", { params });
       return data.assignments || [];
     },

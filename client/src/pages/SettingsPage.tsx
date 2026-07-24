@@ -4,8 +4,38 @@ import { useThemeStore } from '../store/themeStore';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import Avatar from '../components/common/Avatar';
-import { Sun, Moon, Shield, Users, UserPlus, Trash2, Eye, EyeOff, Lock, Pencil, X as XIcon, MapPinned } from 'lucide-react';
+import { Sun, Moon, Shield, Users, UserPlus, Trash2, Eye, EyeOff, Lock, LockKeyhole, LockKeyholeOpen, Pencil, X as XIcon, MapPinned } from 'lucide-react';
 import { navItems, NavLinkItem } from '../components/layout/Sidebar';
+
+// Flatten top-level items AND their subItems into one list of toggleable routes,
+// so items like /tasks and /boards (which only exist as subItems) are included.
+const ALL_PERMISSION_ITEMS: { to: string; label: string; icon: NavLinkItem['icon'] }[] = (() => {
+    const seen = new Set<string>();
+    const items: { to: string; label: string; icon: NavLinkItem['icon'] }[] = [];
+
+    navItems
+        .filter((n): n is NavLinkItem => !n.break)
+        .forEach((item) => {
+            if (!seen.has(item.to)) {
+                seen.add(item.to);
+                items.push({ to: item.to, label: item.label, icon: item.icon });
+            }
+            if (item.subItems) {
+                item.subItems
+                    .filter((sub) => !sub.subItems)
+                    .forEach((sub) => {
+                        if (!seen.has(sub.to)) {
+                            seen.add(sub.to);
+                            items.push({ to: sub.to, label: `${item.label} — ${sub.label}`, icon: item.icon });
+                        }
+                    });
+            }
+        });
+
+    return items;
+})();
+
+const ALL_ALLOWED_TABS = ALL_PERMISSION_ITEMS.map((i) => i.to);
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Admin', manager: 'Manager', member: 'Team Member' };
 
@@ -16,14 +46,14 @@ const SettingsPage: React.FC = () => {
     const [showCreateUser, setShowCreateUser] = useState(false);
     // const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'member' });
     const [newUser, setNewUser] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'member',
-    permissions: { allowedTabs: navItems.filter((n): n is NavLinkItem => !n.break).map(n => n.to) }, // all selected by default
-});
+        name: '',
+        email: '',
+        password: '',
+        role: 'member',
+        permissions: { allowedTabs: ALL_ALLOWED_TABS },
+    });
     const [editingUserId, setEditingUserId] = useState<string | null>(null);
-    const [editForm, setEditForm] = useState({ role: 'member', permissions: { allowedTabs: navItems.filter((n): n is NavLinkItem => !n.break).map(n => n.to) } });
+    const [editForm, setEditForm] = useState({ role: 'member', permissions: { allowedTabs: ALL_ALLOWED_TABS } });
     const [savingEdit, setSavingEdit] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -89,7 +119,7 @@ const startEditUser = (u: any) => {
     setEditingUserId(u._id);
     setEditForm({
         role: u.role,
-        permissions: { allowedTabs: u.permissions?.allowedTabs ?? navItems.filter((n): n is NavLinkItem => !n.break).map(n => n.to) },
+        permissions: { allowedTabs: u.permissions?.allowedTabs ?? ALL_ALLOWED_TABS },
     });
 };
 
@@ -182,6 +212,16 @@ const updateUserPermissions = async (e: React.FormEvent) => {
             await api.delete(`/auth/users/${id}`);
             setUsers(prev => prev.map(u => u._id === id ? { ...u, isActive: false } : u));
         } catch { }
+    };
+
+    const activateUser = async (id: string) => {
+        try {
+            await api.put(`/auth/users/${id}/activate`);
+            setUsers(prev => prev.map(u => u._id === id ? { ...u, isActive: true } : u));
+            toast.success('User activated successfully');
+        } catch {
+            toast.error('Failed to activate user');
+        }
     };
 
     const permanentDeleteUser = async (id: string) => {
@@ -434,7 +474,8 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                     Module Access
                                 </label>
                                                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 8 }}>
-                                    {navItems.filter(item => !item.break).map(item => {
+
+                                    {ALL_PERMISSION_ITEMS.map(item => {
                                         const isChecked = newUser.permissions.allowedTabs.includes(item.to);
                                         return (
                                             <label
@@ -472,6 +513,44 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                             </label>
                                         );
                                     })}
+                                    {/* {navItems.filter(item => !item.break).map(item => {
+                                        const isChecked = newUser.permissions.allowedTabs.includes(item.to);
+                                        return (
+                                            <label
+                                                key={item.to}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 8,
+                                                    padding: '6px 10px',
+                                                    borderRadius: 6,
+                                                    border: `1px solid ${isChecked ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                                                    background: isChecked ? 'var(--color-primary-light)' : 'transparent',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.8125rem',
+                                                    fontWeight: 500,
+                                                    color: isChecked ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                                    transition: 'all 0.15s',
+                                                    userSelect: 'none',
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => {
+                                                        const current = newUser.permissions.allowedTabs;
+                                                        const updated = isChecked
+                                                            ? current.filter(t => t !== item.to)
+                                                            : [...current, item.to];
+                                                        setNewUser({ ...newUser, permissions: { allowedTabs: updated } });
+                                                    }}
+                                                    style={{ display: 'none' }}
+                                                />
+                                                <item.icon size={14} />
+                                                {item.label}
+                                            </label>
+                                        );
+                                    })} */}
                                 </div>
                             </div>
                             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -546,14 +625,16 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                                 </button>
                                                 {u.isActive && u._id !== user?._id && (
                                                     <button className="btn btn-ghost btn-sm" onClick={() => deactivateUser(u._id)} style={{ color: 'var(--color-warning)' }} title="Deactivate">
-                                                        <Shield size={16} />
+                                                        <LockKeyhole size={16} />
                                                     </button>
                                                 )}
-                                                {u._id !== user?._id && (
-                                                    <button className="btn btn-ghost btn-sm" onClick={() => permanentDeleteUser(u._id)} style={{ color: 'var(--color-error)' }} title="Delete Permanently">
-                                                        <Trash2 size={16} />
+                                                {!u.isActive && u._id !== user?._id && (
+                                                    <button className="btn btn-ghost btn-sm" onClick={() => activateUser(u._id)} style={{ color: 'var(--color-success)' }} title="Activate">
+                                                        <LockKeyholeOpen size={16} />
                                                     </button>
                                                 )}
+
+
                                             </div>
                                         </div>
 
@@ -575,7 +656,7 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                                         Module Access
                                                     </label>
                                                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 8 }}>
-                                                        {navItems.filter(item => !item.break).map(item => {
+                                                        {ALL_PERMISSION_ITEMS.map(item => {
                                                             const isChecked = editForm.permissions.allowedTabs.includes(item.to);
                                                             return (
                                                                 <label

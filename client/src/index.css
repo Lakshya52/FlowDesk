@@ -676,3 +676,15 @@ input, textarea, select, button, a-button, .btn, [role="button"], a {
     display: none !important;
   }
 }
+
+.task-highlight {
+  border: 2px solid var(--color-primary) !important;
+  background: var(--color-primary-light) !important;
+  animation: task-highlight-pulse 1.5s ease-in-out;
+}
+
+@keyframes task-highlight-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.5); }
+  50%  { box-shadow: 0 0 0 6px rgba(129, 140, 248, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0); }
+}

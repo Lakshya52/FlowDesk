@@ -40,6 +40,7 @@ import activityLogRoutes from "./routes/activityLogs";
 import crmSummaryRoutes from "./routes/crmSummary";
 import fieldVisitRoutes from "./routes/fieldVisits";
 import settingsRoutes from "./routes/settings";
+import boardRoutes from "./routes/boards";
 import { startRecurringJob } from "./services/recurringTaskService";
 import { startFieldVisitHeartbeat } from "./services/fieldVisitHeartbeatService";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
@@ -277,6 +278,7 @@ app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/crm-summary", crmSummaryRoutes);
 app.use("/api/field-visits", fieldVisitRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/boards", boardRoutes);
 
 // Socket.io connection logic
 io.on("connection", (socket) => {
@@ -392,7 +394,8 @@ io.on("connection", (socket) => {
 
 // Health check
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  // res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({ status: "ok"});
 });
 
 // Error handling

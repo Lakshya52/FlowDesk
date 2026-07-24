@@ -157,9 +157,13 @@ const Campaigns = () => {
     const handleCreate = async () => {
         if (!form.name.trim() || !form.purpose.trim()) return;
 
+        const membersWithCreator = currentUser?._id
+            ? [...new Set([currentUser._id, ...selectedMembers])]
+            : selectedMembers;
+
         if (editingCampaign) {
             updateMutation.mutate(
-                { id: editingCampaign._id, data: { name: form.name.trim(), purpose: form.purpose.trim(), description: form.description.trim(), people: selectedMembers } },
+                { id: editingCampaign._id, data: { name: form.name.trim(), purpose: form.purpose.trim(), description: form.description.trim(), people: membersWithCreator } },
                 {
                     onSuccess: () => {
                         resetForm();
@@ -368,7 +372,12 @@ const Campaigns = () => {
 
                 {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
                     <div className="flex gap-2">
-                        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+                        <button className="btn btn-primary" onClick={() => {
+                            setShowCreateModal(true);
+                            if (!editingCampaign && currentUser?._id) {
+                                setSelectedMembers(prev => prev.includes(currentUser._id) ? prev : [...prev, currentUser._id]);
+                            }
+                        }}>
                             <Plus size={16} /> New Campaign
                         </button>
                     </div>
@@ -515,7 +524,7 @@ const Campaigns = () => {
 
             {/* Create Campaign Modal */}
             <Modal isOpen={showCreateModal} onClose={() => { setShowCreateModal(false); resetForm(); }}>
-                <div className="card animate-fade-in max-w-[500px] w-full p-0 overflow-hidden rounded-2xl">
+                <div className="card animate-fade-in max-w-[500px] w-full p-0 overflow-hidden rounded-2xl" style={{padding:0}}>
                         <div className="px-6 py-5 border-b border-(--color-border) flex items-center justify-between bg-(--color-surface)">
                             <div className="flex items-center gap-2.5">
                                 <div className="w-9 h-9 rounded-xl bg-(--color-primary-light) flex items-center justify-center">
@@ -523,7 +532,7 @@ const Campaigns = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-base font-bold m-0">{editingCampaign ? 'Edit Campaign' : 'New Campaign'}</h3>
-                                    <p className="text-[0.72rem] text-(--color-text-tertiary) mt-[2px] m-0">
+                                    <p className="text-[0.72rem] text-(--color-text-tertiary) mt-0.5 m-0">
                                         {editingCampaign ? 'Update campaign details' : 'Create a new outreach campaign'}
                                     </p>
                                 </div>
@@ -585,14 +594,22 @@ const Campaigns = () => {
                                     ) : (
                                         users.map(user => {
                                             const isSelected = selectedMembers.includes(user._id);
+                                            const isCreator = editingCampaign
+                                                ? editingCampaign.createdBy?._id === user._id
+                                                : currentUser?._id === user._id;
                                             return (
                                                 <button
                                                     key={user._id}
-                                                    onClick={() => toggleMember(user._id)}
-                                                    className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'} rounded-full flex items-center gap-1.5 ${isSelected ? 'font-semibold' : 'font-normal'}`}
+                                                    onClick={() => {
+                                                        if (isCreator) return;
+                                                        toggleMember(user._id);
+                                                    }}
+                                                    style={{border:"1px solid #e2e8f0"}}
+                                                    className={`btn btn-sm rounded-full flex items-center gap-1.5 shrink-0 ${isSelected ? 'btn-primary border border-transparent' : 'btn-secondary'} ${isCreator ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                    disabled={isCreator}
                                                 >
-                                                    {isSelected ? <X size={12} /> : <Users size={12} />}
-                                                    {user.name}
+                                                    {isCreator ? <Users size={12} /> : isSelected ? <X size={12} /> : <Users size={12} />}
+                                                    {user.name}{isCreator ? ' (You)' : ''}
                                                 </button>
                                             );
                                         })

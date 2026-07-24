@@ -3,6 +3,7 @@ import {
     getLeads, getLead, createLead, updateLead, deleteLead,
     addNote, recordCall, importExcel, downloadSampleExcel,
     getUpcomingFollowups, updateMeetingStatus, getLeadCounts, getLeadStats,
+    getLeadFilterOptions,
 } from '../controllers/leadController';
 import { authenticate, authorize } from '../middlewares/auth';
 import { upload } from '../middlewares/upload';
@@ -20,6 +21,7 @@ router.get('/upcoming', getUpcomingFollowups);
 
 router.get('/stats', getLeadStats);
 router.get('/counts', getLeadCounts);
+router.get('/filter-options', getLeadFilterOptions);
 router.get('/', getLeads);
 router.get('/:id', getLead);
 router.post('/', createLead);

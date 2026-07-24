@@ -2,14 +2,15 @@
 /// <reference types="react-dom" />
 import * as React from 'react';
 import { useEffect, useState, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
 import Avatar from '../components/common/Avatar';
 import { useAuthStore } from '../store/authStore';
-import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload, Download, Trash2, Send, Users, Edit3, FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock } from 'lucide-react';
-import { format } from 'date-fns';
+import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload, Download, Trash2, Send, Users, Edit3, FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock, Check, SquarePen } from 'lucide-react';
+import { format, differenceInDays } from 'date-fns';
 import ProjectCanvas from '../components/assignments/ProjectCanvas';
 import FilePreviewModal from '../components/common/FilePreviewModal';
 import Modal from '../components/common/Modal';
@@ -23,10 +24,15 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuthStore();
+    const queryClient = useQueryClient();
     const isAdmin = user?.role === 'admin';
     const isManager = user?.role === 'manager';
-    const isEmployee = user?.role === 'member';
-    const canEdit = true; // Stay democratized: anyone who can see it can edit it
+
+    const canEditProject = isAdmin || isManager;
+    const canEditTask = (task: any) => {
+        if (isAdmin || isManager) return true;
+        return task.createdBy?._id === user?._id || task.assignedTo?._id === user?._id;
+    };
     const [assignment, setAssignment] = useState<any>(null);
     const [tasks, setTasks] = useState<any[]>([]);
     const [comments, setComments] = useState<any[]>([]);
@@ -42,8 +48,11 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const [taskForm, setTaskForm] = useState({ title: '', description: '', assignedTo: '', dueDate: '', priority: 'medium', noDueDate: false });
     const [showTeamModal, setShowTeamModal] = useState(false);
     const [updatingTeam, setUpdatingTeam] = useState(false);
-    const [editingTask, setEditingTask] = useState<string | null>(null);
-    const [editTaskForm, setEditTaskForm] = useState<any>({});
+    const [detailTask, setDetailTask] = useState<any>(null);
+    const [detailAttachments, setDetailAttachments] = useState<any[]>([]);
+    const [detailEditing, setDetailEditing] = useState(false);
+    const [detailEditForm, setDetailEditForm] = useState<any>({});
+    const [detailSaving, setDetailSaving] = useState(false);
     const [stagedFiles, setStagedFiles] = useState<any[]>([]);
     const [isUploadingFile, setIsUploadingFile] = useState(false);
     const [uploadingFileName, setUploadingFileName] = useState<string | null>(null);
@@ -62,6 +71,9 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const [mentionIndex, setMentionIndex] = useState(0);
     const [canvasUnlocked, setCanvasUnlocked] = useState(false);
     const [previewFile, setPreviewFile] = useState<{ url: string, type: string, name: string } | null>(null);
+    const [uploadingDetailAttachment, setUploadingDetailAttachment] = useState(false);
+    const detailAttachmentInputRef = useRef<HTMLInputElement>(null);
+    const [isDragOver, setIsDragOver] = useState(false);
 
     const[manageTeamErrorMsg,setManageTeamErrorMsg] = useState("")
 
@@ -165,7 +177,6 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         }
     };
 
-    // const canEdit = true; // Everyone can edit and manage tasks
     const [isEditingProject, setIsEditingProject] = useState(false);
     const [editProjectForm, setEditProjectForm] = useState({
         title: '',
@@ -394,9 +405,14 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const handleDelete = async () => {
         if (!window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) return;
         try {
+            console.log('🗑️ Deleting assignment:', id);
             await api.delete(`/assignments/${id}`);
+            console.log('✅ Assignment deleted from DB, invalidating cache...');
+            await queryClient.invalidateQueries({ queryKey: ['assignments'] });
+            console.log('✅ Cache invalidated, navigating to /assignments');
             navigate('/assignments');
         } catch (e: any) {
+            console.error('❌ Delete failed:', e);
             alert(e.response?.data?.message || 'Failed to delete project please try again later');
         }
     };
@@ -454,7 +470,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             };
             const { data } = await api.put(`/tasks/${taskId}`, payload);
             setTasks(prev => prev.map(t => t._id === taskId ? data.task : t));
-            setEditingTask(null);
+            // setEditingTask(null);
         } catch (e: any) { alert(e.response?.data?.message || 'Failed'); }
     };
 
@@ -468,14 +484,56 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
 
     const updateTaskStatus = async (taskId: string, status: string) => {
         try {
-            // Override status for employees trying to complete
-            let targetStatus = status;
-            if (isEmployee && status === 'completed') {
-                targetStatus = 'review';
-            }
-            const { data } = await api.put(`/tasks/${taskId}`, { status: targetStatus });
+            const { data } = await api.put(`/tasks/${taskId}`, { status });
             setTasks(prev => prev.map(t => t._id === taskId ? data.task : t));
         } catch { }
+    };
+
+    const openDetailAttachments = async (taskId: string) => {
+        try {
+            const { data } = await api.get('/files', { params: { taskId } });
+            setDetailAttachments(data.attachments || []);
+        } catch {
+            setDetailAttachments([]);
+        }
+    };
+
+    const startDetailEdit = () => {
+        setDetailEditForm({
+            title: detailTask.title,
+            description: detailTask.description || '',
+            assignedTo: detailTask.assignedTo?._id || '',
+            priority: detailTask.priority,
+            status: detailTask.status,
+            dueDate: detailTask.dueDate && new Date(detailTask.dueDate).getFullYear() > 1970 ? detailTask.dueDate.split('T')[0] : '',
+            noDueDate: !detailTask.dueDate || new Date(detailTask.dueDate).getFullYear() <= 1970,
+        });
+        setDetailEditing(true);
+    };
+
+    const saveDetailEdit = async () => {
+        if (!detailTask || !detailEditForm.title?.trim()) return;
+        setDetailSaving(true);
+        try {
+            const payload: any = {
+                title: detailEditForm.title,
+                description: detailEditForm.description,
+                assignedTo: detailEditForm.assignedTo,
+                priority: detailEditForm.priority,
+                status: detailEditForm.status,
+            };
+            if (!detailEditForm.noDueDate && detailEditForm.dueDate) {
+                payload.dueDate = detailEditForm.dueDate;
+            }
+            const { data } = await api.put(`/tasks/${detailTask._id}`, payload);
+            setTasks(prev => prev.map(t => t._id === detailTask._id ? data.task : t));
+            setDetailTask(data.task);
+            setDetailEditing(false);
+        } catch (e: any) {
+            alert(e.response?.data?.message || 'Failed to update task');
+        } finally {
+            setDetailSaving(false);
+        }
     };
 
     const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -527,6 +585,79 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch { }
+    };
+
+    const getDeadlineStyle = (dueDate: string, status: string) => {
+        if (!dueDate || new Date(dueDate).getFullYear() <= 1970)
+            return { color: 'var(--color-text-tertiary)' };
+        if (status === 'completed') return { color: '#22c55e' };
+        const days = differenceInDays(new Date(dueDate), new Date());
+        if (days < 0) return { color: '#ef4444', fontWeight: 600 };
+        if (days === 0) return { color: '#d97706', fontWeight: 600 };
+        if (days <= 2) return { color: '#f59e0b' };
+        return { color: 'var(--color-text-tertiary)' };
+    };
+
+    const getDeadlineLabel = (dueDate: string, status: string) => {
+        if (!dueDate || new Date(dueDate).getFullYear() <= 1970)
+            return 'No due date';
+        if (status === 'completed') return format(new Date(dueDate), 'MMM d');
+        const days = differenceInDays(new Date(dueDate), new Date());
+        if (days < 0) return `${Math.abs(days)}d overdue`;
+        if (days === 0) return 'Due today';
+        if (days <= 2) return `${days}d left`;
+        return format(new Date(dueDate), 'MMM d');
+    };
+
+    const handleDetailAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !detailTask) return;
+        setUploadingDetailAttachment(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('taskId', detailTask._id);
+            const { data } = await api.post('/files', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            setDetailAttachments((prev) => [data.attachment, ...prev]);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Upload failed');
+        } finally {
+            setUploadingDetailAttachment(false);
+            if (detailAttachmentInputRef.current) detailAttachmentInputRef.current.value = '';
+        }
+    };
+
+    const handleDeleteDetailAttachment = async (attachmentId: string) => {
+        if (!window.confirm('Delete this attachment?')) return;
+        try {
+            await api.delete(`/files/${attachmentId}`);
+            setDetailAttachments((prev) => prev.filter((a) => a._id !== attachmentId));
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Failed to delete');
+        }
+    };
+
+    const handleDetailFileDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (!file || !detailTask) return;
+        setUploadingDetailAttachment(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('taskId', detailTask._id);
+            const { data } = await api.post('/files', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            setDetailAttachments((prev) => [data.attachment, ...prev]);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Upload failed');
+        } finally {
+            setUploadingDetailAttachment(false);
+        }
     };
 
     const sendChatMessage = async (e: React.FormEvent) => {
@@ -888,7 +1019,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                             </>
                         )}
                     </div>
-                    {canEdit && (
+                    {canEditProject && (
                         <div className="flex flex-wrap gap-2">
                             {isEditingProject ? (
                                 <>
@@ -971,7 +1102,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                 {m.name}
 
                                 {/* can edit and the name is not the current logged in user name */}
-                                {canEdit && (m.name != user?.name ) && (
+                                {canEditProject && (m.name != user?.name ) && (
                                     <>
                                         <button
                                             className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex cursor-pointer items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity scale-75 group-hover:scale-100"
@@ -985,7 +1116,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                         ))}
                     </div>
                     
-                    {canEdit && (
+                    {canEditProject && (
                         <button className="btn btn-ghost btn-xs" style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }} onClick={() => setShowTeamModal(true)}>
                             Manage Team
                         </button>
@@ -1141,7 +1272,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             {/* Tasks Tab */}
             {activeTab === 'tasks' && (
                 <div>
-                    {canEdit && (
+                    {canEditProject && (
                         <button className="btn btn-secondary btn-sm" style={{ marginBottom: 16 }} onClick={() => {
                             const show = !showTaskForm;
                             setShowTaskForm(show);
@@ -1212,131 +1343,30 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {tasks
                                 .map(t => (
-                                    <div key={t._id} id={`task-${t._id}`} className="card" style={{ padding: '14px 18px' }}>
-                                        {editingTask === t._id ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 } as React.CSSProperties}>
-                                                <input className="input" required placeholder="Enter task title" value={editTaskForm.title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditTaskForm({ ...editTaskForm, title: e.target.value })} />
-                                                <textarea className="input" required rows={2} placeholder="Enter task description..." value={editTaskForm.description} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditTaskForm({ ...editTaskForm, description: e.target.value })} />
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                                                    <select className="select" value={editTaskForm.assignedTo} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditTaskForm({ ...editTaskForm, assignedTo: e.target.value })}>
-                                                        {users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
-                                                    </select>
-                                                    <div>
-                                                        <input className="input" type="date" disabled={editTaskForm.noDueDate} value={editTaskForm.dueDate?.split('T')[0]} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditTaskForm({ ...editTaskForm, dueDate: e.target.value })} />
-                                                        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                            <input
-                                                                type="checkbox"
-                                                                id={`editTaskNoDueDate-${t._id}`}
-                                                                checked={editTaskForm.noDueDate}
-                                                                onChange={e => setEditTaskForm({ ...editTaskForm, noDueDate: e.target.checked })}
-                                                            />
-                                                            <label htmlFor={`editTaskNoDueDate-${t._id}`} style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>No due date</label>
-                                                        </div>
-                                                    </div>
-                                                    <select className="select" value={editTaskForm.priority} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditTaskForm({ ...editTaskForm, priority: e.target.value })}>
-                                                        {Object.entries(PRIORITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                                    <button className="btn btn-ghost btn-xs" onClick={() => setEditingTask(null)}>Cancel</button>
-                                                    <button className="btn btn-primary btn-xs" onClick={() => updateTask(t._id, editTaskForm)}>Save</button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                        <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{t.title}</span>
-                                                        <span className={`badge badge-${t.priority}`}>{PRIORITY_LABELS[t.priority]}</span>
-                                                        <span className={`badge badge-${t.status}`}>{TASK_STATUS_LABELS[t.status]}</span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }} >
-
-                                                        {t.description ? (
-                                                            <>
-                                                                <span className="font-semibold text-(--color-text-secondary)">Task Description :</span> {t.description}
-                                                            </>
-                                                        ) : null}
-
-                                                    </div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                                                        Assigned to {t.assignedTo?.name}<span style={{ color: getDueDateColor(t.dueDate) }}>
-                                                            <span style={{ color: 'var(--color-text-secondary)' }} > · </span>
-                                                            {t.status === "completed" ? (
-                                                                <span className='line-through text-(--color-success) ' >{t.dueDate && new Date(t.dueDate).getFullYear() > 1970 ? `Due ${format(new Date(t.dueDate), 'MMM d')}` : 'No due date'}</span>
-                                                            ) : (
-                                                                <span>{t.dueDate && new Date(t.dueDate).getFullYear() > 1970 ? `Due ${format(new Date(t.dueDate), 'MMM d')}` : 'No due date'}</span>
-                                                            )}
-
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    {t.status === 'review' && (isAdmin || isManager) ? (
-                                                        <div style={{ display: 'flex', gap: 6 }}>
-                                                            <button
-                                                                className="btn btn-xs"
-                                                                style={{ backgroundColor: '#22c55e', color: 'white', border: 'none' }}
-                                                                onClick={() => updateTaskStatus(t._id, 'completed')}
-                                                            >
-                                                                Approve
-                                                            </button>
-                                                            <button
-                                                                className="btn btn-xs"
-                                                                style={{ backgroundColor: '#ef4444', color: 'white', border: 'none' }}
-                                                                onClick={() => updateTaskStatus(t._id, 'in_progress')}
-                                                            >
-                                                                Reject
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            {t.status !== 'completed' && (
-                                                                <select
-                                                                    className="select"
-                                                                    style={{ fontSize: '0.75rem', padding: '4px 24px 4px 8px', width: 120 }}
-                                                                    value={isEmployee && t.status === 'review' ? 'review' : t.status}
-                                                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                                                                        const val = e.target.value;
-                                                                        if (isEmployee && val === 'review') {
-                                                                            updateTaskStatus(t._id, 'review');
-                                                                        } else {
-                                                                            updateTaskStatus(t._id, val);
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    {Object.entries(TASK_STATUS_LABELS).map(([k, v]) => {
-                                                                        if (isEmployee && k === 'review') return null;
-                                                                        if (isEmployee && k === 'completed') return <option key={k} value="review">Mark for Review</option>;
-                                                                        return <option key={k} value={k}>{v}</option>;
-                                                                    })}
-                                                                </select>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                    {canEdit && (
-                                                        <>
-                                                            <button className="btn btn-ghost btn-xs" onClick={() => {
-                                                                setEditingTask(t._id);
-                                                                setEditTaskForm({
-                                                                    title: t.title,
-                                                                    description: t.description || '',
-                                                                    assignedTo: t.assignedTo?._id,
-                                                                    dueDate: t.dueDate && new Date(t.dueDate).getFullYear() > 1970 ? t.dueDate.split('T')[0] : '',
-                                                                    noDueDate: t.noDueDate || (!t.dueDate || new Date(t.dueDate).getFullYear() <= 1970),
-                                                                    priority: t.priority,
-                                                                });
-                                                            }}>
-                                                                <Edit3 size={13} />
-                                                            </button>
-                                                            <button className="btn btn-ghost btn-xs" style={{ color: 'var(--color-error)' }} onClick={() => deleteTask(t._id)}>
-                                                                <Trash2 size={13} />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div key={t._id} id={`task-${t._id}`} className="card" style={{ padding: '14px 18px', cursor: 'pointer' }}
+                                        onClick={() => { setDetailTask(t); openDetailAttachments(t._id); }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                            <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{t.title}</span>
+                                            <span className={`badge badge-${t.priority}`}>{PRIORITY_LABELS[t.priority]}</span>
+                                            <span className={`badge badge-${t.status}`}>{TASK_STATUS_LABELS[t.status]}</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }} >
+                                            {t.description ? (
+                                                <>
+                                                    <span className="font-semibold text-(--color-text-secondary)">Task Description :</span> {t.description}
+                                                </>
+                                            ) : null}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                                            Assigned to {t.assignedTo?.name}<span style={{ color: getDueDateColor(t.dueDate) }}>
+                                                <span style={{ color: 'var(--color-text-secondary)' }} > · </span>
+                                                {t.status === "completed" ? (
+                                                    <span className='line-through text-(--color-success) ' >{t.dueDate && new Date(t.dueDate).getFullYear() > 1970 ? `Due ${format(new Date(t.dueDate), 'MMM d')}` : 'No due date'}</span>
+                                                ) : (
+                                                    <span>{t.dueDate && new Date(t.dueDate).getFullYear() > 1970 ? `Due ${format(new Date(t.dueDate), 'MMM d')}` : 'No due date'}</span>
+                                                )}
+                                            </span>
+                                        </div>
                                     </div>
                                 ))}
                         </div>
@@ -1807,6 +1837,239 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                     </div>
                     
                 </div>
+            </Modal>
+
+            {/* Task Detail Modal */}
+            <Modal isOpen={!!detailTask} onClose={() => { setDetailTask(null); setDetailAttachments([]); setDetailEditing(false); }}>
+                {detailTask && (
+                    <div className="card animate-fade-in" style={{ maxWidth: 640, width: '100%', padding: 0, overflow: 'hidden', borderRadius: 16 }}>
+                        <div style={{ padding: '20px 24px', paddingBottom: '0px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', background: 'var(--color-surface)' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Title</div>
+                                {detailEditing ? (
+                                    <input className="input" style={{ fontSize: '0.95rem', fontWeight: 700 }} value={detailEditForm.title} onChange={(e) => setDetailEditForm({ ...detailEditForm, title: e.target.value })} />
+                                ) : (
+                                    <div style={{ fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.4 }}>{detailTask.title}</div>
+                                )}
+                            </div>
+                            <div className="flex items-center justify-center" style={{ gap: 6, flexShrink: 0, marginLeft: 12 }}>
+                                {!detailEditing && canEditTask(detailTask) && (
+                                    <button className="btn btn-ghost btn-xs" style={{ color: 'var(--color-primary)' }} onClick={startDetailEdit} title="Edit Task">
+                                        <SquarePen size={20} />
+                                    </button>
+                                )}
+                                <button
+                                    className={`bg-(--color-surface-hover) border-none cursor-pointer text-(--color-text-tertiary) ${detailEditing ? "w-10 h-10":"w-8 h-8"} `}
+                                    style={{ background: 'var(--color-surface-hover)', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    onClick={() => {
+                                        if (detailEditing) {
+                                            setDetailEditing(false);
+                                        } else {
+                                            setDetailTask(null); setDetailAttachments([]); setDetailEditing(false);
+                                        }
+                                    }}
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 20, maxHeight: '70dvh', overflowY: 'auto' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+                                {detailEditing ? (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                            <div>
+                                                <label style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', display: 'block' }}>Assigned To</label>
+                                                <select className="select" style={{ width: '100%' }} value={detailEditForm.assignedTo} onChange={(e) => setDetailEditForm({ ...detailEditForm, assignedTo: e.target.value })}>
+                                                    {users.map((u: any) => (
+                                                        <option key={u._id} value={u._id}>{u.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', display: 'block' }}>Priority</label>
+                                                <select className="select" style={{ width: '100%' }} value={detailEditForm.priority} onChange={(e) => setDetailEditForm({ ...detailEditForm, priority: e.target.value })}>
+                                                    {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                                                        <option key={k} value={k}>{v}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', display: 'block' }}>Status</label>
+                                                <select className="select" style={{ width: '100%' }} value={detailEditForm.status} onChange={(e) => setDetailEditForm({ ...detailEditForm, status: e.target.value })}>
+                                                    {Object.entries(TASK_STATUS_LABELS).map(([k, v]) => (
+                                                        <option key={k} value={k}>{v}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', display: 'block' }}>Due Date</label>
+                                                <input type="date" className="input" style={{ width: '100%' }} value={detailEditForm.dueDate} disabled={detailEditForm.noDueDate} onChange={(e) => setDetailEditForm({ ...detailEditForm, dueDate: e.target.value })} />
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                                                    <input type="checkbox" checked={detailEditForm.noDueDate} onChange={(e) => setDetailEditForm({ ...detailEditForm, dueDate: e.target.checked ? '' : detailEditForm.dueDate, noDueDate: e.target.checked })} />
+                                                    No Due Date
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', display: 'block' }}>Description</label>
+                                            <textarea className="input" style={{ minHeight: 80, resize: 'vertical' }} value={detailEditForm.description} onChange={(e) => setDetailEditForm({ ...detailEditForm, description: e.target.value })} placeholder="Task description..." />
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                            <button className="btn btn-ghost btn-sm" onClick={() => setDetailEditing(false)}>Cancel</button>
+                                            <button className="btn btn-primary btn-sm" onClick={saveDetailEdit} disabled={detailSaving}>
+                                                {detailSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                                {detailSaving ? 'Saving...' : 'Save'}
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Assigned To</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <Avatar src={detailTask.assignedTo?.avatar} name={detailTask.assignedTo?.name} size={22} />
+                                                    <span style={{ fontSize: '0.8125rem' }}>{detailTask.assignedTo?.name}</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Priority</div>
+                                                <span className={`badge badge-${detailTask.priority}`} style={{ fontSize: '0.75rem' }}>
+                                                    {PRIORITY_LABELS[detailTask.priority]}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Status</div>
+                                                <span className={`badge badge-${detailTask.status}`} style={{ fontSize: '0.75rem', textTransform: 'capitalize' }}>
+                                                    {detailTask.status?.replace(/_/g, ' ')}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Created</div>
+                                                <span style={{ fontSize: '0.8125rem' }}>{detailTask.createdAt ? format(new Date(detailTask.createdAt), 'MMM d, yyyy') : '—'}</span>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Due Date</div>
+                                                <span style={{ fontSize: '0.8125rem', ...getDeadlineStyle(detailTask.dueDate, detailTask.status) }}>
+                                                    {getDeadlineLabel(detailTask.dueDate, detailTask.status)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {detailTask.description && (
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Description</div>
+                                                <div style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{detailTask.description}</div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                {detailTask.assignment && (
+                                    <div style={{ padding: '10px 12px', background: 'var(--color-primary-light)', borderRadius: 8 }}>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Project: </span>
+                                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-primary)', cursor: 'pointer' }} onClick={() => { setDetailTask(null); navigate(`/assignments/${detailTask.assignment._id}`); }}>
+                                            {detailTask.assignment.title}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, borderLeft: '1px solid var(--color-border)', paddingLeft: 20 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Paperclip size={14} style={{ color: 'var(--color-text-tertiary)' }} />
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>
+                                        Attachments ({detailAttachments.length})
+                                    </span>
+                                </div>
+
+                                <div
+                                    onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                                    onDragLeave={() => setIsDragOver(false)}
+                                    onDrop={handleDetailFileDrop}
+                                    onClick={() => detailAttachmentInputRef.current?.click()}
+                                    style={{
+                                        border: `2px dashed ${isDragOver ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                                        borderRadius: 10,
+                                        padding: '18px 12px',
+                                        textAlign: 'center',
+                                        cursor: 'pointer',
+                                        background: isDragOver ? 'var(--color-primary-light)' : 'var(--color-surface)',
+                                        transition: 'all 0.2s ease',
+                                    }}
+                                >
+                                    <input
+                                        ref={detailAttachmentInputRef}
+                                        type="file"
+                                        className="hidden"
+                                        onChange={handleDetailAttachmentUpload}
+                                    />
+                                    {uploadingDetailAttachment ? (
+                                        <Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-primary)', margin: '0 auto 4px' }} />
+                                    ) : (
+                                        <Upload size={20} style={{ color: isDragOver ? 'var(--color-primary)' : 'var(--color-text-tertiary)', margin: '0 auto 4px', display: 'block' }} />
+                                    )}
+                                    <p style={{ fontSize: '0.78rem', fontWeight: 600, margin: '0 0 2px', color: isDragOver ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
+                                        {uploadingDetailAttachment ? 'Uploading...' : 'Drop file here or click to browse'}
+                                    </p>
+                                    <p style={{ fontSize: '0.68rem', margin: 0, color: 'var(--color-text-tertiary)' }}>
+                                        Max 50MB
+                                    </p>
+                                </div>
+
+                                {detailAttachments.length > 0 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        {detailAttachments.map((att: any) => (
+                                            <div
+                                                key={att._id}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                    padding: '6px 10px', borderRadius: 6,
+                                                    border: '1px solid var(--color-border)', background: 'var(--color-surface)',
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                                                    <Paperclip size={12} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                                                    <span style={{ fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {att.originalName}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 2, flexShrink: 0, marginLeft: 6 }}>
+                                                    <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', alignSelf: 'center' }}>
+                                                        {att.fileSize > 1048576 ? `${(att.fileSize / 1048576).toFixed(1)}MB` : `${(att.fileSize / 1024).toFixed(0)}KB`}
+                                                    </span>
+                                                    <button
+                                                        className="btn btn-ghost btn-xs"
+                                                        style={{ padding: 2, color: 'var(--color-primary)' }}
+                                                        onClick={() => downloadFile(att._id, att.originalName)}
+                                                    >
+                                                        <Download size={12} />
+                                                    </button>
+                                                    {(user?.role === 'admin' || att.uploadedBy?._id === user?._id) && (
+                                                        <button
+                                                            className="btn btn-ghost btn-xs"
+                                                            style={{ padding: 2, color: 'var(--color-error)' }}
+                                                            onClick={() => handleDeleteDetailAttachment(att._id)}
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {detailAttachments.length === 0 && (
+                                    <div style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)', textAlign: 'center', padding: '12px 0' }}>
+                                        No attachments yet
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </div >
     );

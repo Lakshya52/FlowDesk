@@ -333,15 +333,20 @@ export const deleteAssignment = async (
   res: Response,
 ): Promise<void> => {
   try {
+    console.log('🗑️ [DELETE] Step 1: Fetching tenant user IDs');
     const tenantUserIds = await getTenantUserIds(req.user);
     console.log(
-      `🗑️ Attempting to delete assignment: ${req.params.id} by user: ${req.user?._id}`,
+      `🗑️ [DELETE] Step 2: Attempting to delete assignment: ${req.params.id} by user: ${req.user?._id}`,
     );
+
+    console.log('🗑️ [DELETE] Step 3: Finding assignment in DB...');
     const assignment = await Assignment.findById(req.params.id);
     if (!assignment) {
+      console.log('❌ [DELETE] Assignment not found in DB:', req.params.id);
       res.status(404).json({ message: "Assignment not found" });
       return;
     }
+    console.log('✅ [DELETE] Step 4: Found assignment:', assignment.title);
 
     // Tenant check
     const creatorInTenant = tenantUserIds.includes(assignment.createdBy.toString());
@@ -349,9 +354,11 @@ export const deleteAssignment = async (
       tenantUserIds.includes(id.toString())
     );
     if (!creatorInTenant && !teamInTenant) {
+      console.log('❌ [DELETE] Tenant check failed - access denied');
       res.status(403).json({ message: "Access denied" });
       return;
     }
+    console.log('✅ [DELETE] Step 5: Tenant check passed');
 
     // Authorization check: Admin OR In Team OR Creator
     const isCreator =
@@ -361,14 +368,18 @@ export const deleteAssignment = async (
     );
 
     if (req.user!.role !== "admin" && !isCreator && !isInTeam) {
+      console.log('❌ [DELETE] Auth check failed - insufficient permissions');
       res.status(403).json({
         message:
           "Insufficient permissions: You are not included in this project.",
       });
       return;
     }
+    console.log('✅ [DELETE] Step 6: Auth check passed');
 
-    await assignment.deleteOne();
+    console.log('🗑️ [DELETE] Step 7: Deleting assignment from DB...');
+    const deleteResult = await assignment.deleteOne();
+    console.log('✅ [DELETE] Step 8: deleteOne() result:', JSON.stringify(deleteResult));
 
     await ActivityLog.create({
       action: "Assignment deleted",
@@ -377,9 +388,12 @@ export const deleteAssignment = async (
       entityId: assignment._id,
       metadata: { title: assignment.title },
     });
+    console.log('✅ [DELETE] Step 9: Activity log created');
 
+    console.log('✅ [DELETE] Step 10: Sending success response');
     res.json({ message: "Assignment deleted successfully" });
   } catch (error: any) {
+    console.error('❌ [DELETE] Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
