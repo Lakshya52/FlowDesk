@@ -1047,7 +1047,7 @@ const TasksPage: React.FC = () => {
                   <option key={a._id} value={a._id}>{a.title}</option>
                 ))}
               </select>
-            </div>
+            </div> 
             <div className={`${createForm.assignment == "" ? "hidden" : null}`}>
               <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
                 Assign To <span style={{ color: "var(--color-danger)" }}>*</span>
