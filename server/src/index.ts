@@ -8,11 +8,17 @@ import sharp from "sharp";
 // Load environment variables early
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is not set");
+  process.exit(1);
+}
+
 import { Server } from "socket.io";
 import http from "http";
 import dns from "node:dns";
 
 import buddyRoute from "./routes/buddy";
+import { authenticate } from "./middlewares/auth";
 
 // Force DNS to resolve IPv4 first to avoid Atlas connection issues on Windows
 dns.setDefaultResultOrder("ipv4first");
@@ -49,9 +55,7 @@ const app = express();
 const server = http.createServer(app);
 const clientUrls = [
   process.env.CLIENT_URL,
-  "https://flowdesk-frontend-g35x.onrender.com",
   "http://localhost:5173",
-  "https://districts-beside-roughly-reached.trycloudflare.com",
   "https://flowdesk.raksco.in",
 ].filter(Boolean) as string[];
 
@@ -109,7 +113,7 @@ app.use(
       if (!origin || clientUrls.includes(origin)) {
         callback(null, true);
       } else {
-        callback(null, true); // Fallback to true if we're unsure, or log it
+        callback(null, false);
       }
     },
     credentials: true,
@@ -223,9 +227,9 @@ app.get("/uploads/:filename/resize", async (req, res) => {
 });
 
 // Ollama proxy endpoint
-app.post("/api/buddy/ollama", async (req, res) => {
+app.post("/api/buddy/ollama", authenticate, async (req, res) => {
   try {
-    req.setTimeout(120000); // 2 minutes
+    req.setTimeout(120000); // 2 minutes maggie
     res.setTimeout(120000);
 
     const response = await fetch("http://127.0.0.1:11434/api/chat", {
@@ -254,7 +258,7 @@ app.post("/api/buddy/ollama", async (req, res) => {
 });
 
 // API Routes
-app.use("/api/buddy", buddyRoute);
+app.use("/api/buddy", authenticate, buddyRoute);
 app.use("/api/auth", authRoutes);
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/tasks", taskRoutes);

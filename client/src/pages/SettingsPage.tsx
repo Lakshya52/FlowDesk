@@ -53,7 +53,14 @@ const SettingsPage: React.FC = () => {
         permissions: { allowedTabs: ALL_ALLOWED_TABS },
     });
     const [editingUserId, setEditingUserId] = useState<string | null>(null);
-    const [editForm, setEditForm] = useState({ role: 'member', permissions: { allowedTabs: ALL_ALLOWED_TABS } });
+    const [editForm, setEditForm] = useState({
+        name: "", 
+        email: "", 
+        role: 'member', 
+        permissions: { 
+            allowedTabs: ALL_ALLOWED_TABS 
+        } 
+    });
     const [savingEdit, setSavingEdit] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -118,12 +125,14 @@ const SettingsPage: React.FC = () => {
 const startEditUser = (u: any) => {
     setEditingUserId(u._id);
     setEditForm({
+        name: u.name,
+        email : u.email,
         role: u.role,
         permissions: { allowedTabs: u.permissions?.allowedTabs ?? ALL_ALLOWED_TABS },
     });
 };
 
-const updateUserPermissions = async (e: React.FormEvent) => {
+const updateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUserId) return;
     setSavingEdit(true);
@@ -131,6 +140,7 @@ const updateUserPermissions = async (e: React.FormEvent) => {
         const { data } = await api.put(`/auth/users/${editingUserId}`, editForm);
         setUsers(prev => prev.map(u => u._id === editingUserId ? data.user : u));
         setEditingUserId(null);
+        alert(data.message);
     } catch (e: any) {
         alert(e.response?.data?.message || 'Failed to update user');
     } finally {
@@ -633,13 +643,18 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                                         <LockKeyholeOpen size={16} />
                                                     </button>
                                                 )}
+                                                {/* {!u.isActive && u._id !== user?._id && ( */}
+                                                    <button className="btn btn-ghost btn-sm" onClick={() => permanentDeleteUser(u._id)} style={{ color: 'var(--color-danger)' }} title="Activate">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                {/* // )} */}
 
 
                                             </div>
                                         </div>
 
                                         {editingUserId === u._id && (
-                                            <form onSubmit={updateUserPermissions} className="card" style={{ padding: 16, marginTop: 6, marginBottom: 10, border: '1px solid var(--color-primary)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            <form onSubmit={updateUser} className="card" style={{ padding: 16, marginTop: 6, marginBottom: 10, border: '1px solid var(--color-primary)', display: 'flex', flexDirection: 'column', gap: 12 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Editing: {u.name}</span>
                                                     <button type="button" onClick={() => setEditingUserId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}>
@@ -647,13 +662,46 @@ const updateUserPermissions = async (e: React.FormEvent) => {
                                                     </button>
                                                 </div>
 
-                                                <select className="select" value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
-                                                    {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                                </select>
+                                                <div className='flex items-center justify-center'>
+                                                    <span className='min-w-20' >
+                                                        Name : 
+                                                    </span>
+                                                    <div className='flex-1' >
+                                                        <input  className='input flex-1' value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} type='text'
+                                                            required
+                                                            minLength={6}
+                                                            style={{ width: '100%', paddingRight: 40 }}
+                                                        >
+                                                        </input>
+                                                    </div>
+                                                </div>
+                                                <div className='flex items-center justify-center'>
+                                                    <span className='min-w-20' >
+                                                        Role : 
+                                                    </span>
+                                                    <div className='flex-1' >
+                                                        <select className="select flex-1" value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
+                                                            {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div className='flex items-center justify-center'>
+                                                    <span className='min-w-20' >
+                                                        Email : 
+                                                    </span>
+                                                    <div className='flex-1' >
+                                                        <input  className='input flex-1' value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} type='text'
+                                                            required
+                                                            minLength={6}
+                                                            style={{ width: '100%', paddingRight: 40 }}
+                                                        >
+                                                        </input>
+                                                    </div>
+                                                </div>
 
                                                 <div>
                                                     <label style={{ fontSize: '0.8125rem', fontWeight: 500, marginBottom: 8, display: 'block', color: 'var(--color-text-secondary)' }}>
-                                                        Module Access
+                                                        Module Access / Permission
                                                     </label>
                                                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 8 }}>
                                                         {ALL_PERMISSION_ITEMS.map(item => {

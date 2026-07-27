@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import api from '../lib/api';
 import Avatar from '../components/common/Avatar';
 import { useAuthStore } from '../store/authStore';
-import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload, Download, Trash2, Send, Users, Edit3, FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock, Check, SquarePen } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload, Download, Trash2, Send, Users,  FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock, Check, SquarePen } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import ProjectCanvas from '../components/assignments/ProjectCanvas';
 import FilePreviewModal from '../components/common/FilePreviewModal';

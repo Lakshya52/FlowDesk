@@ -19,12 +19,10 @@ export const authenticate = async (
 		}
 
 		const token = authHeader.split(" ")[1];
-		// const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as { userId: string };
 
-		// const user = await User.findById(decoded.userId).select('-password');
 		const decoded = jwt.verify(
 			token,
-			process.env.JWT_SECRET || "fallback_secret",
+			process.env.JWT_SECRET!,
 		) as { userId: string; tenantId: string };
 
 		const user = await User.findById(decoded.userId)

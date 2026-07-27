@@ -33,7 +33,6 @@ const linkGroups = [
     links: [
       "Project Management",
       "Task / Kanban Management",
-      "Task / Kanban Management",
       // "Channels",
       // "FlowDesk Connect",
       // "Workflow Builder",

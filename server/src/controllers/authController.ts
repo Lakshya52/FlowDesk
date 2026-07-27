@@ -13,7 +13,7 @@ import {
 const generateToken = (userId: string, tenantId?: string): string => {
 	const payload: any = { userId };
 	if (tenantId) payload.tenantId = tenantId;
-	return jwt.sign(payload, process.env.JWT_SECRET || "fallback_secret", {
+	return jwt.sign(payload, process.env.JWT_SECRET!, {
 		expiresIn: process.env.JWT_EXPIRES_IN || "7d",
 	} as jwt.SignOptions);
 };
@@ -383,9 +383,11 @@ export const updateUser = async (
 ): Promise<void> => {
 	try {
 		const { id } = req.params;
-		const { role, permissions } = req.body;
+		const { name, email, role, permissions } = req.body;
 
 		const updates: any = {};
+		if (name) updates.name = name;
+		if (email) updates.email = email;
 		if (role) updates.role = role;
 		if (permissions?.allowedTabs) {
 			updates.permissions = { allowedTabs: permissions.allowedTabs };
@@ -398,11 +400,11 @@ export const updateUser = async (
 		).select("-password");
 
 		if (!user) {
-			res.status(404).json({ message: "User not found" });
+			res.status(404).json({ message: "User not found, there is some error !!" });
 			return;
 		}
 
-		res.json({ user });
+		res.json({ user, message : "User Updated Success backend" });
 	} catch (error: any) {
 		res.status(500).json({ message: error.message });
 	}

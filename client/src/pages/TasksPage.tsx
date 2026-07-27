@@ -100,8 +100,8 @@ const TasksPage: React.FC = () => {
     : [];
 
   const isAdmin = user?.role === "admin";
-  const isManager = user?.role === "manager";
-  const isEmployee = user?.role === "member";
+  // const isManager = user?.role === "manager";
+  // const isEmployee = user?.role === "member";
 
   const canEditTask = (task: any) => {
     if (isAdmin) return true;
@@ -574,20 +574,22 @@ const TasksPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-2">
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
-              {activeBoardInfo ? activeBoardInfo.title : "Tasks"}
-            </h1>
             {activeBoardInfo && (
               <div
                 style={{
                   width: 12,
                   height: 12,
-                  borderRadius: "50%",
+                  // borderRadius: "50%",
                   background: activeBoardInfo.color,
                   flexShrink: 0,
                 }}
               />
             )}
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
+              {activeBoardInfo ? (
+                "Kanban : " + activeBoardInfo?.title
+                ) : "Tasks / Kanban View"}
+            </h1>
           </div>
           <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginTop: 2 }}>
             {tasks.length} task{tasks.length !== 1 ? "s" : ""}
@@ -826,7 +828,7 @@ const TasksPage: React.FC = () => {
               <div data-col={col.key} className="h-[95%]" style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
                 {grouped[col.key]?.map((t: any, colIdx: number) => (
                       <React.Fragment key={t._id}>
-                        {draggedTaskId && dragInsertInfo?.colKey === col.key && dragInsertInfo.index === colIdx && (
+                        {draggedTaskId && dragInsertInfo?.colKey === col.key && dragInsertInfo?.index === colIdx && (
                           <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: -1 }}>
                             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", flexShrink: 0 }} />
                             <div style={{ height: 2, flex: 1, background: "var(--color-primary)", borderRadius: "0 2px 2px 0" }} />
@@ -908,7 +910,7 @@ const TasksPage: React.FC = () => {
                         </div>
                       </React.Fragment>
                     ))}
-                    {draggedTaskId && dragInsertInfo?.colKey === col.key && dragInsertInfo.index === (grouped[col.key]?.length || 0) && (
+                    {draggedTaskId && dragInsertInfo?.colKey === col.key && dragInsertInfo?.index === (grouped[col.key]?.length || 0) && (
                       <div style={{ display: "flex", alignItems: "center", gap: 0, marginTop: -1 }}>
                         <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", flexShrink: 0 }} />
                         <div style={{ height: 2, flex: 1, background: "var(--color-primary)", borderRadius: "0 2px 2px 0" }} />

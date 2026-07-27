@@ -23,23 +23,23 @@ router.post('/forgot-password', forgotPassword);
 router.post('/verify-forgot-password-otp', verifyForgotPasswordOtp);
 
 // Temporary debug route to check SMTP connectivity
-router.get('/debug-email', async (req, res) => {
-    const net = require('net');
+// router.get('/debug-email', async (req, res) => {
+//     const net = require('net');
 
-    const checkPort = (port: number) => new Promise((resolve) => {
-        const socket = new net.Socket();
-        socket.setTimeout(5000);
-        socket.connect(port, 'smtp.gmail.com', () => {
-            socket.destroy();
-            resolve(`✅ Port ${port} OPEN`);
-        });
-        socket.on('timeout', () => { socket.destroy(); resolve(`❌ Port ${port} TIMED OUT`); });
-        socket.on('error', (err: any) => { resolve(`❌ Port ${port} BLOCKED - ${err.message}`); });
-    });
+//     const checkPort = (port: number) => new Promise((resolve) => {
+//         const socket = new net.Socket();
+//         socket.setTimeout(5000);
+//         socket.connect(port, 'smtp.gmail.com', () => {
+//             socket.destroy();
+//             resolve(`✅ Port ${port} OPEN`);
+//         });
+//         socket.on('timeout', () => { socket.destroy(); resolve(`❌ Port ${port} TIMED OUT`); });
+//         socket.on('error', (err: any) => { resolve(`❌ Port ${port} BLOCKED - ${err.message}`); });
+//     });
 
-    const [p587, p465] = await Promise.all([checkPort(587), checkPort(465)]);
-    res.json({ port587: p587, port465: p465 });
-});
+//     const [p587, p465] = await Promise.all([checkPort(587), checkPort(465)]);
+//     res.json({ port587: p587, port465: p465 });
+// });
 
 
 export default router;

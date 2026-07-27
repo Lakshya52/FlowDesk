@@ -12,7 +12,7 @@ import {
 import CrmDashboard from "../components/crm/CrmDashboard";
 import Campaigns from "../components/crm/Campaigns";
 import DialQueue from "../components/crm/DialQueue";
-import Plan from "../components/crm/Plan";
+// import Plan from "../components/crm/Plan";
 import CrmLogs from "../components/crm/CrmLogs";
 import Schedule from "../components/crm/Schedule";
 import Summary from "../components/crm/Summary";
