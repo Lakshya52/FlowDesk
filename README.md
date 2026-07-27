@@ -1,21 +1,6 @@
-# 🚀 FlowDesk — Aceone Internal Software
+# 🚀 FlowDesk
 
-> A modern, full-stack internal management platform built for **Aceone**, designed to streamline workflows, centralize operations, and boost team productivity.
-
-<!-- <div align="center"> -->
-
-<!-- <table>
-  <tr>
-    <td><img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=220&fit=crop" alt="Dashboard Overview" width="200" style="border-radius:8px"/></td>
-    <td><img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=220&fit=crop" alt="Analytics View" width="200" style="border-radius:8px"/></td>
-    <td><img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=220&fit=crop" alt="Team Collaboration" width="200" style="border-radius:8px"/></td>
-    <td><img src="https://images.unsplash.com/photo-1507925921958-8a62f3d1a50d?w=400&h=220&fit=crop" alt="Workflow Management" width="200" style="border-radius:8px"/></td>
-  </tr>
-</table> -->
-
-<!-- </div> -->
-
-
+> A modern, full-stack internal management platform, designed to streamline workflows, centralize operations, and boost team productivity.
 
 <div align="center">
 
@@ -25,7 +10,6 @@
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square)
 
 </div>
-
 
 
 ## 📋 Table of Contents
@@ -45,7 +29,7 @@
 
 ## 📌 Overview
 
-**FlowDesk** is Aceone's internal software solution — a full-stack web application that serves as a centralized desk for managing internal operations, team workflows, and day-to-day business processes. Built with TypeScript across both frontend and backend for end-to-end type safety and developer confidence.
+**FlowDesk** — a full-stack web application that serves as a centralized desk for managing internal operations, team workflows, and day-to-day business processes. Built with TypeScript across both frontend and backend for end-to-end type safety and developer confidence.
 
 ---
 
@@ -156,13 +140,9 @@ NODE_ENV=development
 VITE_API_URL=http://localhost:5000
 ```
 
-> ⚠️ Never commit `.env` files to version control.
-
 ---
 
 ## 🤝 Contributing
-
-This is an **internal project** for Aceone. Contributions are limited to authorized team members.
 
 1. Create a new branch: `git checkout -b feature/your-feature-name`
 2. Make your changes and commit: `git commit -m "feat: add your feature"`
@@ -173,8 +153,6 @@ This is an **internal project** for Aceone. Contributions are limited to authori
 
 ## 📄 License
 
-This project is **proprietary and confidential**. Unauthorized use, distribution, or modification is strictly prohibited. All rights reserved © Aceone.
+This project is **proprietary and confidential**. Unauthorized use, distribution, or modification is strictly prohibited. All rights reserved.
 
 ---
-
-<p align="center">Built with ❤️ for Aceone's internal teams</p>
