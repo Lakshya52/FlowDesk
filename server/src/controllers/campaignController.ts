@@ -111,7 +111,7 @@ export const updateCampaign = async (req: AuthRequest, res: Response): Promise<v
             if (!req.body.people.includes(creatorId)) {
                 req.body.people.push(creatorId);
             }
-            campaign.people = [...new Set(req.body.people)];
+            campaign.people = [...new Set(req.body.people)] as mongoose.Types.ObjectId[];
         }
 
         await campaign.save();
