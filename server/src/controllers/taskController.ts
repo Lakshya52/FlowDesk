@@ -7,7 +7,8 @@ import ActivityLog, { EntityType } from '../models/ActivityLog';
 import { AuthRequest } from '../middlewares/auth';
 import { createNotification } from '../services/notificationService';
 import { NotificationType } from '../models/Notification';
-import { getTenantUserIds } from '../utils/tenant';
+import { getTenantUserIds, getTenantId } from '../utils/tenant';
+import { emitTaskCreated, emitTaskUpdated, emitTaskDeleted } from '../services/taskSocketService';
 
 export const createTask = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -74,6 +75,11 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
             .populate('assignedTo', 'name email avatar')
             .populate('createdBy', 'name email')
             .populate('assignment', 'title');
+
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitTaskCreated(tenantId, populated);
+        } catch {}
 
         res.status(201).json({ task: populated });
     } catch (error: any) {
@@ -332,6 +338,11 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
             metadata: { updates: Object.keys(req.body), status: req.body.status },
         });
 
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitTaskUpdated(tenantId, task);
+        } catch {}
+
         res.json({ task });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -409,6 +420,11 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
             entityId: task._id,
             metadata: { title: task.title },
         });
+
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitTaskDeleted(tenantId, task._id.toString());
+        } catch {}
 
         res.json({ message: 'Task deleted successfully' });
     } catch (error: any) {

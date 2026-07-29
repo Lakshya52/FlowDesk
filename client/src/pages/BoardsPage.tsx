@@ -6,6 +6,7 @@ import Avatar from "../components/common/Avatar";
 import Modal from "../components/common/Modal";
 import { useAuthStore } from "../store/authStore";
 import { Plus, LayoutGrid, Users, X, Loader2, Columns3, Settings, Check, Trash2, Mail } from "lucide-react";
+import { useTaskSocket } from "../hooks/useTaskSocket";
 
 const COLORS = [
     "#3b82f6", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
@@ -16,6 +17,7 @@ const BoardsPage: React.FC = () => {
     const { user } = useAuthStore();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    useTaskSocket();
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ title: "", description: "", color: "#3b82f6" });
     const [submitting, setSubmitting] = useState(false);

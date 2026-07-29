@@ -211,7 +211,7 @@ const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const allowed = user.permissions?.allowedTabs ?? [];
 
-  console.log('[RouteGuard]', location.pathname, '| allowedTabs:', allowed, '| includes /tasks:', allowed.includes('/tasks'));
+  // console.log('[RouteGuard]', location.pathname, '| allowedTabs:', allowed, '| includes /tasks:', allowed.includes('/tasks'));
 
   // Match the parent tab (handles /reports/:reportType, /assignments/:id, etc.)
   const currentTopLevel = '/' + location.pathname.split('/')[1];

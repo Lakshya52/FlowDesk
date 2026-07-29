@@ -7,6 +7,7 @@ import { useAuthStore } from "../store/authStore";
 import { Search, Trash2, X, Check, Plus, Loader2, GripVertical, ChevronRight, Paperclip, Download, Upload, SquarePen } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTaskSocket } from "../hooks/useTaskSocket";
 
 const PRIORITY_LABELS: Record<string, string> = {
   low: "Low",
@@ -18,6 +19,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 const TasksPage: React.FC = () => {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
+  useTaskSocket();
   const params = useParams();
   const boardIdFromUrl = params.id || "";
   const [search, setSearch] = useState("");
@@ -34,6 +36,7 @@ const TasksPage: React.FC = () => {
     noDueDate: false,
     priority: "medium",
     assignment: "",
+    board: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [hoveredColumn, setHoveredColumn] = useState<string | null>(null);
@@ -57,6 +60,8 @@ const TasksPage: React.FC = () => {
   const [dropAnim, setDropAnim] = useState<{ x: number; y: number; w: number; h: number; key: number } | null>(null);
   const draggedCardRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const [dragInsertInfo, setDragInsertInfo] = useState<{ colKey: string; index: number } | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -85,7 +90,7 @@ const TasksPage: React.FC = () => {
   });
   const allBoards = boardsData || [];
 
-  const { data: boardData } = useQuery({
+  const { data: boardData, isFetching: boardFetching } = useQuery({
     queryKey: ["board", activeBoardId],
     queryFn: async () => {
       const { data } = await api.get(`/boards/${activeBoardId}`);
@@ -113,9 +118,23 @@ const TasksPage: React.FC = () => {
     return task.createdBy?._id === user?._id || task.assignedTo?._id === user?._id;
   };
 
+  const getDeniedReason = (task: any): string => {
+    if (task.assignment) {
+      return `This task belongs to "${task.assignment.title}". Only the project creator or team members can move it.`;
+    }
+    if (task.assignedTo?._id === user?._id) {
+      return "You are assigned to this task but didn't create it. Only the creator or an admin can move it.";
+    }
+    return "This task was created by someone else and is not assigned to you. Only the creator or assignee can move it.";
+  };
+
   const canDeleteTask = (task: any) => {
     if (isAdmin) return true;
-    return task.createdBy?._id === user?._id || task.createdBy === user?._id;
+    if (task.assignment) {
+      const isTaskCreator = task.assignment.createdBy?._id === user?._id
+      return isTaskCreator ;
+    }
+    return task.createdBy?._id === user?._id
   };
 
   const { data: companiesData } = useQuery({
@@ -147,7 +166,7 @@ const TasksPage: React.FC = () => {
 
   const taskQueryKey = ["tasks", activeBoardId, selectedCompany, currentTab, user?._id];
 
-  const { data: tasksData, isLoading: loading } = useQuery({
+  const { data: tasksData, isLoading: loading, isFetching: tasksFetching } = useQuery({
     queryKey: taskQueryKey,
     queryFn: async () => {
       const params: any = {};
@@ -161,6 +180,8 @@ const TasksPage: React.FC = () => {
     },
   });
   const tasks = tasksData || [];
+
+  const isSyncing = activeBoardId && (boardFetching || tasksFetching);
 
   const { data: searchData } = useQuery({
     queryKey: ["tasks-search", search],
@@ -184,6 +205,12 @@ const TasksPage: React.FC = () => {
       highlightTimeoutRef.current = setTimeout(() => setHighlightedTaskId(null), 2000);
     }
     setSearch("");
+  };
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMsg(null), 3000);
   };
 
   const downloadFile = async (fileId: string, originalName: string) => {
@@ -319,7 +346,8 @@ const TasksPage: React.FC = () => {
       if (createForm.dueDate) payload.dueDate = createForm.dueDate;
       if (createForm.assignment) payload.assignment = createForm.assignment;
       if (createColumnStatus) payload.status = createColumnStatus;
-      if (activeBoardId) payload.board = activeBoardId;
+      if (createForm.board) payload.board = createForm.board;
+      else if (activeBoardId) payload.board = activeBoardId;
 
       await api.post("/tasks", payload);
       setShowCreateModal(false);
@@ -332,6 +360,7 @@ const TasksPage: React.FC = () => {
         noDueDate: false,
         priority: "medium",
         assignment: "",
+        board: "",
       });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
     } catch (e: any) {
@@ -721,7 +750,7 @@ const TasksPage: React.FC = () => {
       </div>
 
       {/* Kanban Board - unified view */}
-      {loading ? (
+      {(loading || isSyncing) ? (
         <div style={{ display: "flex", gap: 8, width: "100%" }}>
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="skeleton" style={{ height: 300, borderRadius: 12, flex: 1 }} />
@@ -850,6 +879,11 @@ const TasksPage: React.FC = () => {
                           draggable={canEditTask(t)}
                           onDragStart={(e) => handleDragStart(e, t._id)}
                           onDragEnd={handleDragEnd}
+                          onMouseDown={() => {
+                            if (!canEditTask(t)) {
+                              showToast(getDeniedReason(t));
+                            }
+                          }}
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, paddingBottom: 8, borderBottom: "1px solid var(--color-border)" }}>
                               <div
@@ -1033,6 +1067,7 @@ const TasksPage: React.FC = () => {
               </label>
               <input type="text" className="input" placeholder="e.g. Design landing page" value={createForm.title} onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })} />
             </div>
+            
             <div>
               <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
                 Description <span style={{ color: "var(--color-danger)" }}>*</span>
@@ -1049,8 +1084,21 @@ const TasksPage: React.FC = () => {
                   <option key={a._id} value={a._id}>{a.title}</option>
                 ))}
               </select>
-            </div> 
-            <div className={`${createForm.assignment == "" ? "hidden" : null}`}>
+            </div>
+            {!activeBoardId && (
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
+                  Board <span style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>(optional)</span>
+                </label>
+                <select className="select" value={createForm.board} onChange={(e) => setCreateForm({ ...createForm, board: e.target.value })} style={{ width: "100%" }}>
+                  <option value="">No board (standalone task)</option>
+                  {allBoards.map((b: any) => (
+                    <option key={b._id} value={b._id}>{b.title}</option>
+                  ))}
+                </select>
+              </div>
+            )} 
+            <div>
               <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
                 Assign To <span style={{ color: "var(--color-danger)" }}>*</span>
               </label>
@@ -1355,6 +1403,28 @@ const TasksPage: React.FC = () => {
         </div>
       )}
 
+      {toastMsg && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1e293b",
+            color: "#f1f5f9",
+            padding: "10px 20px",
+            borderRadius: 8,
+            fontSize: "0.8125rem",
+            fontWeight: 500,
+            zIndex: 9999,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+            animation: "toastIn 0.3s ease",
+          }}
+        >
+          {toastMsg}
+        </div>
+      )}
+
       <style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -1365,6 +1435,10 @@ const TasksPage: React.FC = () => {
         }
         .drop-ghost {
           animation: dropGhostExpand 0.6s ease-out forwards;
+        }
+        @keyframes toastIn {
+          0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+          100% { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
       `}</style>
     </div>

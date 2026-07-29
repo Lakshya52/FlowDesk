@@ -1,76 +1,76 @@
-# name: Deploy to Windows Server
+name: Deploy to Windows Server
 
-# on:
-#   push:
-#     branches: [ main ]
+on:
+  push:
+    branches: [ main ]
 
-# jobs:
-#   deploy:
-#     runs-on: self-hosted
+jobs:
+  deploy:
+    runs-on: self-hosted
 
-#     steps:
-      # - name: Checkout code
-      #   uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # - name: Create frontend .env
-      #   working-directory: client
-      #   run: |
-      #     @"
-      #     VITE_API_URL=$env:VITE_API_URL
-      #     VITE_SOCKET_URL=$env:VITE_SOCKET_URL
-      #     "@ | Out-File -FilePath .env -Encoding utf8
-      #   env:
-      #     VITE_API_URL: ${{ secrets.VITE_API_URL }}
-      #     VITE_SOCKET_URL: ${{ secrets.VITE_SOCKET_URL }}
+      - name: Create frontend .env
+        working-directory: client
+        run: |
+          @"
+          VITE_API_URL=$env:VITE_API_URL
+          VITE_SOCKET_URL=$env:VITE_SOCKET_URL
+          "@ | Out-File -FilePath .env -Encoding utf8
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_SOCKET_URL: ${{ secrets.VITE_SOCKET_URL }}
 
-      # - name: Build frontend
-      #   working-directory: client
-      #   run: |
-      #     npm ci --include=dev
-      #     npm run build
+      - name: Build frontend
+        working-directory: client
+        run: |
+          npm ci --include=dev
+          npm run build
 
-      # - name: Build backend
-      #   working-directory: server
-      #   run: |
-      #     npm ci --include=dev
-      #     npm run build
+      - name: Build backend
+        working-directory: server
+        run: |
+          npm ci --include=dev
+          npm run build
 
-      # - name: Clean old frontend dist
-      #   run: |
-      #     $frontendDist = "D:\Softwares\FlowDesk\frontend\dist"
-      #     if (Test-Path $frontendDist) { Remove-Item $frontendDist -Recurse -Force }
+      - name: Clean old frontend dist
+        run: |
+          $frontendDist = "D:\Softwares\FlowDesk\frontend\dist"
+          if (Test-Path $frontendDist) { Remove-Item $frontendDist -Recurse -Force }
 
-      # - name: Clean old backend files
-      #   run: |
-      #     $backendPath = "D:\Softwares\FlowDesk\backend"
-      #     Remove-Item "$backendPath\dist" -Recurse -Force -ErrorAction SilentlyContinue
-      #     Remove-Item "$backendPath\node_modules" -Recurse -Force -ErrorAction SilentlyContinue
-      #     Remove-Item "$backendPath\package.json" -Force -ErrorAction SilentlyContinue
-      #     Remove-Item "$backendPath\package-lock.json" -Force -ErrorAction SilentlyContinue
+      - name: Clean old backend files
+        run: |
+          $backendPath = "D:\Softwares\FlowDesk\backend"
+          Remove-Item "$backendPath\dist" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item "$backendPath\node_modules" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item "$backendPath\package.json" -Force -ErrorAction SilentlyContinue
+          Remove-Item "$backendPath\package-lock.json" -Force -ErrorAction SilentlyContinue
 
-      # - name: Copy new frontend dist
-      #   run: |
-      #     $dest = "D:\Softwares\FlowDesk\frontend\dist"
-      #     New-Item -ItemType Directory -Path $dest -Force
-      #     Copy-Item -Path "$env:GITHUB_WORKSPACE\client\dist\*" -Destination $dest -Recurse -Force
+      - name: Copy new frontend dist
+        run: |
+          $dest = "D:\Softwares\FlowDesk\frontend\dist"
+          New-Item -ItemType Directory -Path $dest -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\client\dist\*" -Destination $dest -Recurse -Force
 
-      # - name: Copy new backend dist and package.json
-      #   run: |
-      #     $backendPath = "D:\Softwares\FlowDesk\backend"
-      #     New-Item -ItemType Directory -Path "$backendPath\dist" -Force
-      #     Copy-Item -Path "$env:GITHUB_WORKSPACE\server\dist\*" -Destination "$backendPath\dist" -Recurse -Force
-      #     Copy-Item -Path "$env:GITHUB_WORKSPACE\server\package.json" -Destination "$backendPath\package.json" -Force
+      - name: Copy new backend dist and package.json
+        run: |
+          $backendPath = "D:\Softwares\FlowDesk\backend"
+          New-Item -ItemType Directory -Path "$backendPath\dist" -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\server\dist\*" -Destination "$backendPath\dist" -Recurse -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\server\package.json" -Destination "$backendPath\package.json" -Force
 
-      # - name: Grant IIS permissions on frontend dist folder
-      #   run: |
-      #     icacls "D:\Softwares\FlowDesk\frontend\dist" /grant "IIS_IUSRS:(OI)(CI)F" /T
-      #     icacls "D:\Softwares\FlowDesk\frontend\dist" /grant "IUSR:(OI)(CI)F" /T
+      - name: Grant IIS permissions on frontend dist folder
+        run: |
+          icacls "D:\Softwares\FlowDesk\frontend\dist" /grant "IIS_IUSRS:(OI)(CI)F" /T
+          icacls "D:\Softwares\FlowDesk\frontend\dist" /grant "IUSR:(OI)(CI)F" /T
 
-      # - name: npm install in backend
-      #   working-directory: D:\Softwares\FlowDesk\backend
-      #   run: |
-      #     npm install
-      #     npm install
+      - name: npm install in backend
+        working-directory: D:\Softwares\FlowDesk\backend
+        run: |
+          npm install
+          npm install
 
       # - name: Restart PM2 services
       #   run: |

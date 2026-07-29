@@ -2,9 +2,10 @@ import { Response } from 'express';
 import Board from '../models/Board';
 import Task from '../models/Task';
 import { AuthRequest } from '../middlewares/auth';
-import { getTenantUserIds } from '../utils/tenant';
+import { getTenantUserIds, getTenantId } from '../utils/tenant';
 import { createNotification } from '../services/notificationService';
 import { NotificationType } from '../models/Notification';
+import { emitBoardCreated, emitBoardUpdated, emitBoardDeleted, emitTaskUpdated } from '../services/taskSocketService';
 
 const generateKey = (label: string): string => {
     return label
@@ -45,6 +46,11 @@ export const createBoard = async (req: AuthRequest, res: Response): Promise<void
         const populated = await Board.findById(board._id)
             .populate('createdBy', 'name email avatar')
             .populate('members', 'name email avatar');
+
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardCreated(tenantId, populated);
+        } catch {}
 
         res.status(201).json({ board: populated });
     } catch (error: any) {
@@ -156,6 +162,11 @@ export const updateBoard = async (req: AuthRequest, res: Response): Promise<void
             .populate('createdBy', 'name email avatar')
             .populate('members', 'name email avatar');
 
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardUpdated(tenantId, populated);
+        } catch {}
+
         res.json({ board: populated });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -177,6 +188,11 @@ export const deleteBoard = async (req: AuthRequest, res: Response): Promise<void
 
         await Task.updateMany({ board: board._id }, { $unset: { board: '' } });
         await board.deleteOne();
+
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardDeleted(tenantId, board._id.toString());
+        } catch {}
 
         res.json({ message: 'Board deleted successfully' });
     } catch (error: any) {
@@ -252,6 +268,11 @@ export const addColumn = async (req: AuthRequest, res: Response): Promise<void> 
 
         await board.save();
 
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardUpdated(tenantId, board);
+        } catch {}
+
         res.json({ board });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -298,6 +319,14 @@ export const renameColumn = async (req: AuthRequest, res: Response): Promise<voi
             );
         }
 
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardUpdated(tenantId, board);
+            if (newKey !== oldKeyForTasks) {
+                emitTaskUpdated(tenantId, { boardId: board._id, oldStatus: oldKeyForTasks, newStatus: newKey });
+            }
+        } catch {}
+
         res.json({ board });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -335,6 +364,11 @@ export const deleteColumn = async (req: AuthRequest, res: Response): Promise<voi
 
         await board.save();
 
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardUpdated(tenantId, board);
+        } catch {}
+
         res.json({ board });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -365,6 +399,11 @@ export const reorderColumns = async (req: AuthRequest, res: Response): Promise<v
 
         board.columns = reordered as any;
         await board.save();
+
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardUpdated(tenantId, board);
+        } catch {}
 
         res.json({ board });
     } catch (error: any) {

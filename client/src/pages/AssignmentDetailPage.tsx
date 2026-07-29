@@ -462,17 +462,17 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         } catch (e: any) { alert(e.response?.data?.message || 'Failed'); }
     };
 
-    const updateTask = async (taskId: string, updates: any) => {
-        try {
-            const payload = {
-                ...updates,
-                dueDate: updates.noDueDate ? null : updates.dueDate
-            };
-            const { data } = await api.put(`/tasks/${taskId}`, payload);
-            setTasks(prev => prev.map(t => t._id === taskId ? data.task : t));
-            // setEditingTask(null);
-        } catch (e: any) { alert(e.response?.data?.message || 'Failed'); }
-    };
+    // const updateTask = async (taskId: string, updates: any) => {
+    //     try {
+    //         const payload = {
+    //             ...updates,
+    //             dueDate: updates.noDueDate ? null : updates.dueDate
+    //         };
+    //         const { data } = await api.put(`/tasks/${taskId}`, payload);
+    //         setTasks(prev => prev.map(t => t._id === taskId ? data.task : t));
+    //         // setEditingTask(null);
+    //     } catch (e: any) { alert(e.response?.data?.message || 'Failed'); }
+    // };
 
     const deleteTask = async (taskId: string) => {
         if (!window.confirm('Delete this task?')) return;
@@ -482,12 +482,12 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         } catch (e: any) { alert(e.response?.data?.message || 'Failed'); }
     };
 
-    const updateTaskStatus = async (taskId: string, status: string) => {
-        try {
-            const { data } = await api.put(`/tasks/${taskId}`, { status });
-            setTasks(prev => prev.map(t => t._id === taskId ? data.task : t));
-        } catch { }
-    };
+    // const updateTaskStatus = async (taskId: string, status: string) => {
+    //     try {
+    //         const { data } = await api.put(`/tasks/${taskId}`, { status });
+    //         setTasks(prev => prev.map(t => t._id === taskId ? data.task : t));
+    //     } catch { }
+    // };
 
     const openDetailAttachments = async (taskId: string) => {
         try {
@@ -842,7 +842,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         placeholder="Project Title"
                                     />
                                     <select
-                                        className="select sm:w-[120px] w-full"
+                                        className="select sm:w-30 w-full"
                                         value={editProjectForm.priority}
                                         onChange={e => setEditProjectForm({ ...editProjectForm, priority: e.target.value })}
                                     >
@@ -978,7 +978,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                         ) : (
                             <>
                                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                                    <h1 className="text-xl font-bold break-words">{assignment.title}</h1>
+                                    <h1 className="text-xl font-bold wrap-break-word">{assignment.title}</h1>
                                     {assignment.isRecurring && !assignment.parentAssignmentId && (
                                         <span className="badge" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>Recurring Blueprint</span>
                                     )}
@@ -1825,7 +1825,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                                 <Minus size={14} /> Remove
                                             </span>
                                         ) : (
-                                            <span className='flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>
+                                            <span className='flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-(--color-primary)/10 text-(--color-primary) hover:bg-(--color-primary)/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>
                                                 <Plus size={14} /> Add
                                             </span>
                                         )}
@@ -1854,9 +1854,19 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                             </div>
                             <div className="flex items-center justify-center" style={{ gap: 6, flexShrink: 0, marginLeft: 12 }}>
                                 {!detailEditing && canEditTask(detailTask) && (
-                                    <button className="btn btn-ghost btn-xs" style={{ color: 'var(--color-primary)' }} onClick={startDetailEdit} title="Edit Task">
-                                        <SquarePen size={20} />
-                                    </button>
+                                    <>
+                                        <button className="btn btn-ghost btn-xs" style={{ color: 'var(--color-primary)' }} onClick={startDetailEdit} title="Edit Task">
+                                            <SquarePen size={20} />
+                                        </button>
+                                        <button className="btn btn-ghost btn-xs" style={{ color: 'var(--color-danger)' }} 
+                                            onClick={()=> {
+                                                deleteTask(detailTask._id)
+                                                setDetailTask(null);
+                                            }} 
+                                            title="Edit Task">
+                                            <Trash2 size={20} />
+                                        </button>
+                                    </>
                                 )}
                                 <button
                                     className={`bg-(--color-surface-hover) border-none cursor-pointer text-(--color-text-tertiary) ${detailEditing ? "w-10 h-10":"w-8 h-8"} `}

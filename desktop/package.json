@@ -1,6 +1,6 @@
 {
   "name": "flowdesk-desktop",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "FlowDesk Desktop",
   "main": "dist/main.js",
   "author": "FlowDesk Team",
@@ -51,7 +51,7 @@
         "nsis",
         "portable"
       ],
-      "icon": "assets/icon.png",
+      "icon": "assets/icon.ico",
       "executableName": "FlowDesk"
     },
     "mac": {
@@ -60,7 +60,7 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -68,9 +68,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "FlowDesk",
-      "installerIcon": "assets/icon.png",
-      "uninstallerIcon": "assets/icon.png",
-      "installerHeaderIcon": "assets/icon.png",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
       "installerSidebar": "assets/FlowDeskInstallerSidebarBmp.bmp",
       "uninstallerSidebar": "assets/FlowDeskUninstallerSidebarBmp.bmp",
       "artifactName": "${productName}-Setup-${version}.${ext}"
