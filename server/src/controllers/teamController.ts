@@ -2,9 +2,11 @@ import { Response } from 'express';
 import Team from '../models/Team';
 import ActivityLog, { EntityType } from '../models/ActivityLog';
 import { AuthRequest } from '../middlewares/auth';
+import { getTenantId } from '../utils/tenant';
 
 export const createTeam = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const tenantId = getTenantId(req.user);
         const { members, manager, ...rest } = req.body;
 
         if (!members || !Array.isArray(members) || members.length === 0) {
@@ -26,6 +28,7 @@ export const createTeam = async (req: AuthRequest, res: Response): Promise<void>
             members: cleanMembers,
             manager,
             createdBy: req.user!._id,
+            tenantId,
         });
 
         await ActivityLog.create({
@@ -49,12 +52,13 @@ export const createTeam = async (req: AuthRequest, res: Response): Promise<void>
 
 export const getTeams = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const tenantId = getTenantId(req.user);
         const { all } = req.query;
 
-        let query = {};
-        // If ?all=true is passed, return all teams for everyone
+        let query: any = { tenantId };
+        // If ?all=true is passed, return all teams for this tenant
         if (all !== 'true') {
-            query = { members: req.user!._id };
+            query.members = req.user!._id;
         }
 
         const teams = await Team.find(query)
@@ -72,7 +76,8 @@ export const getTeams = async (req: AuthRequest, res: Response): Promise<void> =
 
 export const getTeam = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const team = await Team.findById(req.params.id)
+        const tenantId = getTenantId(req.user);
+        const team = await Team.findOne({ _id: req.params.id, tenantId })
             .populate('members', 'name email avatar role')
             .populate('createdBy', 'name email');
 
@@ -89,14 +94,21 @@ export const getTeam = async (req: AuthRequest, res: Response): Promise<void> =>
 
 export const updateTeam = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const team = await Team.findById(req.params.id);
+        const tenantId = getTenantId(req.user);
+        const team = await Team.findOne({ _id: req.params.id, tenantId });
         if (!team) {
             res.status(404).json({ message: 'Team not found' });
             return;
         }
 
-        // Everyone can update team
-        const updated = await Team.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' })
+        // Only allow specific fields to prevent NoSQL injection
+        const allowedFields = ['name', 'description', 'manager'];
+        const updateData: Record<string, any> = {};
+        for (const field of allowedFields) {
+          if (field in req.body) updateData[field] = req.body[field];
+        }
+
+        const updated = await Team.findOneAndUpdate({ _id: req.params.id, tenantId }, updateData, { returnDocument: 'after' })
             .populate('members', 'name email avatar role')
             .populate('createdBy', 'name email');
 
@@ -116,7 +128,8 @@ export const updateTeam = async (req: AuthRequest, res: Response): Promise<void>
 
 export const deleteTeam = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const team = await Team.findById(req.params.id);
+        const tenantId = getTenantId(req.user);
+        const team = await Team.findOne({ _id: req.params.id, tenantId });
         if (!team) {
             res.status(404).json({ message: 'Team not found' });
             return;
@@ -141,7 +154,8 @@ export const deleteTeam = async (req: AuthRequest, res: Response): Promise<void>
 
 export const updateTeamMembers = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const team = await Team.findById(req.params.id);
+        const tenantId = getTenantId(req.user);
+        const team = await Team.findOne({ _id: req.params.id, tenantId });
         if (!team) {
             res.status(404).json({ message: 'Team not found' });
             return;
@@ -174,7 +188,8 @@ export const updateTeamMembers = async (req: AuthRequest, res: Response): Promis
 
 export const requestJoinTeam = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const team = await Team.findById(req.params.id);
+        const tenantId = getTenantId(req.user);
+        const team = await Team.findOne({ _id: req.params.id, tenantId });
         if (!team) {
             res.status(404).json({ message: 'Team not found' });
             return;
@@ -206,7 +221,8 @@ export const requestJoinTeam = async (req: AuthRequest, res: Response): Promise<
 
 export const approveJoinRequest = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const team = await Team.findById(req.params.id);
+        const tenantId = getTenantId(req.user);
+        const team = await Team.findOne({ _id: req.params.id, tenantId });
         if (!team) {
             res.status(404).json({ message: 'Team not found' });
             return;
@@ -241,7 +257,8 @@ export const approveJoinRequest = async (req: AuthRequest, res: Response): Promi
 
 export const rejectJoinRequest = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const team = await Team.findById(req.params.id);
+        const tenantId = getTenantId(req.user);
+        const team = await Team.findOne({ _id: req.params.id, tenantId });
         if (!team) {
             res.status(404).json({ message: 'Team not found' });
             return;

@@ -19,6 +19,7 @@ import BoardsPage from "./pages/BoardsPage";
 import CalendarPage from "./pages/CalendarPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
+import BackupPage from "./pages/BackupPage";
 import TeamsPage from "./pages/TeamsPage";
 import ClientsPage from "./pages/ClientsPage";
 import CanvasPage from "./pages/CanvasPage";
@@ -294,6 +295,7 @@ const AppInner: React.FC = () => {
           <Route path="/canvas" element={<RouteGuard><CanvasPage /></RouteGuard>} />
           <Route path="/bulk-email" element={<RouteGuard><BulkEmailPage /></RouteGuard>} />
           <Route path="/settings" element={<RouteGuard><SettingsPage /></RouteGuard>} />
+          <Route path="/backup" element={<RouteGuard><BackupPage /></RouteGuard>} />
           <Route path="/chat" element={<RouteGuard><ChatsPage /></RouteGuard>} />
           <Route
             path="/crm"

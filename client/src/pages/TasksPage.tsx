@@ -689,7 +689,7 @@ const TasksPage: React.FC = () => {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6 w-full">
-        <div className="w-full sm:max-w-[400px] relative" ref={searchContainerRef}>
+        <div className="w-full sm:max-w-100 relative" ref={searchContainerRef}>
           <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)" }} />
           <input className="input" style={{ paddingLeft: 36 }} placeholder="Search tasks..." value={search} onChange={(e) => setSearch(e.target.value)} />
           {search && search.trim().length >= 2 && searchResults.length > 0 && (
@@ -738,7 +738,7 @@ const TasksPage: React.FC = () => {
           )}
         </div>
         {!activeBoardId && (
-          <div className="w-full sm:w-[250px]">
+          <div className="w-full sm:w-62.5">
             <select className="select" value={selectedCompany} onChange={(e) => setSelectedCompany(e.target.value)} style={{ width: "100%" }}>
               <option value="">All Companies</option>
               {companies.map((c: any) => (

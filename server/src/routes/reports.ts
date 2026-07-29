@@ -15,7 +15,6 @@ router.get('/employee-tracking', authorize('admin', 'manager', 'member'), getEmp
 router.get('/workload', authorize('admin', 'manager', 'member'), getWorkloadReport);
 router.get('/activity', authorize('admin', 'manager', 'member'), getActivityReport);
 
-// router.get('/export', authorize('admin', 'manager'), exportReport);
-router.get('/export', exportReport);
+router.get('/export', authorize('admin', 'manager'), exportReport);
 
 export default router;

@@ -9,8 +9,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ----- Auto-updater bridge -----
   // Renderer → Main: trigger restart & install
   restartAndInstall: () => ipcRenderer.send('update-action', 'restart'),
-  // Renderer → Main: dismiss the update banner
+  // Renderer → Main: dismiss the update card
   dismissUpdate: () => ipcRenderer.send('update-action', 'dismiss'),
+  // Renderer → Main: start downloading the update
+  startDownload: () => ipcRenderer.send('start-download'),
+
+  // Main → Renderer: receive version info when overlay opens
+  onUpdateInfo: (callback: (info: { version: string }) => void) => {
+    ipcRenderer.on('update-info', (_event, data) => callback(data));
+  },
+
+  // Main → Renderer: receive download error
+  onDownloadError: (callback: (msg: string) => void) => {
+    ipcRenderer.on('download-error', (_event, msg) => callback(msg));
+  },
 
   // Main → Renderer: receive download progress { percent, bytesPerSecond, total, transferred }
   onDownloadProgress: (callback: (progress: any) => void) => {

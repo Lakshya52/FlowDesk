@@ -6,7 +6,11 @@ dotenv.config();
 
 const seedAdmin = async () => {
     try {
-        const mongoUri = process.env.MONGODB_URI || 'mongodb://AceoneSupport:A!ceone-mongocluster@ac-c2bzbo0-shard-00-00.dffbzkm.mongodb.net:27017,ac-c2bzbo0-shard-00-01.dffbzkm.mongodb.net:27017,ac-c2bzbo0-shard-00-02.dffbzkm.mongodb.net:27017/?ssl=true&replicaSet=atlas-10c7ui-shard-0&authSource=admin&appName=Cluster0';
+        const mongoUri = process.env.MONGODB_URI;
+        if (!mongoUri) {
+            console.error('FATAL: MONGODB_URI environment variable is not set');
+            process.exit(1);
+        }
         await mongoose.connect(mongoUri);
         console.log('Connected to MongoDB');
 

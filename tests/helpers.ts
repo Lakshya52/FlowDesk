@@ -14,9 +14,9 @@ export const login = async (page: Page, email = TEST_EMAIL, password = TEST_PASS
 
 export const loginAs = (role: 'admin' | 'manager' | 'member') => {
   const creds: Record<string, { email: string; password: string }> = {
-    admin: { email: 'testadmin@flowdesk.com', password: 'Test@123456' },
-    manager: { email: 'testmanager@flowdesk.com', password: 'Test@123456' },
-    member: { email: 'testmember@flowdesk.com', password: 'Test@123456' },
+    admin: { email: process.env.TEST_ADMIN_EMAIL || 'testadmin@flowdesk.com', password: process.env.TEST_ADMIN_PASSWORD || 'Test@123456' },
+    manager: { email: process.env.TEST_MANAGER_EMAIL || 'testmanager@flowdesk.com', password: process.env.TEST_MANAGER_PASSWORD || 'Test@123456' },
+    member: { email: process.env.TEST_MEMBER_EMAIL || 'testmember@flowdesk.com', password: process.env.TEST_MEMBER_PASSWORD || 'Test@123456' },
   };
   return creds[role];
 };

@@ -92,6 +92,43 @@ export const sendRegistrationOtpEmail = async (to: string, otp: string, companyN
     }
 };
 
+export const sendBackupEmail = async (to: string, subject: string, fileBuffer: Buffer, filename: string): Promise<void> => {
+  try {
+    console.log(`[EMAIL] Sending backup email to: ${to}`);
+    const brevo = getBrevoClient();
+    const base64Content = fileBuffer.toString('base64');
+
+    await brevo.transactionalEmails.sendTransacEmail({
+      subject,
+      htmlContent: `
+        <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+          <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 20px;">FlowDesk Backup</h1>
+          </div>
+          <div style="padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+            <p style="font-size: 16px; color: #4b5563;">Your scheduled FlowDesk backup is attached.</p>
+            <p style="font-size: 14px; color: #6b7280;">File: <strong>${filename}</strong></p>
+            <p style="font-size: 14px; color: #6b7280;">Generated: ${new Date().toLocaleString()}</p>
+            <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+            <p style="font-size: 14px; color: #9ca3af; text-align: center;">Sent via FlowDesk Backup System</p>
+          </div>
+        </div>
+      `,
+      sender: {
+        name: 'FlowDesk Backup',
+        email: process.env.BREVO_SENDER_EMAIL || 'support.aceone@gmail.com'
+      },
+      to: [{ email: to }],
+      attachment: [{ content: base64Content, name: filename }],
+    });
+
+    console.log(`[EMAIL] Backup sent to ${to}`);
+  } catch (error) {
+    console.error('[EMAIL] Failed to send backup email:', error);
+    throw error;
+  }
+};
+
 export const sendGenericEmail = async (to: string[], subject: string, message: string): Promise<Brevo.SendTransacEmailResponse> => {
     try {
         console.log(`[EMAIL] Sending bulk email to ${to.length} recipients`);

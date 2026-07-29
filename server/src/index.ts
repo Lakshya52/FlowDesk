@@ -3,10 +3,11 @@ import cors from "cors";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import path from "path";
 import sharp from "sharp";
 
 // Load environment variables early
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 if (!process.env.JWT_SECRET) {
   console.error("FATAL: JWT_SECRET environment variable is not set");
@@ -49,6 +50,8 @@ import settingsRoutes from "./routes/settings";
 import boardRoutes from "./routes/boards";
 import { startRecurringJob } from "./services/recurringTaskService";
 import { startFieldVisitHeartbeat } from "./services/fieldVisitHeartbeatService";
+import backupRoutes from "./routes/backup";
+import { startBackupScheduler } from "./services/backupScheduleService";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
 
 const app = express();
@@ -99,7 +102,7 @@ app.use(
         scriptSrcElem: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:", "http://localhost:5000", "https://flowdesk-api.raksco.in"],
-        connectSrc: ["'self'", "*"],
+        connectSrc: ["'self'", "http://localhost:5000", "https://flowdesk-api.raksco.in", "https://api.brevo.com", "https://api.openai.com"],
         mediaSrc: ["'self'", "http://localhost:5000", "blob:", "https://flowdesk-api.raksco.in"],
         workerSrc: ["'self'", "blob:"],
       },
@@ -126,7 +129,7 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Serve files from GridFS
+// Serve files from GridFS (no auth — browsers need direct img src)
 app.get("/uploads/:filename", async (req, res) => {
   try {
     if (!mongoose.connection.db) {
@@ -138,7 +141,7 @@ app.get("/uploads/:filename", async (req, res) => {
       bucketName: "uploads",
     });
 
-    const filename = req.params.filename;
+    const filename = req.params.filename as string;
     const files = await bucket.find({ filename }).toArray();
 
     if (!files || files.length === 0) {
@@ -149,7 +152,6 @@ app.get("/uploads/:filename", async (req, res) => {
     if (file.contentType) {
       res.set("Content-Type", file.contentType);
     } else {
-      // Fallback for files without contentType (though GridFS usually has it)
       const ext = filename.split(".").pop();
       if (ext === "png") res.set("Content-Type", "image/png");
       else if (ext === "jpg" || ext === "jpeg")
@@ -157,9 +159,7 @@ app.get("/uploads/:filename", async (req, res) => {
       else if (ext === "pdf") res.set("Content-Type", "application/pdf");
     }
 
-    // Allow inline rendering (critical for PDF preview in iframes)
     res.set("Content-Disposition", "inline");
-    // Allow embedding from the client origin
     res.set("X-Frame-Options", "ALLOWALL");
     res.set("Cross-Origin-Resource-Policy", "cross-origin");
 
@@ -175,7 +175,7 @@ app.get("/uploads/:filename", async (req, res) => {
   }
 });
 
-// Serve resized image from GridFS
+// Serve resized image from GridFS (no auth — browsers need direct img src)
 app.get("/uploads/:filename/resize", async (req, res) => {
   try {
     if (!mongoose.connection.db) {
@@ -185,7 +185,7 @@ app.get("/uploads/:filename/resize", async (req, res) => {
       bucketName: "uploads",
     });
 
-    const filename = req.params.filename;
+    const filename = req.params.filename as string;
     const files = await bucket.find({ filename }).toArray();
     if (!files || files.length === 0) {
       return res.status(404).json({ message: "File not found" });
@@ -194,7 +194,6 @@ app.get("/uploads/:filename/resize", async (req, res) => {
     const file = files[0];
     const contentType = file.contentType || "image/jpeg";
 
-    // Only resize image types
     if (!contentType.startsWith("image/") || contentType === "image/gif") {
       const downloadStream = bucket.openDownloadStreamByName(filename);
       if (file.contentType) res.set("Content-Type", file.contentType);
@@ -283,36 +282,48 @@ app.use("/api/crm-summary", crmSummaryRoutes);
 app.use("/api/field-visits", fieldVisitRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/boards", boardRoutes);
+app.use("/api/backup", backupRoutes);
+
+// Socket.io authentication middleware
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (!token) {
+      return next(new Error("Authentication required"));
+    }
+    const jwt = await import("jsonwebtoken");
+    const decoded = jwt.default.verify(
+      token as string,
+      process.env.JWT_SECRET!,
+    ) as { userId: string; tenantId: string };
+    socket.data.userId = decoded.userId;
+    socket.data.tenantId = decoded.tenantId;
+    next();
+  } catch {
+    next(new Error("Invalid token"));
+  }
+});
 
 // Socket.io connection logic
 io.on("connection", (socket) => {
   socket.on("join_assignment", (assignmentId) => {
     socket.join(`assignment_${assignmentId}`);
-    console.log(`User joined assignment room: assignment_${assignmentId}`);
   });
 
   socket.on("join_conversation", (conversationId) => {
     socket.join(`conversation_${conversationId}`);
-    console.log(
-      `User joined conversation room: conversation_${conversationId}`,
-    );
   });
 
   socket.on("join_tenant", (tenantId) => {
-    if (!tenantId) return;
+    if (!tenantId || tenantId !== socket.data.tenantId) return;
     socket.join(`tenant_${tenantId}`);
-    console.log(`User joined tenant room: tenant_${tenantId}`);
   });
 
   socket.on("join_user", (userId) => {
-    if (!userId) return;
+    if (!userId || userId !== socket.data.userId) return;
     socket.join(`user_${userId}`);
-    socket.data.userId = userId;
     activeUsers.add(userId.toString());
     io.emit("user_status_change", { userId, status: "online" });
-    console.log(
-      `User joined personal room: user_${userId}. Active users count: ${activeUsers.size}`,
-    );
   });
 
   socket.on("user_active_status", ({ userId, status }) => {
@@ -409,9 +420,11 @@ app.use(errorHandler);
 // Database connection and server start
 const startServer = async () => {
   try {
-    const mongoUri =
-      process.env.MONGODB_URI ||
-      "mongodb://AceoneSupport:A!ceone-mongocluster@ac-c2bzbo0-shard-00-00.dffbzkm.mongodb.net:27017,ac-c2bzbo0-shard-00-01.dffbzkm.mongodb.net:27017,ac-c2bzbo0-shard-00-02.dffbzkm.mongodb.net:27017/?ssl=true&replicaSet=atlas-10c7ui-shard-0&authSource=admin&appName=Cluster0";
+    const mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+      console.error("FATAL: MONGODB_URI environment variable is not set");
+      process.exit(1);
+    }
     await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 5000,
       family: 4, // Force IPv4
@@ -421,6 +434,7 @@ const startServer = async () => {
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       startRecurringJob();
+      startBackupScheduler();
     });
   } catch (error) {
     console.error("❌ Failed to connect to MongoDB:", error);

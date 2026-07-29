@@ -22,6 +22,7 @@ dotenv.config({ path: path.join(__dirname, "../.env") });
   // process.env.FRONTEND_URL || "https://prince-principal-skirts-capture.trycloudflare.com/";
 const FRONTEND_URL =
   process.env.FRONTEND_URL || "https://flowdesk.raksco.in";
+// const IS_DEV = process.env.NODE_ENV === "development";
 const IS_DEV = process.env.NODE_ENV === "development";
 
 let mainWindow: BrowserWindow | null = null;
@@ -51,7 +52,7 @@ if (!gotTheLock) {
 }
 
 // ─── Auto-updater configuration ────────────────────────────────────────────
-autoUpdater.autoDownload = true; // Download silently in background
+autoUpdater.autoDownload = false; // Download on user request only
 autoUpdater.autoInstallOnAppQuit = true; // Install when user quits normally
 
 // ─── Loading splash window ─────────────────────────────────────────────────
@@ -62,7 +63,7 @@ function createLoadingWindow() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    icon: path.join(__dirname, "../assets/icon.ico"),
+    icon: path.join(__dirname, "../assets/icon.png"),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -118,7 +119,7 @@ function createMainWindow() {
     }
   });
 
-  // Keep overlay anchored when main window moves/resizes
+  // Keep overlay anchored to bottom-right when main window moves or resizes
   mainWindow.on("move", repositionOverlay);
   mainWindow.on("resize", repositionOverlay);
 
@@ -160,25 +161,30 @@ function createMainWindow() {
   );
 }
 
-// ─── Update overlay (banner shown inside the app window) ──────────────────
-function createUpdateOverlay() {
+// ─── Update overlay (bottom-right card notification) ──────────────────────
+const OVERLAY_WIDTH = 340;
+const OVERLAY_HEIGHT = 150;
+const OVERLAY_MARGIN = 16;
+
+function createUpdateOverlay(version?: string) {
   if (!mainWindow || updateOverlay) return;
 
-  const [x, y] = mainWindow.getPosition();
-  const [w] = mainWindow.getSize();
+  const [mx, my] = mainWindow.getPosition();
+  const [mw, mh] = mainWindow.getSize();
 
   updateOverlay = new BrowserWindow({
-    width: w,
-    height: 56,
-    x,
-    y,
+    width: OVERLAY_WIDTH,
+    height: OVERLAY_HEIGHT,
+    x: mx + mw - OVERLAY_WIDTH - OVERLAY_MARGIN,
+    y: my + mh - OVERLAY_HEIGHT - OVERLAY_MARGIN,
+    parent: mainWindow,
     frame: false,
-    transparent: false,
-    alwaysOnTop: true,
+    transparent: true,
     skipTaskbar: true,
     resizable: false,
     movable: false,
     focusable: true,
+    show: false,
     icon: path.join(__dirname, "../assets/icon.ico"),
     webPreferences: {
       nodeIntegration: false,
@@ -189,23 +195,27 @@ function createUpdateOverlay() {
 
   updateOverlay.loadFile(path.join(__dirname, "../assets/update-overlay.html"));
 
-  // Handle overlay IPC actions
-  ipcMain.on("update-action", (_event, action: string) => {
-    if (action === "restart") {
-      autoUpdater.quitAndInstall(false, true);
-    } else if (action === "dismiss") {
-      updateOverlay?.close();
-      updateOverlay = null;
+  updateOverlay.once("ready-to-show", () => {
+    updateOverlay?.show();
+    if (version) {
+      updateOverlay?.webContents.send("update-info", { version });
     }
+  });
+
+  updateOverlay.on("closed", () => {
+    updateOverlay = null;
   });
 }
 
 function repositionOverlay() {
   if (!mainWindow || !updateOverlay) return;
-  const [x, y] = mainWindow.getPosition();
-  const [w] = mainWindow.getSize();
-  updateOverlay.setPosition(x, y);
-  updateOverlay.setSize(w, 56);
+  if (updateOverlay.isDestroyed()) { updateOverlay = null; return; }
+  const [mx, my] = mainWindow.getPosition();
+  const [mw, mh] = mainWindow.getSize();
+  updateOverlay.setPosition(
+    mx + mw - OVERLAY_WIDTH - OVERLAY_MARGIN,
+    my + mh - OVERLAY_HEIGHT - OVERLAY_MARGIN,
+  );
 }
 
 function sendToOverlay(channel: string, data?: any) {
@@ -252,7 +262,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on("update-available", (info) => {
     console.log(`[Updater] Update available: v${info.version}`);
-    createUpdateOverlay();
+    createUpdateOverlay(info.version);
   });
 
   autoUpdater.on("update-not-available", () => {
@@ -274,7 +284,6 @@ function setupAutoUpdater() {
   autoUpdater.on("error", (err) => {
     console.error("[Updater] Error:", err);
 
-    // Only show a dialog if an overlay was open (i.e., user was aware of the update)
     if (updateOverlay) {
       updateOverlay.close();
       updateOverlay = null;
@@ -282,6 +291,30 @@ function setupAutoUpdater() {
         "Update Failed",
         `Could not download the update. Please try again later.\n\n${err.message}`,
       );
+    }
+  });
+
+  // IPC: handle overlay actions (registered once)
+  ipcMain.removeAllListeners("update-action");
+  ipcMain.removeAllListeners("start-download");
+  ipcMain.on("update-action", (_event, action: string) => {
+    if (action === "restart") {
+      autoUpdater.quitAndInstall(false, true);
+    } else if (action === "dismiss") {
+      if (updateOverlay) {
+        updateOverlay.close();
+        updateOverlay = null;
+      }
+    }
+  });
+  ipcMain.on("start-download", async () => {
+    try {
+      await autoUpdater.downloadUpdate();
+    } catch (err: any) {
+      console.error("[Updater] Download failed:", err);
+      if (updateOverlay && !updateOverlay.isDestroyed()) {
+        updateOverlay.webContents.send("download-error", err.message || "Download failed");
+      }
     }
   });
 

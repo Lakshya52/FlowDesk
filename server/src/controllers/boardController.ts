@@ -21,6 +21,14 @@ const DEFAULT_COLUMNS = [
     { key: 'completed', label: 'Completed', color: '#22c55e', order: 3 },
 ];
 
+const checkBoardAccess = (board: any, req: AuthRequest): boolean => {
+  const userId = req.user!._id.toString();
+  if (req.user!.role === 'admin') return true;
+  if (board.createdBy?.toString() === userId) return true;
+  if (board.members?.some((m: any) => m.toString() === userId)) return true;
+  return false;
+};
+
 export const createBoard = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { title, description, color, members } = req.body;
@@ -243,6 +251,11 @@ export const addColumn = async (req: AuthRequest, res: Response): Promise<void> 
             return;
         }
 
+        if (!checkBoardAccess(board, req)) {
+            res.status(403).json({ message: 'Access denied' });
+            return;
+        }
+
         const { label, color } = req.body;
         if (!label?.trim()) {
             res.status(400).json({ message: 'Column label is required' });
@@ -284,6 +297,11 @@ export const renameColumn = async (req: AuthRequest, res: Response): Promise<voi
         const board = await Board.findById(req.params.id);
         if (!board) {
             res.status(404).json({ message: 'Board not found' });
+            return;
+        }
+
+        if (!checkBoardAccess(board, req)) {
+            res.status(403).json({ message: 'Access denied' });
             return;
         }
 
@@ -341,6 +359,11 @@ export const deleteColumn = async (req: AuthRequest, res: Response): Promise<voi
             return;
         }
 
+        if (!checkBoardAccess(board, req)) {
+            res.status(403).json({ message: 'Access denied' });
+            return;
+        }
+
         const { key } = req.params;
         const columnIndex = board.columns.findIndex(c => c.key === key);
         if (columnIndex === -1) {
@@ -380,6 +403,11 @@ export const reorderColumns = async (req: AuthRequest, res: Response): Promise<v
         const board = await Board.findById(req.params.id);
         if (!board) {
             res.status(404).json({ message: 'Board not found' });
+            return;
+        }
+
+        if (!checkBoardAccess(board, req)) {
+            res.status(403).json({ message: 'Access denied' });
             return;
         }
 

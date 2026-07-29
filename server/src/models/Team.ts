@@ -7,6 +7,7 @@ export interface ITeam extends Document {
   joinRequests: mongoose.Types.ObjectId[];
   createdBy: mongoose.Types.ObjectId;
   manager: mongoose.Types.ObjectId;
+  tenantId: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,10 +25,12 @@ const teamSchema = new Schema<ITeam>(
       ref: "User",
       default: null,
     },
+    tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true },
   },
   { timestamps: true },
 );
 
 teamSchema.index({ members: 1 });
+teamSchema.index({ tenantId: 1 });
 
 export default mongoose.model<ITeam>("Team", teamSchema);

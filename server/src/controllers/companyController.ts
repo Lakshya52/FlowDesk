@@ -7,19 +7,21 @@ import multer from 'multer';
 import { sendGenericEmail } from '../services/emailService';
 import ActivityLog, { EntityType } from '../models/ActivityLog';
 import { AuthRequest } from '../middlewares/auth';
+import { getTenantId } from '../utils/tenant';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Create Company
 export const createCompany = async (req: AuthRequest, res: Response) => {
     try {
+        const tenantId = getTenantId(req.user);
         const { name, parentCompanyId, industry, description, website, email, phone, phoneCountryCode, address, status } = req.body;
         
         let slug = name
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '');
-        const existing = await Company.findOne({ slug });
+        const existing = await Company.findOne({ slug, tenantId });
         if (existing) {
             slug = `${slug}-${Date.now()}`;
         }
@@ -27,6 +29,7 @@ export const createCompany = async (req: AuthRequest, res: Response) => {
         const companyData: any = {
             name,
             slug,
+            tenantId,
             parentCompanyId: parentCompanyId || null,
             industry,
             description,
@@ -57,16 +60,17 @@ export const createCompany = async (req: AuthRequest, res: Response) => {
 // Get All Companies (with hierarchy)
 export const getCompanies = async (req: Request, res: Response) => {
     try {
+        const tenantId = getTenantId((req as any).user);
         const { flat } = req.query;
 
-        // Return flat list of all companies
+        // Return flat list of all companies for this tenant
         if (flat === 'true') {
-            const allCompanies = await Company.find().select('_id name parentCompanyId').sort({ name: 1 }).lean();
+            const allCompanies = await Company.find({ tenantId }).select('_id name parentCompanyId').sort({ name: 1 }).lean();
             res.json({ success: true, companies: allCompanies });
             return;
         }
 
-        const allCompanies = await Company.find().populate('contacts').lean();
+        const allCompanies = await Company.find({ tenantId }).populate('contacts').lean();
 
         const companyMap = new Map();
         const rootCompanies: any[] = [];
@@ -101,7 +105,8 @@ export const getCompanies = async (req: Request, res: Response) => {
 // Get Single Company with contacts and child companies
 export const getCompany = async (req: Request, res: Response) => {
     try {
-        const company = await Company.findById(req.params.id)
+        const tenantId = getTenantId((req as any).user);
+        const company = await Company.findOne({ _id: req.params.id, tenantId })
             .populate('contacts')
             .populate('childCompanies');
 
@@ -118,6 +123,7 @@ export const getCompany = async (req: Request, res: Response) => {
 // Update Company
 export const updateCompany = async (req: AuthRequest, res: Response) => {
     try {
+        const tenantId = getTenantId(req.user);
         const { name, parentCompanyId, industry, description, website, email, phone, phoneCountryCode, address, status } = req.body;
 
         const updateData: any = {
@@ -133,7 +139,7 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
             status
         };
 
-        const company = await Company.findById(req.params.id);
+        const company = await Company.findOne({ _id: req.params.id, tenantId });
         if (!company) {
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
@@ -171,25 +177,26 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
 // Delete Company
 export const deleteCompany = async (req: AuthRequest, res: Response) => {
     try {
-        const company = await Company.findByIdAndDelete(req.params.id);
+        const tenantId = getTenantId(req.user);
+        const company = await Company.findOneAndDelete({ _id: req.params.id, tenantId });
 
         if (!company) {
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
 
         // Delete all contacts associated with this company
-        await Contact.deleteMany({ companyId: req.params.id });
+        await Contact.deleteMany({ companyId: req.params.id, tenantId });
 
-        // Recursively delete child companies
-        const childCompanies = await Company.find({ parentCompanyId: req.params.id });
+        // Recursively delete child companies within the same tenant
+        const childCompanies = await Company.find({ parentCompanyId: req.params.id, tenantId });
         for (const child of childCompanies) {
             await Company.findByIdAndDelete(child._id);
-            await Contact.deleteMany({ companyId: child._id });
+            await Contact.deleteMany({ companyId: child._id, tenantId });
             // Recursively delete deeper levels
-            const deeperChildren = await Company.find({ parentCompanyId: child._id });
+            const deeperChildren = await Company.find({ parentCompanyId: child._id, tenantId });
             for (const grandchild of deeperChildren) {
                 await Company.findByIdAndDelete(grandchild._id);
-                await Contact.deleteMany({ companyId: grandchild._id });
+                await Contact.deleteMany({ companyId: grandchild._id, tenantId });
             }
         }
 
@@ -210,7 +217,8 @@ export const deleteCompany = async (req: AuthRequest, res: Response) => {
 // Get Company Contacts
 export const getCompanyContacts = async (req: Request, res: Response) => {
     try {
-        const contacts = await Contact.find({ companyId: req.params.id });
+        const tenantId = getTenantId((req as any).user);
+        const contacts = await Contact.find({ companyId: req.params.id, tenantId });
         res.json({ success: true, contacts });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -220,18 +228,20 @@ export const getCompanyContacts = async (req: Request, res: Response) => {
 // Create Contact
 export const createContact = async (req: AuthRequest, res: Response) => {
     try {
+        const tenantId = getTenantId(req.user);
         const { name, email, phone, position, department, isPrimary, notes } = req.body;
 
-        // If primary, unset other primary contacts
+        // If primary, unset other primary contacts within tenant
         if (isPrimary) {
             await Contact.updateMany(
-                { companyId: req.params.id, isPrimary: true },
+                { companyId: req.params.id, tenantId, isPrimary: true },
                 { isPrimary: false }
             );
         }
 
         const contact = await Contact.create({
             companyId: req.params.id,
+            tenantId,
             name,
             email,
             phone,
@@ -258,17 +268,18 @@ export const createContact = async (req: AuthRequest, res: Response) => {
 // Update Contact
 export const updateContact = async (req: AuthRequest, res: Response) => {
     try {
+        const tenantId = getTenantId(req.user);
         const { name, email, phone, position, department, isPrimary, notes } = req.body;
 
-        // If setting as primary, unset other primary contacts
+        // If setting as primary, unset other primary contacts within tenant
         if (isPrimary) {
             await Contact.updateMany(
-                { companyId: req.params.id, isPrimary: true, _id: { $ne: req.params.contactId } },
+                { companyId: req.params.id, tenantId, isPrimary: true, _id: { $ne: req.params.contactId } },
                 { isPrimary: false }
             );
         }
 
-        const contact = await Contact.findById(req.params.contactId);
+        const contact = await Contact.findOne({ _id: req.params.contactId, tenantId });
         if (!contact) {
             return res.status(404).json({ success: false, message: 'Contact not found' });
         }
@@ -310,7 +321,8 @@ export const updateContact = async (req: AuthRequest, res: Response) => {
 // Delete Contact
 export const deleteContact = async (req: AuthRequest, res: Response) => {
     try {
-        const contact = await Contact.findByIdAndDelete(req.params.contactId);
+        const tenantId = getTenantId(req.user);
+        const contact = await Contact.findOneAndDelete({ _id: req.params.contactId, tenantId });
 
         if (!contact) {
             return res.status(404).json({ success: false, message: 'Contact not found' });
@@ -338,6 +350,7 @@ export const getCompanyProjects = async (req: Request, res: Response) => {
 // Import Companies from Excel
 export const importCompanies = async (req: AuthRequest, res: Response) => {
     try {
+        const tenantId = getTenantId(req.user);
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
@@ -379,19 +392,20 @@ export const importCompanies = async (req: AuthRequest, res: Response) => {
                     continue;
                 }
 
-                // Find existing company by name
-                let company = await Company.findOne({ name });
+                // Find existing company by name within tenant
+                let company = await Company.findOne({ name, tenantId });
                 const isUpdate = !!company;
 
                 const parentName = getCell('parent company') || getCell('parent');
                 let parentCompanyId = null;
                 if (parentName) {
-                    const parent = await Company.findOne({ name: parentName });
+                    const parent = await Company.findOne({ name: parentName, tenantId });
                     parentCompanyId = parent?._id || null;
                 }
 
                 const companyData = {
                     name,
+                    tenantId,
                     parentCompanyId,
                     industry: getCell('industry') || undefined,
                     description: getCell('description') || undefined,
@@ -410,7 +424,7 @@ export const importCompanies = async (req: AuthRequest, res: Response) => {
                 };
 
                 if (isUpdate) {
-                    company = await Company.findByIdAndUpdate(company!._id, companyData, { new: true });
+                    company = await Company.findOneAndUpdate({ _id: company!._id, tenantId }, companyData, { new: true });
                     results.updated++;
                 } else {
                     company = await Company.create(companyData);
@@ -428,6 +442,7 @@ export const importCompanies = async (req: AuthRequest, res: Response) => {
 
                     const contactData = {
                         companyId: company._id,
+                        tenantId,
                         name: contactName,
                         email: contactEmail,
                         phone: getCell('contact phone') || undefined,
@@ -440,6 +455,7 @@ export const importCompanies = async (req: AuthRequest, res: Response) => {
                     // Avoid duplicate contacts within the same company
                     const existingContact = await Contact.findOne({ 
                         companyId: company._id, 
+                        tenantId,
                         $or: [
                             { name: contactName },
                             ...(contactEmail ? [{ email: contactEmail }] : [])
@@ -447,7 +463,7 @@ export const importCompanies = async (req: AuthRequest, res: Response) => {
                     });
 
                     if (existingContact) {
-                        await Contact.findByIdAndUpdate(existingContact._id, contactData);
+                        await Contact.findOneAndUpdate({ _id: existingContact._id, tenantId }, contactData);
                     } else {
                         await Contact.create(contactData);
                     }
@@ -513,19 +529,20 @@ export const exportCompaniesToExcel = async (req: Request, res: Response) => {
             fgColor: { argb: 'FFE0E0E0' },
         };
 
-        // Fetch companies with optional ID filtering
+        // Fetch companies with optional ID filtering within tenant
+        const tenantId = getTenantId((req as any).user);
         const { ids } = req.query;
-        let queryFilter = {};
+        let queryFilter: any = { tenantId };
         if (ids) {
             const idList = (ids as string).split(',');
-            queryFilter = { _id: { $in: idList } };
+            queryFilter._id = { $in: idList };
         }
         
         const companies = await Company.find(queryFilter).populate('contacts').lean();
 
         // Get parent company names map
         const parentIds = [...new Set(companies.map(c => c.parentCompanyId).filter(Boolean))];
-        const parents = await Company.find({ _id: { $in: parentIds } });
+        const parents = await Company.find({ _id: { $in: parentIds }, tenantId });
         const parentMap = new Map(parents.map(p => [p._id.toString(), p.name]));
 
         for (const company of companies) {
@@ -607,19 +624,20 @@ export const exportCompaniesToPDF = async (req: Request, res: Response) => {
         doc.fontSize(10).font('Helvetica').text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
         doc.moveDown(1);
 
-        // Fetch companies with optional ID filtering
+        // Fetch companies with optional ID filtering within tenant
+        const tenantId = getTenantId((req as any).user);
         const { ids } = req.query;
-        let queryFilter = {};
+        let queryFilter: any = { tenantId };
         if (ids) {
             const idList = (ids as string).split(',');
-            queryFilter = { _id: { $in: idList } };
+            queryFilter._id = { $in: idList };
         }
         
         const companies = await Company.find(queryFilter).sort({ name: 1 }).populate('contacts');
 
         // Get parent company names map
         const parentIds = [...new Set(companies.map(c => c.parentCompanyId).filter(Boolean))];
-        const parents = await Company.find({ _id: { $in: parentIds } });
+        const parents = await Company.find({ _id: { $in: parentIds }, tenantId });
         const parentMap = new Map(parents.map(p => [p._id.toString(), p.name]));
 
         for (let i = 0; i < companies.length; i++) {
@@ -707,6 +725,7 @@ export const exportCompaniesToPDF = async (req: Request, res: Response) => {
 // Send Bulk Email to Companies
 export const sendBulkCompanyEmail = async (req: AuthRequest, res: Response) => {
     try {
+        const tenantId = getTenantId(req.user);
         const { companyIds, subject, message } = req.body;
 
         if (!companyIds || !Array.isArray(companyIds) || companyIds.length === 0) {
@@ -717,8 +736,8 @@ export const sendBulkCompanyEmail = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ success: false, message: 'Subject and message are required' });
         }
 
-        // Fetch company emails
-        const companies = await Company.find({ _id: { $in: companyIds } }).select('email name');
+        // Fetch company emails within tenant
+        const companies = await Company.find({ _id: { $in: companyIds }, tenantId }).select('email name');
         const emails = companies.map(c => c.email).filter(Boolean) as string[];
 
         if (emails.length === 0) {

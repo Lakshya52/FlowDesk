@@ -28,10 +28,15 @@ export const authenticate = async (
 		const user = await User.findById(decoded.userId)
 			.select("-password")
 			.populate("tenantId");
-            
+
 		if (!user || !user.isActive) {
 			res.status(401).json({ message: "Invalid or expired token" });
 			return;
+		}
+
+		// If tenantId was deleted from DB, fall back to the JWT value
+		if (!user.tenantId && decoded.tenantId) {
+			(user as any).tenantId = { _id: decoded.tenantId };
 		}
 
 		req.user = user;

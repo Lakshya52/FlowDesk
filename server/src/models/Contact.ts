@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IContact extends Document {
     companyId: mongoose.Types.ObjectId;
+    tenantId: mongoose.Types.ObjectId;
     name: string;
     email?: string;
     phone?: string;
@@ -17,6 +18,7 @@ export interface IContact extends Document {
 const contactSchema = new Schema<IContact>(
     {
         companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
+        tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true },
         name: { type: String, required: true, trim: true },
         email: { type: String, trim: true, lowercase: true },
         phone: { type: String, trim: true },
@@ -32,5 +34,6 @@ const contactSchema = new Schema<IContact>(
 contactSchema.index({ companyId: 1 });
 contactSchema.index({ email: 1 });
 contactSchema.index({ isPrimary: 1 });
+contactSchema.index({ tenantId: 1 });
 
 export default mongoose.model<IContact>('Contact', contactSchema);

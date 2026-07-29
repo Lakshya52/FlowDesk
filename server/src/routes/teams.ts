@@ -3,6 +3,7 @@ import { createTeam, getTeams, getTeam, updateTeam, deleteTeam, updateTeamMember
 import { authenticate, authorize } from '../middlewares/auth';
 import Team from '../models/Team';
 import User from '../models/User';
+import { getTenantId } from '../utils/tenant';
 
 const router = Router();
 
@@ -22,9 +23,10 @@ router.post('/:id/requests/:userId/reject', authorize('admin', 'manager'), rejec
 // Assign or remove a team manager — admin only
 router.put('/:id/manager', authorize('admin'), async (req, res) => {
     try {
+        const tenantId = getTenantId((req as any).user);
         const { managerId } = req.body; // null = remove manager
 
-        const team = await Team.findById(req.params.id);
+        const team = await Team.findOne({ _id: req.params.id, tenantId });
         if (!team) { res.status(404).json({ message: 'Team not found' }); return; }
 
         if (managerId) {

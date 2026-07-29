@@ -2,185 +2,160 @@
 <html>
 <head>
   <meta charset="UTF-8" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: '#0f172a',
+            'surface-hover': '#1e293b',
+            'surface-border': '#1e293b',
+            'border-hover': '#334155',
+            primary: '#818cf8',
+            'primary-hover': '#6366f1',
+            'primary-light': '#1e1b4b',
+            text: '#f8fafc',
+            'text-secondary': '#94a3b8',
+            'text-tertiary': '#64748b',
+            success: '#10b981',
+            'success-bg': '#064e3b',
+            danger: '#ef4444',
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+          },
+          boxShadow: {
+            'card': '0 20px 25px -5px rgba(0,0,0,0.4), 0 8px 10px -6px rgba(0,0,0,0.3)',
+          },
+          animation: {
+            'slide-up': 'slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            'fade-in': 'fadeIn 0.2s ease-out',
+          },
+          keyframes: {
+            slideUp: {
+              'from': { opacity: '0', transform: 'translateY(12px)' },
+              'to': { opacity: '1', transform: 'translateY(0)' },
+            },
+            fadeIn: {
+              'from': { opacity: '0' },
+              'to': { opacity: '1' },
+            },
+          },
+        }
+      }
+    }
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: transparent;
-      overflow: hidden;
-      user-select: none;
-      -webkit-app-region: no-drag;
-    }
-
-    .banner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 18px;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-      border-bottom: 1px solid rgba(99, 179, 237, 0.3);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-      gap: 12px;
-      height: 56px;
-      width: 100%;
-    }
-
-    .left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex: 1;
-      min-width: 0;
-    }
-
-    .icon { font-size: 18px; flex-shrink: 0; }
-
-    .text-block { flex: 1; min-width: 0; }
-
-    .title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #e2e8f0;
-      white-space: nowrap;
-    }
-
-    .subtitle {
-      font-size: 11px;
-      color: #94a3b8;
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* Progress */
-    .progress-wrap {
-      width: 160px;
-      height: 5px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 99px;
-      overflow: hidden;
-      display: none;
-      flex-shrink: 0;
-    }
-    .progress-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #4facfe, #00f2fe);
-      border-radius: 99px;
-      width: 0%;
-      transition: width 0.4s ease;
-    }
-    .progress-label {
-      font-size: 11px;
-      color: #63b3ed;
-      font-weight: 500;
-      display: none;
-      flex-shrink: 0;
-      min-width: 34px;
-    }
-
-    /* Spinner */
-    .spinner {
-      width: 15px;
-      height: 15px;
-      border: 2px solid rgba(99, 179, 237, 0.2);
-      border-top-color: #63b3ed;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      flex-shrink: 0;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Buttons */
-    .actions { display: flex; gap: 8px; flex-shrink: 0; }
-
-    .btn {
-      padding: 6px 14px;
-      border-radius: 6px;
-      border: none;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, #4facfe, #00f2fe);
-      color: #0a0a1a;
-    }
-    .btn-primary:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
-    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    .btn-secondary {
-      background: rgba(255,255,255,0.07);
-      color: #94a3b8;
-      border: 1px solid rgba(255,255,255,0.1);
-    }
-    .btn-secondary:hover { background: rgba(255,255,255,0.13); color: #e2e8f0; }
+    body { background: transparent; overflow: hidden; user-select: none; -webkit-app-region: no-drag; }
+    .progress-fill { width: 0%; transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
   </style>
 </head>
 <body>
-  <div class="banner">
-    <div class="left">
-      <span class="icon" id="icon">⬇️</span>
-      <div class="text-block">
-        <div class="title" id="title">Update Available</div>
-        <div class="subtitle" id="subtitle">Downloading the latest version of FlowDesk...</div>
-      </div>
-      <div class="spinner" id="spinner"></div>
-      <div class="progress-wrap" id="progressWrap">
-        <div class="progress-bar" id="progressBar"></div>
-      </div>
-      <span class="progress-label" id="progressLabel"></span>
-    </div>
+  <div class="animate-slide-up flex flex-col gap-0 w-full h-full rounded-2xl border border-surface-border shadow-card overflow-hidden"
+       style="background: #0f172a;">
 
-    <div class="actions">
-      <button class="btn btn-secondary" id="laterBtn" onclick="handleLater()">Later</button>
-      <button class="btn btn-primary" id="actionBtn" disabled>Downloading...</button>
+    <!-- Accent bar -->
+    <div class="h-0.5 w-full shrink-0" style="background: linear-gradient(90deg, #818cf8, #a78bfa);"></div>
+
+    <!-- Body -->
+    <div class="flex flex-col gap-3 p-4 flex-1">
+      <!-- Header -->
+      <div class="flex items-start gap-3">
+        <div id="icon" class="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 animate-fade-in"
+             style="background: linear-gradient(135deg, #818cf8, #a78bfa); color: #fff;">⬇</div>
+        <div class="flex-1 min-w-0 pt-0.5">
+          <div id="title" class="text-sm font-semibold leading-tight" style="color: #f8fafc;">Update Available</div>
+          <div id="subtitle" class="text-xs mt-1 leading-normal truncate" style="color: #94a3b8;">
+            A new version of FlowDesk is available
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="progressSection" class="hidden flex-col gap-1.5 animate-fade-in">
+        <div class="w-full h-1 rounded-full overflow-hidden" style="background: #1e293b;">
+          <div id="progressFill" class="h-full rounded-full progress-fill"
+               style="background: linear-gradient(90deg, #818cf8, #a78bfa);"></div>
+        </div>
+        <div class="flex justify-between text-[11px] leading-none" style="color: #64748b;">
+          <span id="progressSpeed"></span>
+          <span id="progressPercent">0%</span>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-end gap-2 mt-auto pt-1">
+        <button id="laterBtn" onclick="handleLater()"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:text-text"
+                style="color: #64748b;">Later</button>
+        <button id="actionBtn" onclick="handleUpdateNow()"
+                class="px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                style="background: #818cf8; color: #0f172a;">Update Now</button>
+      </div>
     </div>
   </div>
 
   <script>
     const api = window.electronAPI;
 
-    function handleLater() {
-      api.dismissUpdate();
+    function handleLater() { api.dismissUpdate(); }
+
+    function handleUpdateNow() {
+      const btn = document.getElementById('actionBtn');
+      btn.textContent = 'Downloading...';
+      btn.disabled = true;
+      btn.onclick = null;
+      document.getElementById('subtitle').textContent = 'Downloading update...';
+      api.startDownload();
     }
 
-    function handleRestart() {
-      api.restartAndInstall();
-    }
+    function handleInstall() { api.restartAndInstall(); }
 
-    // Listen for download progress from main process
-    api.onDownloadProgress((progress) => {
-      const pct = Math.round(progress.percent);
-
-      document.getElementById('spinner').style.display = 'none';
-      document.getElementById('progressWrap').style.display = 'block';
-      document.getElementById('progressLabel').style.display = 'block';
-      document.getElementById('progressBar').style.width = pct + '%';
-      document.getElementById('progressLabel').textContent = pct + '%';
-      document.getElementById('subtitle').textContent =
-        `Downloading... ${pct}% (${formatBytes(progress.bytesPerSecond)}/s)`;
+    api.onUpdateInfo((info) => {
+      document.getElementById('subtitle').textContent = `v${info.version} is ready to download`;
     });
 
-    // Listen for update-downloaded
+    api.onDownloadProgress((progress) => {
+      const pct = Math.round(progress.percent);
+      const section = document.getElementById('progressSection');
+      section.classList.remove('hidden');
+      section.classList.add('flex');
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressPercent').textContent = pct + '%';
+      document.getElementById('progressSpeed').textContent = formatBytes(progress.bytesPerSecond) + '/s';
+    });
+
+    api.onDownloadError((msg) => {
+      document.getElementById('icon').textContent = '!';
+      document.getElementById('icon').style.background = '#7f1d1d';
+      document.getElementById('icon').style.color = '#ef4444';
+      document.getElementById('title').textContent = 'Download Failed';
+      document.getElementById('subtitle').textContent = msg;
+      document.getElementById('progressSection').classList.add('hidden');
+      document.getElementById('progressSection').classList.remove('flex');
+      const btn = document.getElementById('actionBtn');
+      btn.textContent = 'Update Now';
+      btn.disabled = false;
+      btn.onclick = handleUpdateNow;
+    });
+
     api.onUpdateDownloaded((info) => {
-      document.getElementById('icon').textContent = '✅';
+      const icon = document.getElementById('icon');
+      icon.textContent = '✓';
+      icon.style.background = '#064e3b';
+      icon.style.color = '#10b981';
       document.getElementById('title').textContent = 'Update Ready';
-      document.getElementById('subtitle').textContent =
-        `v${info.version} is ready. Restart FlowDesk to apply the update.`;
-      document.getElementById('spinner').style.display = 'none';
-      document.getElementById('progressWrap').style.display = 'none';
-      document.getElementById('progressLabel').style.display = 'none';
+      document.getElementById('subtitle').textContent = `v${info.version} has been downloaded. Install now?`;
+      const section = document.getElementById('progressSection');
+      section.classList.add('hidden');
+      section.classList.remove('flex');
 
       const btn = document.getElementById('actionBtn');
-      btn.textContent = '🔁 Restart & Update';
+      btn.textContent = 'Install Now';
       btn.disabled = false;
-      btn.onclick = handleRestart;
-
-      document.getElementById('laterBtn').textContent = 'Later';
+      btn.onclick = handleInstall;
     });
 
     function formatBytes(bytes) {

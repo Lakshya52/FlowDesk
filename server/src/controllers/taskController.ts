@@ -295,10 +295,15 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
             }
         }
 
-        // Everyone authorized above to update everything
+        // Only allow specific fields to prevent NoSQL injection
         const userId = req.user!._id.toString();
+        const allowedFields = ['title', 'description', 'status', 'priority', 'assignedTo', 'dueDate', 'startDate', 'board', 'rank', 'assignment', 'labels', 'customFields'];
+        const updateData: Record<string, any> = {};
+        for (const field of allowedFields) {
+          if (field in req.body) updateData[field] = req.body[field];
+        }
 
-        const task = await Task.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' })
+        const task = await Task.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after' })
             .populate('assignedTo', 'name email avatar')
             .populate('createdBy', 'name email')
             .populate('assignment', 'title');

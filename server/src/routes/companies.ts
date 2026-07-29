@@ -17,31 +17,31 @@ import {
     sendBulkCompanyEmail,
     upload
 } from '../controllers/companyController';
-import { authenticate } from '../middlewares/auth';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = Router();
 
 router.use(authenticate);
 
 // Import/Export routes (must come before /:id to avoid conflicts)
-router.post('/import', upload.single('file'), importCompanies);
+router.post('/import', authorize('admin', 'manager'), upload.single('file'), importCompanies);
 router.get('/import/sample', downloadSampleExcel);
 router.get('/export/excel', exportCompaniesToExcel);
 router.get('/export/pdf', exportCompaniesToPDF);
 router.post('/bulk-email', sendBulkCompanyEmail);
 
 // Company routes
-router.post('/', createCompany);
+router.post('/', authorize('admin', 'manager'), createCompany);
 router.get('/', getCompanies);
 router.get('/:id', getCompany);
-router.put('/:id', updateCompany);
-router.delete('/:id', deleteCompany);
+router.put('/:id', authorize('admin', 'manager'), updateCompany);
+router.delete('/:id', authorize('admin'), deleteCompany);
 
 // Contact routes
 router.get('/:id/contacts', getCompanyContacts);
-router.post('/:id/contacts', createContact);
-router.put('/:id/contacts/:contactId', updateContact);
-router.delete('/:id/contacts/:contactId', deleteContact);
+router.post('/:id/contacts', authorize('admin', 'manager'), createContact);
+router.put('/:id/contacts/:contactId', authorize('admin', 'manager'), updateContact);
+router.delete('/:id/contacts/:contactId', authorize('admin', 'manager'), deleteContact);
 
 // Projects route (placeholder for future integration)
 router.get('/:id/projects', getCompanyProjects);

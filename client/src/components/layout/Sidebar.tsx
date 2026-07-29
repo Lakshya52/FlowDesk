@@ -27,6 +27,7 @@ import {
 	X,
 	Headset,
 	PanelLeftOpen,
+	HardDrive,
 	// ScrollText,
 } from "lucide-react";
 
@@ -109,6 +110,7 @@ export const navItems: NavItem[] = [
 		],
 	},
 	{ break: true },
+	{ to: "/backup", icon: HardDrive, label: "Backup" },
 	{ to: "/settings", icon: Settings, label: "Settings" },
 	// { to: "/settings", icon: Settings, label: "Settings" },
 ];

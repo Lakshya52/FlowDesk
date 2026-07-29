@@ -9,7 +9,7 @@ import User from '../models/User';
 import { AuthRequest } from '../middlewares/auth';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
-import { getTenantUserIds } from '../utils/tenant';
+import { getTenantId, getTenantUserIds } from '../utils/tenant';
 
 /**
  * Helper to get role-based constraints and shared filters
@@ -17,6 +17,7 @@ import { getTenantUserIds } from '../utils/tenant';
 const getBaseFilters = async (req: AuthRequest) => {
     const userRole = req.user!.role;
     const userId = req.user!._id;
+    const tenantId = getTenantId(req.user);
     const { teamId, employeeId, projectId, status, startDate, endDate } = req.query;
     const tenantUserIds = await getTenantUserIds(req.user);
 
@@ -25,6 +26,8 @@ const getBaseFilters = async (req: AuthRequest) => {
     const taskMatch: any = {};
     const activityMatch: any = {};
 
+    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+
     // 1. Role-based scoping with tenant enforcement
     if (userRole === 'member') {
         userFilter._id = userId;
@@ -32,8 +35,8 @@ const getBaseFilters = async (req: AuthRequest) => {
         taskMatch.assignedTo = userId;
         activityMatch.user = userId;
     } else if (userRole === 'manager') {
-        const managedTeams = await Team.find({ manager: userId }).distinct('_id');
-        const allManagedMembers = await Team.find({ manager: userId }).distinct('members');
+        const managedTeams = await Team.find({ manager: userId, tenantId: tenantObjectId }).distinct('_id');
+        const allManagedMembers = await Team.find({ manager: userId, tenantId: tenantObjectId }).distinct('members');
         const managedMembers = allManagedMembers.filter((m: any) =>
             tenantUserIds.includes(m.toString())
         );
@@ -41,7 +44,7 @@ const getBaseFilters = async (req: AuthRequest) => {
         if (teamId) {
             const tId = new mongoose.Types.ObjectId(teamId as string);
             teamFilter._id = tId;
-            const team = await Team.findById(tId);
+            const team = await Team.findOne({ _id: tId, tenantId: tenantObjectId });
             const roster = [...(team?.members || []), team?.manager].filter(Boolean);
             const tenantRoster = roster.filter((m: any) => tenantUserIds.includes(m.toString()));
             userFilter._id = { $in: tenantRoster };
@@ -57,7 +60,7 @@ const getBaseFilters = async (req: AuthRequest) => {
     } else if (userRole === 'admin') {
         // Always apply tenant scoping for admin
         if (teamId) {
-            const team = await Team.findById(teamId);
+            const team = await Team.findOne({ _id: teamId, tenantId: tenantObjectId });
             const roster = [...(team?.members || []), team?.manager].filter(Boolean);
             const tenantRoster = roster.filter((m: any) => tenantUserIds.includes(m.toString()));
             taskMatch.assignedTo = { $in: tenantRoster };

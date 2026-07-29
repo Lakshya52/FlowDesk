@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface ICompany extends Document {
     name: string;
     slug: string;
+    tenantId: mongoose.Types.ObjectId;
     parentCompanyId?: mongoose.Types.ObjectId | null;
     industry?: string;
     description?: string;
@@ -29,7 +30,8 @@ export interface ICompany extends Document {
 const companySchema = new Schema<ICompany>(
     {
         name: { type: String, required: true, trim: true },
-        slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
+        slug: { type: String, required: true, lowercase: true, trim: true },
+        tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true },
         parentCompanyId: { type: Schema.Types.ObjectId, ref: 'Company', default: null },
         industry: { type: String, trim: true },
         description: { type: String, trim: true },
@@ -53,7 +55,7 @@ const companySchema = new Schema<ICompany>(
     { timestamps: true }
 );
 
-companySchema.index({ slug: 1 });
+companySchema.index({ tenantId: 1, slug: 1 }, { unique: true });
 companySchema.index({ parentCompanyId: 1 });
 companySchema.index({ name: 1 });
 companySchema.index({ status: 1 });
