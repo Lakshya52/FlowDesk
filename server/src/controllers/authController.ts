@@ -404,7 +404,7 @@ export const updateUser = async (
 			return;
 		}
 
-		res.json({ user, message : "User Updated Success backend" });
+		res.json({ user, message : "User Updated Success" });
 	} catch (error: any) {
 		res.status(500).json({ message: error.message });
 	}

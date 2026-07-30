@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import packageJson from "../../../package.json";
 import { useChatStore } from "../../store/chatStore";
@@ -169,6 +169,35 @@ const Sidebar: React.FC<SidebarProps> = ({
 			[to]: !prev[to],
 		}));
 	};
+	const [hoveredItem, setHoveredItem] = useState<NavLinkItem | null>(null);
+	const [popupTop, setPopupTop] = useState(0);
+	const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const handleHoverStart = (item: NavLinkItem, top: number) => {
+		if (hoverTimeoutRef.current) {
+			clearTimeout(hoverTimeoutRef.current);
+			hoverTimeoutRef.current = null;
+		}
+		setPopupTop(top);
+		setHoveredItem(item);
+	};
+
+	const handleHoverEnd = () => {
+		if (hoverTimeoutRef.current) {
+			clearTimeout(hoverTimeoutRef.current);
+		}
+		hoverTimeoutRef.current = setTimeout(() => {
+			setHoveredItem(null);
+		}, 200);
+	};
+
+	useEffect(() => {
+		return () => {
+			if (hoverTimeoutRef.current) {
+				clearTimeout(hoverTimeoutRef.current);
+			}
+		};
+	}, []);
 
 	return (
 		<aside
@@ -377,7 +406,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 									display: "flex",
 									flexDirection: "column",
 								}}
-							>
+							> 
 								{hasSubItems ? (
 									// Parent with subItems - clickable to toggle
 									<div
@@ -412,11 +441,21 @@ const Sidebar: React.FC<SidebarProps> = ({
 												e.currentTarget.style.background =
 													"var(--color-surface-hover)";
 											}
+											if (!isOpen && hasSubItems) {
+												const rect = e.currentTarget.getBoundingClientRect();
+												const asideRect = (e.currentTarget.closest("aside") as HTMLElement)?.getBoundingClientRect();
+												if (asideRect) {
+													handleHoverStart(item, rect.top - asideRect.top);
+												}
+											}
 										}}
 										onMouseLeave={(e) => {
 											if (!isActiveParent) {
 												e.currentTarget.style.background =
 													"transparent";
+											}
+											if (!isOpen && hasSubItems) {
+												handleHoverEnd();
 											}
 										}}
 									>
@@ -482,6 +521,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 												el.style.background =
 													"var(--color-surface-hover)";
 											}
+											
 										}}
 										onMouseLeave={(e) => {
 											const el = e.currentTarget;
@@ -602,6 +642,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 															alignItems: "center",
 														}}
 													>
+														{/* subitems starts here */}
 														<div
 															style={{
 																position: "absolute",
@@ -677,7 +718,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 															</NavLink>
 														)}
 													</div>
-
 													{hasNested && isNestedExpanded && (
 														<div style={{ marginLeft: "44px", display: "flex", flexDirection: "column" }}>
 															{sub.subItems!.filter(n => !n.adminOnly || user?.role === "admin" || user?.role === "manager").map((nested, nidx, narr) => {
@@ -740,6 +780,62 @@ const Sidebar: React.FC<SidebarProps> = ({
 					}}
 				>
 					FlowDesk v{packageJson.version}
+				</div>
+			)}
+
+			{/* Popup for sub-items when sidebar is closed */}
+			{!isOpen && hoveredItem && hoveredItem.subItems && hoveredItem.subItems.length > 0 && (
+				<div
+					onMouseEnter={() => handleHoverStart(hoveredItem, popupTop)}
+					onMouseLeave={handleHoverEnd}
+					style={{
+						position: "absolute",
+						left: "100%",
+						top: popupTop,
+						marginLeft: "8px",
+						background: "var(--color-surface)",
+						border: "1px solid var(--color-border)",
+						borderRadius: "8px",
+						padding: "8px",
+						boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+						zIndex: 1000,
+						minWidth: "180px",
+					}}
+				>
+					{hoveredItem.subItems
+						.filter(sub => !sub.adminOnly || user?.role === "admin" || user?.role === "manager")
+						.map((sub) => (
+							<NavLink
+								key={sub.to}
+								to={sub.to}
+								onClick={() => setHoveredItem(null)}
+								style={({ isActive }) => ({
+									display: "block",
+									padding: "8px 12px",
+									borderRadius: "6px",
+									fontSize: "0.875rem",
+									fontWeight: isActive ? 600 : 400,
+									color: isActive
+										? "var(--color-primary)"
+										: "var(--color-text-secondary)",
+									textDecoration: "none",
+									whiteSpace: "nowrap",
+									transition: "all 0.15s ease",
+								})}
+								onMouseEnter={(e) => {
+									if (!e.currentTarget.classList.contains("active")) {
+										e.currentTarget.style.background = "var(--color-surface-hover)";
+									}
+								}}
+								onMouseLeave={(e) => {
+									if (!e.currentTarget.classList.contains("active")) {
+										e.currentTarget.style.background = "transparent";
+									}
+								}}
+							>
+								{sub.label}
+							</NavLink>
+						))}
 				</div>
 			)}
 		</aside>

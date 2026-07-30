@@ -1,6 +1,6 @@
 {
   "name": "flowdesk-server",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "FlowDesk Backend API",
   "main": "dist/index.js",
   "scripts": {
