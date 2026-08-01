@@ -99,7 +99,7 @@ app.use(
         scriptSrc: ["'self'", "https://static.cloudflareinsights.com"],
         styleSrc: ["'self'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "blob:"],
+        imgSrc: ["'self'", "data:", "blob:", "https://flowdesk-api.raksco.in"],
         connectSrc: ["'self'", "https://flowdesk-api.raksco.in", "https://api.brevo.com", "https://api.openai.com"],
         mediaSrc: ["'self'", "blob:"],
         workerSrc: ["'self'", "blob:"],
