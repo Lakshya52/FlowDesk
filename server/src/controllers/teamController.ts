@@ -135,8 +135,7 @@ export const deleteTeam = async (req: AuthRequest, res: Response): Promise<void>
             return;
         }
 
-        // Everyone can delete team
-        await team.deleteOne();
+		await team.deleteOne();
 
         await ActivityLog.create({
             action: 'Team deleted',

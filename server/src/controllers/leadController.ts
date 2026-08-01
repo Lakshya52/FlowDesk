@@ -211,7 +211,13 @@ export const updateLead = async (
 		}
 
 		const oldStatus = lead.status;
-		Object.assign(lead, req.body);
+
+		const protectedFields = ['tenantId', 'createdBy', 'notes', 'followUpLogs', 'meetingLogs', 'callCount', 'followUpCount', 'meetingCount', 'callDuration', 'lastCallAt', 'source', '_id'];
+		const sanitizedBody = { ...req.body };
+		for (const field of protectedFields) {
+			delete sanitizedBody[field];
+		}
+		Object.assign(lead, sanitizedBody);
 
 		const body = req.body;
 		if (body.scheduleType === 'follow_up' || body.nextFollowupAt) {

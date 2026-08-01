@@ -1,5 +1,7 @@
 import { Response } from "express";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import User from "../models/User";
 // import Company from '../models/Company';
 import Tenant from "../models/Tenant";
@@ -60,13 +62,15 @@ export const register = async (
 
 		const otp = Math.floor(100000 + Math.random() * 900000).toString();
 		const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
+		const salt = await bcrypt.genSalt(12);
+		const hashedPassword = await bcrypt.hash(password, salt);
 
 		await RegistrationOtp.create({
 			companyName,
 			slug,
 			name,
 			email,
-			password,
+			password: hashedPassword,
 			website: website || "",
 			phone: phone || "",
 			industry: industry || "",
@@ -250,13 +254,18 @@ const tenant = await Tenant.create({
 });
 
 // Create admin user scoped to tenant
+// Use a temporary password first (gets hashed by the pre-save hook),
+// then overwrite with the already-hashed password from RegistrationOtp
+const tempPassword = crypto.randomBytes(16).toString('hex');
 const user = await User.create({
     name: regData.name,
     email: regData.email,
-    password: regData.password,
+    password: tempPassword,
     role: 'admin',
     tenantId: tenant._id,
 });
+// Overwrite with the real hashed password (updateOne bypasses pre-save hook)
+await User.updateOne({ _id: user._id }, { $set: { password: regData.password } });
 
 // Backfill ownerId now that we have the user
 tenant.ownerId = user._id;
@@ -507,6 +516,11 @@ export const uploadAvatar = async (
 	res: Response,
 ): Promise<void> => {
 	try {
+		if (req.params.id !== req.user!._id.toString() && req.user!.role !== 'admin') {
+			res.status(403).json({ message: "Insufficient permissions" });
+			return;
+		}
+
 		if (!req.file) {
 			res.status(400).json({ message: "No file uploaded" });
 			return;
@@ -548,6 +562,11 @@ export const removeAvatar = async (
 	res: Response,
 ): Promise<void> => {
 	try {
+		if (req.params.id !== req.user!._id.toString() && req.user!.role !== 'admin') {
+			res.status(403).json({ message: "Insufficient permissions" });
+			return;
+		}
+
 		const user = await User.findById(req.params.id);
 		if (!user) {
 			res.status(404).json({ message: "User not found" });
@@ -567,6 +586,24 @@ export const removeAvatar = async (
 			message: "Avatar removed successfully",
 			user: { ...user.toObject(), password: "" },
 		});
+	} catch (error: any) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+export const refreshToken = async (
+	req: AuthRequest,
+	res: Response,
+): Promise<void> => {
+	try {
+		const user = await User.findById(req.user!._id).select("-password");
+		if (!user || !user.isActive) {
+			res.status(401).json({ message: "Invalid or expired token" });
+			return;
+		}
+
+		const token = generateToken(user._id.toString(), user.tenantId.toString());
+		res.json({ token });
 	} catch (error: any) {
 		res.status(500).json({ message: error.message });
 	}

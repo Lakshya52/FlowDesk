@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { register, login, getMe, getUsers, permanentDeleteUser, deleteUser, activateUser, updateUser, uploadAvatar, removeAvatar, changePassword, forgotPassword, verifyForgotPasswordOtp, verifyRegistrationOtp, resendRegistrationOtp, createUser } from '../controllers/authController';
+import { register, login, getMe, getUsers, permanentDeleteUser, deleteUser, activateUser, updateUser, uploadAvatar, removeAvatar, changePassword, forgotPassword, verifyForgotPasswordOtp, verifyRegistrationOtp, resendRegistrationOtp, createUser, refreshToken } from '../controllers/authController';
 import { authenticate, authorize } from '../middlewares/auth';
 import { upload } from '../middlewares/upload';
 
@@ -27,6 +27,7 @@ router.put('/users/:id/activate', authenticate, authorize('admin'), activateUser
 router.put('/users/:id/avatar', authenticate, upload.single('avatar'), uploadAvatar);
 router.delete('/users/:id/avatar', authenticate, removeAvatar);
 router.delete('/users/:id/permanent', authenticate, authorize('admin', 'manager'), permanentDeleteUser);
+router.post('/refresh', authenticate, refreshToken);
 router.put('/change-password', authenticate, changePassword);
 router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/verify-forgot-password-otp', authLimiter, verifyForgotPasswordOtp);

@@ -373,11 +373,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 						gap: "8px",
 					}}
 				>
-					{visibleNavItems.map((item) => {
+					{visibleNavItems.map((item, idx) => {
 						if (item.break) {
 							return (
 								<div
-									key={Math.random()}
+									key={`break-${idx}`}
 									style={{
 										height: "1px",
 										background: "var(--color-border)",

@@ -148,6 +148,8 @@ export const processTaskDeadlines = async () => {
     }
 };
 
+let recurringInterval: ReturnType<typeof setInterval> | null = null;
+
 // Start the background job
 export const startRecurringJob = () => {
     // Run once on server start
@@ -156,10 +158,17 @@ export const startRecurringJob = () => {
 
     // Run every hour — fine for daily pattern since we check exact timestamps
     // For daily: spawns only when `now >= nextSpawnTime`, so no duplicates
-    setInterval(() => {
+    recurringInterval = setInterval(() => {
         processRecurringAssignments();
         processTaskDeadlines();
     }, 1000 * 60 * 60);
 
     startFieldVisitHeartbeat();
+};
+
+export const stopRecurringJob = () => {
+    if (recurringInterval) {
+        clearInterval(recurringInterval);
+        recurringInterval = null;
+    }
 };

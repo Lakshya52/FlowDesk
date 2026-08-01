@@ -48,10 +48,10 @@ import crmSummaryRoutes from "./routes/crmSummary";
 import fieldVisitRoutes from "./routes/fieldVisits";
 import settingsRoutes from "./routes/settings";
 import boardRoutes from "./routes/boards";
-import { startRecurringJob } from "./services/recurringTaskService";
+import { startRecurringJob, stopRecurringJob } from "./services/recurringTaskService";
 import { startFieldVisitHeartbeat } from "./services/fieldVisitHeartbeatService";
 import backupRoutes from "./routes/backup";
-import { startBackupScheduler } from "./services/backupScheduleService";
+import { startBackupScheduler, stopBackupScheduler } from "./services/backupScheduleService";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
 
 const app = express();
@@ -96,15 +96,15 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        frameSrc: ["'self'", "http://localhost:5000", "http://localhost:5173", "https://flowdesk.raksco.in", "https://flowdesk-api.raksco.in"],
-        objectSrc: ["'self'", "http://localhost:5000", "https://flowdesk-api.raksco.in"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://static.cloudflareinsights.com"],
-        scriptSrcElem: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "blob:", "http://localhost:5000", "https://flowdesk-api.raksco.in"],
-        connectSrc: ["'self'", "http://localhost:5000", "https://flowdesk-api.raksco.in", "https://api.brevo.com", "https://api.openai.com"],
-        mediaSrc: ["'self'", "http://localhost:5000", "blob:", "https://flowdesk-api.raksco.in"],
+        scriptSrc: ["'self'", "https://static.cloudflareinsights.com"],
+        styleSrc: ["'self'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: ["'self'", "https://flowdesk-api.raksco.in", "https://api.brevo.com", "https://api.openai.com"],
+        mediaSrc: ["'self'", "blob:"],
         workerSrc: ["'self'", "blob:"],
+        frameSrc: ["'self'"],
+        objectSrc: ["'none'"],
       },
     },
   }),
@@ -408,14 +408,43 @@ io.on("connection", (socket) => {
 });
 
 // Health check
-app.get("/api/health", (_req, res) => {
-  // res.json({ status: "ok", timestamp: new Date().toISOString() });
-  res.json({ status: "ok"});
+app.get("/api/health", async (_req, res) => {
+  try {
+    await mongoose.connection.db?.admin().ping();
+    res.json({ status: "ok" });
+  } catch {
+    res.status(503).json({ status: "error", message: "Database unavailable" });
+  }
 });
 
 // Error handling
 app.use(notFound);
 app.use(errorHandler);
+
+// Graceful shutdown handlers
+const shutdown = async (signal: string) => {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  server.close(() => {
+    console.log('HTTP server closed');
+  });
+  stopRecurringJob();
+  stopBackupScheduler();
+  await mongoose.disconnect();
+  console.log('MongoDB disconnected');
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
 
 // Database connection and server start
 const startServer = async () => {

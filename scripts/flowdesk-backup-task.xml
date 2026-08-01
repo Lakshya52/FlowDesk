@@ -44,7 +44,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
-      <Arguments>-NoProfile -ExecutionPolicy Bypass -File "D:\softwares\flowdesk\scripts\flowdesk-backup.ps1" -MongoUri "mongodb://AceoneSupport:A!ceone-mongocluster@ac-c2bzbo0-shard-00-00.dffbzkm.mongodb.net:27017,ac-c2bzbo0-shard-00-01.dffbzkm.mongodb.net:27017,ac-c2bzbo0-shard-00-02.dffbzkm.mongodb.net:27017/FlowDesk?ssl=true&amp;replicaSet=atlas-10c7ui-shard-0&amp;authSource=admin&amp;appName=Cluster0"</Arguments>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -File "D:\softwares\flowdesk\scripts\flowdesk-backup.ps1" -MongoUri "mongodb://AceoneSupport:A!ceone-mongocluster@ac-c2bzbo0-shard-00-00.dffbzkm.mongodb.net:27017,ac-c2bzbo0-shard-00-01.dffbzkm.mongodb.net:27017,ac-c2bzbo0-shard-00-02.dffbzkm.mongodb.net:27017/test?ssl=true&amp;replicaSet=atlas-10c7ui-shard-0&amp;authSource=admin&amp;appName=Cluster0"</Arguments>
       <WorkingDirectory>D:\softwares\flowdesk\scripts</WorkingDirectory>
     </Exec>
   </Actions>

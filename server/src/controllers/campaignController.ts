@@ -103,10 +103,16 @@ export const updateCampaign = async (req: AuthRequest, res: Response): Promise<v
             return;
         }
 
-        const changedFields = Object.keys(req.body);
-        Object.assign(campaign, req.body);
+		const changedFields = Object.keys(req.body);
 
-        if (req.body.people) {
+		const protectedFields = ['tenantId', 'createdBy', '_id'];
+		const sanitizedBody = { ...req.body };
+		for (const field of protectedFields) {
+			delete sanitizedBody[field];
+		}
+		Object.assign(campaign, sanitizedBody);
+
+		if (req.body.people) {
             const creatorId = campaign.createdBy.toString();
             if (!req.body.people.includes(creatorId)) {
                 req.body.people.push(creatorId);
