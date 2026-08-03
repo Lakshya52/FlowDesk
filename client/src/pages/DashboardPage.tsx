@@ -116,7 +116,7 @@ const DashboardPage: React.FC = () => {
   const { data: teamsData } = useQuery({
     queryKey: ["my-teams"],
     queryFn: async () => {
-      const { data } = await api.get("/teams");
+      const { data } = await api.get("/teams?all=true");
       return data.teams || [];
     },
   });
@@ -214,6 +214,7 @@ const DashboardPage: React.FC = () => {
   const workloadData = data.teamWorkload.map((w: any) => ({
     name: w.name.split(" ")[0],
     tasks: w.taskCount,
+    projects: w.projectCount,
   }));
 
   return (
@@ -428,11 +429,51 @@ const DashboardPage: React.FC = () => {
                       />
                       <Bar
                         dataKey="tasks"
+                        name="Tasks"
                         fill="var(--color-primary)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="projects"
+                        name="Projects"
+                        fill="var(--color-info)"
                         radius={[4, 4, 0, 0]}
                       />
                     </BarChart>
                   </ResponsiveContainer>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 16,
+                      justifyContent: "center",
+                      marginTop: 12,
+                      fontSize: "0.75rem",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 3,
+                          background: "var(--color-primary)",
+                        }}
+                      />
+                      Tasks
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 3,
+                          background: "var(--color-info)",
+                        }}
+                      />
+                      Projects
+                    </span>
+                  </div>
                 </div>
               )}
               {data.weeklyCompletionData?.length > 0 && (

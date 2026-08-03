@@ -46,13 +46,13 @@ const getBaseFilters = async (req: AuthRequest) => {
             teamFilter._id = tId;
             const team = await Team.findOne({ _id: tId, tenantId: tenantObjectId });
             const roster = [...(team?.members || []), team?.manager].filter(Boolean);
-            const tenantRoster = roster.filter((m: any) => tenantUserIds.includes(m.toString()));
+            const tenantRoster = roster.filter((m: any) => tenantUserIds.includes(m.toString())).map((id: any) => new mongoose.Types.ObjectId(id.toString()));
             userFilter._id = { $in: tenantRoster };
             taskMatch.assignedTo = { $in: tenantRoster };
             activityMatch.user = { $in: tenantRoster };
         } else {
             teamFilter._id = { $in: managedTeams };
-            const roster = Array.from(new Set([...managedMembers, userId.toString()]));
+            const roster = Array.from(new Set([...managedMembers, userId.toString()])).map((id: any) => new mongoose.Types.ObjectId(id.toString()));
             userFilter._id = { $in: roster };
             taskMatch.assignedTo = { $in: roster };
             activityMatch.user = { $in: roster };
@@ -62,7 +62,7 @@ const getBaseFilters = async (req: AuthRequest) => {
         if (teamId) {
             const team = await Team.findOne({ _id: teamId, tenantId: tenantObjectId });
             const roster = [...(team?.members || []), team?.manager].filter(Boolean);
-            const tenantRoster = roster.filter((m: any) => tenantUserIds.includes(m.toString()));
+            const tenantRoster = roster.filter((m: any) => tenantUserIds.includes(m.toString())).map((id: any) => new mongoose.Types.ObjectId(id.toString()));
             taskMatch.assignedTo = { $in: tenantRoster };
             activityMatch.user = { $in: tenantRoster };
             userFilter._id = { $in: tenantRoster };
@@ -80,9 +80,10 @@ const getBaseFilters = async (req: AuthRequest) => {
             }
         } else {
             // No specific filter — scope to all tenant users
-            taskMatch.assignedTo = { $in: tenantUserIds };
-            activityMatch.user = { $in: tenantUserIds };
-            userFilter._id = { $in: tenantUserIds };
+            const tenantObjectIds = tenantUserIds.map((id) => new mongoose.Types.ObjectId(id));
+            taskMatch.assignedTo = { $in: tenantObjectIds };
+            activityMatch.user = { $in: tenantObjectIds };
+            userFilter._id = { $in: tenantObjectIds };
         }
     }
 

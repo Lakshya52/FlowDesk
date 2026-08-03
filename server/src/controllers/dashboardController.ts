@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import mongoose from 'mongoose';
 import Assignment from '../models/Assignment';
 import Task from '../models/Task';
 import Team from '../models/Team';
@@ -19,6 +20,9 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
 
         // Get all users in this tenant for tenant scoping
         const tenantUserIds = await getTenantUserIds(req.user);
+        // Aggregation pipelines ($match) do NOT cast string ids to ObjectIds,
+        // so convert once here for use in aggregate filters.
+        const tenantObjectIds = tenantUserIds.map((id) => new mongoose.Types.ObjectId(id));
 
         // Base filters for role-based access
         const assignmentFilter: any = {};
@@ -60,9 +64,9 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
             ];
         } else {
             // Admin — scope all data to this tenant
-            assignmentFilter.createdBy = { $in: tenantUserIds };
-            taskFilter.assignedTo = { $in: tenantUserIds };
-            activityFilter.user = { $in: tenantUserIds };
+            assignmentFilter.createdBy = { $in: tenantObjectIds };
+            taskFilter.assignedTo = { $in: tenantObjectIds };
+            activityFilter.user = { $in: tenantObjectIds };
         }
 
         // Active assignments
@@ -101,7 +105,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
         // Total call duration across all leads (scoped by tenantId directly on Lead model)
         const tenantId = (req.user!.tenantId?._id || req.user!.tenantId).toString();
         const callDurationResult = await Lead.aggregate([
-            { $match: { tenantId: tenantId as any } },
+            { $match: { tenantId: new mongoose.Types.ObjectId(tenantId) } },
             { $group: { _id: null, total: { $sum: '$callDuration' } } },
         ]);
         const totalCallDuration = callDurationResult[0]?.total || 0;
@@ -125,32 +129,36 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
 
         const totalActivities = await ActivityLog.countDocuments(activityFilter);
 
-        // Team workload (scoped to tenant users)
-        const teamWorkload = await Task.aggregate([
-            { $match: { status: { $ne: 'completed' }, assignedTo: { $in: tenantUserIds } } },
-            { $group: { _id: '$assignedTo', taskCount: { $sum: 1 } } },
-            {
-                $lookup: {
-                    from: 'users',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'user',
-                },
-            },
-            { $unwind: '$user' },
-            {
-                $project: {
-                    _id: 0,
-                    userId: '$_id',
-                    name: '$user.name',
-                    email: '$user.email',
-                    avatar: '$user.avatar',
-                    taskCount: 1,
-                },
-            },
-            { $sort: { taskCount: -1 } },
-            { $limit: 10 },
+        // Team workload (scoped to tenant users) — tasks + projects per user
+        const [taskWorkload, assignmentWorkload, workloadUsers] = await Promise.all([
+            Task.aggregate([
+                { $match: { status: { $ne: 'completed' }, assignedTo: { $in: tenantObjectIds } } },
+                { $group: { _id: '$assignedTo', taskCount: { $sum: 1 } } },
+            ]),
+            Assignment.aggregate([
+                { $match: { createdBy: { $in: tenantObjectIds } } },
+                { $unwind: '$team' },
+                { $match: { team: { $in: tenantObjectIds } } },
+                { $group: { _id: '$team', projectCount: { $sum: 1 } } },
+            ]),
+            User.find({ _id: { $in: tenantObjectIds } }).select('name email avatar').lean(),
         ]);
+
+        const taskWorkloadMap = new Map(taskWorkload.map((t: any) => [t._id.toString(), t.taskCount]));
+        const assignmentWorkloadMap = new Map(assignmentWorkload.map((a: any) => [a._id.toString(), a.projectCount]));
+
+        const teamWorkload = workloadUsers
+            .map((u: any) => ({
+                userId: u._id.toString(),
+                name: u.name,
+                email: u.email,
+                avatar: u.avatar,
+                taskCount: taskWorkloadMap.get(u._id.toString()) || 0,
+                projectCount: assignmentWorkloadMap.get(u._id.toString()) || 0,
+            }))
+            .filter((w: any) => w.taskCount > 0 || w.projectCount > 0)
+            .sort((a: any, b: any) => b.taskCount + b.projectCount - (a.taskCount + a.projectCount))
+            .slice(0, 10);
 
         // Upcoming deadlines
         const upcomingDeadlines = await Task.find({
@@ -327,6 +335,8 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
         const userRole = req.user!.role;
         const userId = req.user!._id;
         const tenantUserIds = await getTenantUserIds(req.user);
+        // Aggregation pipelines ($match) do NOT cast string ids to ObjectIds
+        const tenantObjectIds = tenantUserIds.map((id) => new mongoose.Types.ObjectId(id));
 
         const dateFilter: any = {};
         if (startDate && endDate) {
@@ -339,7 +349,7 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
         // Tenant scope: only tasks assigned to users in this tenant
         let baseMatch: any = {
             ...dateFilter,
-            assignedTo: { $in: tenantUserIds }
+            assignedTo: { $in: tenantObjectIds }
         };
 
         // Role-based constraints
@@ -411,7 +421,7 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
 
         // Assignment completion analytics (Filtered by team if provided, scoped to tenant)
         const assignmentFilter: any = {
-            createdBy: { $in: tenantUserIds }
+            createdBy: { $in: tenantObjectIds }
         };
         if (teamId) {
             assignmentFilter.teams = teamId;

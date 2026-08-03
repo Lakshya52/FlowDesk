@@ -1252,7 +1252,7 @@ const handlePincodeChange = async (value: string) => {
 							setActiveTab("all");
 							setPage(1);
 						}}
-						className="flex items-center gap-1 bg-(--color-surface) border border-(--color-border) rounded-lg px-3 py-1.5 text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg) transition-colors cursor-pointer"
+						className="flex items-center gap-1 bg-(--color-surface) border border-(--color-border) rounded-lg px-3 py-1.5 text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg) hover:text-(--color-text) transition-colors cursor-pointer"
 					>
 						<X size={12} />
 						Reset Filters

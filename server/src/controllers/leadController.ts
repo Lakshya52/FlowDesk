@@ -1229,7 +1229,7 @@ export const getLeadFilterOptions = async (
 		const tenantId = getTenantId(req.user);
 		const { campaignId, status, search } = req.query;
 
-		const filter: any = { tenantId };
+		const filter: any = { tenantId: new mongoose.Types.ObjectId(tenantId) };
 		let campaignOr: any[] | null = null;
 		let searchOr: any[] | null = null;
 
@@ -1237,7 +1237,7 @@ export const getLeadFilterOptions = async (
 			const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
 			filter.campaignId = { $nin: allCampaignIds };
 		} else {
-			if (campaignId) filter.campaignId = campaignId;
+			if (campaignId) filter.campaignId = new mongoose.Types.ObjectId(campaignId as string);
 
 			const accessible = await getAccessibleCampaignIds(req.user, tenantId);
 			if (accessible) {
