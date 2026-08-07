@@ -5,7 +5,7 @@ import api from "../lib/api";
 import Avatar from "../components/common/Avatar";
 import Modal from "../components/common/Modal";
 import { useAuthStore } from "../store/authStore";
-import { Plus, LayoutGrid, Users, X, Loader2, Columns3, Settings, Check, Trash2, Mail } from "lucide-react";
+import { Plus, LayoutGrid, Users, X, Loader2, Columns3, Settings, Check, Trash2, Mail, Pencil } from "lucide-react";
 import { useTaskSocket } from "../hooks/useTaskSocket";
 
 const COLORS = [
@@ -26,6 +26,12 @@ const BoardsPage: React.FC = () => {
     const [inviteUserId, setInviteUserId] = useState("");
     const [inviteSearch, setInviteSearch] = useState("");
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+
+    const [startBoardEditing, setStartBoardEditing] = useState(false);
+    const [editForm, setEditForm] = useState<{ title: string; description: string; color: string } | null>(null);
+    // const [showColorPicker, setShowColorPicker] = useState(false);
+    const [savingEdit, setSavingEdit] = useState(false);
 
     const { data: boardsData, isLoading } = useQuery({
         queryKey: ["boards"],
@@ -194,6 +200,78 @@ const BoardsPage: React.FC = () => {
             setActionLoading(null);
         }
     };
+
+    const closeManageModal = () => {
+        setManageBoardId(null);
+        setInviteSearch("");
+        setInviteUserId("");
+        setStartBoardEditing(false);
+        setEditForm(null);
+        // setShowColorPicker(false);
+    };
+
+    const handleStartEdit = () => {
+        if (!manageBoard) return;
+        setEditForm({
+            title: manageBoard.title || "",
+            description: manageBoard.description || "",
+            color: manageBoard.color || "#3b82f6",
+        });
+        setStartBoardEditing(true);
+    };
+
+    const handleCancelEdit = () => {
+        setStartBoardEditing(false);
+        setEditForm(null);
+        // setShowColorPicker(false);
+    };
+
+    const handleSaveEdit = async () => {
+        if (!manageBoardId || !editForm?.title.trim()) return;
+        setSavingEdit(true);
+        try {
+            await api.put(`/boards/${manageBoardId}`, {
+                title: editForm.title,
+                description: editForm.description,
+                color: editForm.color,
+            });
+            setStartBoardEditing(false);
+            setEditForm(null);
+            await queryClient.invalidateQueries({ queryKey: ["boards"] });
+            refetchManageBoard();
+        } catch (e: any) {
+            alert(e.response?.data?.message || "Failed to update board");
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
+    const handleDeleteBoard = async () => {
+        if (!manageBoardId) return;
+        if (!window.confirm("You really want to delete this?")) return;
+        setSavingEdit(true);
+        try {
+            await api.delete(`/boards/${manageBoardId}`);
+            closeManageModal();
+            await queryClient.invalidateQueries({ queryKey: ["boards"] });
+        } catch (e: any) {
+            alert(e.response?.data?.message || "Failed to delete board");
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
+    // const handleUpdateBoardColor = async (color: string) => {
+    //     if (!manageBoardId) return;
+    //     setEditForm((prev) => (prev ? { ...prev, color } : prev));
+    //     try {
+    //         await api.put(`/boards/${manageBoardId}`, { color });
+    //         await queryClient.invalidateQueries({ queryKey: ["boards"] });
+    //         refetchManageBoard();
+    //     } catch (e: any) {
+    //         alert(e.response?.data?.message || "Failed to update color");
+    //     }
+    // };
 
     return (
         <div className="flex flex-col gap-6">
@@ -451,19 +529,141 @@ const BoardsPage: React.FC = () => {
             </Modal>
 
             {/* Manage Board Modal */}
-            <Modal isOpen={!!manageBoardId} onClose={() => { setManageBoardId(null); setInviteSearch(""); setInviteUserId(""); }}>
+            <Modal isOpen={!!manageBoardId} onClose={closeManageModal}>
                 <div className="card" style={{ maxWidth: 480, width: "100%", padding: 24 }}>
                     {manageBoard ? (
                         <>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: manageBoard.color }} />
-                                    <h2 style={{ fontSize: "1.125rem", fontWeight: 700, margin: 0 }}>{manageBoard.title}</h2>
+                            {startBoardEditing && editForm ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
+                                    <h3 style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-text-secondary)" }}>Edit Board</h3>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
+                                            Title <span style={{ color: "var(--color-danger)" }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={editForm.title}
+                                            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                                            placeholder="Board title"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
+                                            Description
+                                        </label>
+                                        <textarea
+                                            className="input"
+                                            style={{ minHeight: 60, resize: "vertical" }}
+                                            value={editForm.description}
+                                            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                                            placeholder="What is this board for?"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
+                                            Color
+                                        </label>
+                                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                            {COLORS.map((c) => (
+                                                <div
+                                                    key={c}
+                                                    onClick={() => setEditForm({ ...editForm, color: c })}
+                                                    style={{
+                                                        width: 28,
+                                                        height: 28,
+                                                        borderRadius: "50%",
+                                                        background: c,
+                                                        cursor: "pointer",
+                                                        border: editForm.color === c ? "3px solid var(--color-surface)" : "2px solid var(--color-border)",
+                                                        outline: editForm.color === c ? `2px solid ${c}` : "none",
+                                                        transition: "all 0.15s ease",
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                                        <button
+                                            className="btn btn-primary"
+                                            style={{ flex: 1, justifyContent: "center" }}
+                                            disabled={!editForm.title.trim() || savingEdit}
+                                            onClick={handleSaveEdit}
+                                        >
+                                            {savingEdit ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                            {savingEdit ? "Saving..." : "Save Changes"}
+                                        </button>
+                                        <button
+                                            className="btn"
+                                            style={{ background: "var(--color-surface-hover)", color: "var(--color-text-secondary)" }}
+                                            onClick={handleCancelEdit}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
                                 </div>
-                                <button className="btn btn-ghost btn-xs" onClick={() => { setManageBoardId(null); setInviteSearch(""); setInviteUserId(""); }}>
-                                    <X size={16} />
-                                </button>
-                            </div>
+                            ) : (
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                                    <div
+                                        style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}
+                                        
+                                    >
+                                        <div style={{ background: manageBoard.color }} className="h-2.5 w-2.5 rounded-[50%] cursor-pointer"
+                                        // onMouseEnter={() => setShowColorPicker(true)}
+                                        // onMouseLeave={() => setShowColorPicker(false)} 
+                                        />
+                                        <h2 style={{ fontSize: "1.125rem", fontWeight: 700, margin: 0 }}>{manageBoard.title}</h2>
+                                        {/* {showColorPicker && (
+                                            <div
+                                                style={{
+                                                    position: "absolute",
+                                                    top: "100%",
+                                                    left: -150,
+                                                    zIndex: 20,
+                                                    // marginTop: 8,
+                                                    background: "var(--color-surface)",
+                                                    border: "1px solid var(--color-border)",
+                                                    borderRadius: 10,
+                                                    padding: 8,
+                                                    display: "flex",
+                                                    gap: 6,
+                                                    flexWrap: "wrap",
+                                                    width: 152,
+                                                    boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                                                }}
+                                            >
+                                                {COLORS.map((c) => (
+                                                    <div
+                                                        key={c}
+                                                        onClick={() => { handleUpdateBoardColor(c); setShowColorPicker(false); }}
+                                                        style={{
+                                                            width: 24,
+                                                            height: 24,
+                                                            borderRadius: "50%",
+                                                            background: c,
+                                                            cursor: "pointer",
+                                                            border: manageBoard.color === c ? "2px solid var(--color-surface)" : "1px solid var(--color-border)",
+                                                            outline: manageBoard.color === c ? `2px solid ${c}` : "none",
+                                                            transition: "all 0.15s ease",
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )} */}
+                                    </div>
+                                    <div className="flex">
+                                        <button className="btn btn-ghost btn-xs group" title="Edit board" onClick={handleStartEdit}>
+                                            <Pencil size={16} className="group-hover:text-(--color-primary)" />
+                                        </button>
+                                        <button className="btn btn-ghost btn-xs group" title="Delete board" disabled={savingEdit} onClick={handleDeleteBoard} >
+                                            <Trash2 size={16} className="group-hover:text-(--color-danger)" />
+                                        </button>
+                                        <button className="btn btn-ghost btn-xs group" onClick={closeManageModal}>
+                                            <X size={18} className="group-hover:text-(--color-text)" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Join Requests - only visible to creator/admin */}
                             {isCreator && manageBoard.requests?.filter((r: any) => r.status === "pending").length > 0 && (
@@ -505,10 +705,22 @@ const BoardsPage: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Description */}
+                            {!startBoardEditing && (
+                                <div style={{ marginBottom: 20 }}>
+                                    <h3 style={{ fontSize: "0.8125rem", fontWeight: 600, marginBottom: 8, color: "var(--color-text-secondary)" }}>
+                                        Board Description
+                                    </h3>
+                                    <p style={{ fontSize: "0.875rem", color: "var(--color-text-primary)" }}>
+                                        {manageBoard.description || "No description provided."}
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Members */}
                             <div style={{ marginBottom: 20 }}>
                                 <h3 style={{ fontSize: "0.8125rem", fontWeight: 600, marginBottom: 8, color: "var(--color-text-secondary)" }}>
-                                    Members ({manageBoard.members?.length || 0})
+                                    Board Member{manageBoard.members?.length > 1 ? "s" : ""} ({manageBoard.members?.length || 0})
                                 </h3>
                                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                     {manageBoard.members?.map((m: any) => (

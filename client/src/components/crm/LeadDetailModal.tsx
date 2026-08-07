@@ -573,6 +573,15 @@ export default function LeadDetailModal({
 										</div>
 										<div className="flex gap-2 m-3 mt-1">
 											<button
+												onClick={() =>{
+													setIsEditingLead(false)
+													setUpdatingLead(false)
+												}}
+												className="btn btn-secondary flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold "
+											>
+												Cancle Edits
+											</button>
+											<button
 												className="btn btn-primary flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold"
 												disabled={
 													!	updatingLead ||
@@ -583,15 +592,6 @@ export default function LeadDetailModal({
 												{!updatingLead
 													? "Saving..."
 													: "Save Edits"}
-											</button>
-											<button
-												onClick={() =>{
-													setIsEditingLead(false)
-													setUpdatingLead(false)
-												}}
-												className="btn btn-secondary flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold "
-											>
-												Cancle Edits
 											</button>
 										</div>
 									</>

@@ -140,6 +140,7 @@ const AssignmentsPage: React.FC = () => {
     errors: any[];
   } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const selectedFileRef = React.useRef<File | null>(null);
 
   const { data: assignmentsData, isLoading: loading } = useQuery({
     queryKey: ["assignments", search, companyFilter],
@@ -1838,6 +1839,7 @@ const AssignmentsPage: React.FC = () => {
           setPreviewRows([]);
           setPreviewTasks([]);
           setImportResult(null);
+          selectedFileRef.current = null;
         }}
         zIndex={50}
       >
@@ -1872,7 +1874,8 @@ const AssignmentsPage: React.FC = () => {
               >
                 {importStep === "result" && importResult ? (
                   importResult.imported > 0 ? (
-                    <CheckCircle size={20} color="var(--color-success)" />
+                    // <CheckCircle size={20} color="var(--color-success)" />
+                    null
                   ) : (
                     <AlertCircle size={20} color="var(--color-danger)" />
                   )
@@ -1884,7 +1887,7 @@ const AssignmentsPage: React.FC = () => {
                     ? "Import Projects"
                     : importStep === "preview"
                       ? "Review Imported Projects"
-                      : "Import Complete"}
+                      : "Import Completed"}
                 </h3>
               </div>
               <button
@@ -1894,6 +1897,7 @@ const AssignmentsPage: React.FC = () => {
                   setPreviewRows([]);
                   setPreviewTasks([]);
                   setImportResult(null);
+                  selectedFileRef.current = null;
                 }}
                 style={{
                   background: "none",
@@ -1918,6 +1922,7 @@ const AssignmentsPage: React.FC = () => {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
+                    selectedFileRef.current = file;
                     setImporting(true);
                     try {
                       const formData = new FormData();
@@ -2161,6 +2166,7 @@ const AssignmentsPage: React.FC = () => {
                       setImportStep("upload");
                       setPreviewRows([]);
                       setPreviewTasks([]);
+                      selectedFileRef.current = null;
                     }}
                   >
                     Cancel
@@ -2176,8 +2182,7 @@ const AssignmentsPage: React.FC = () => {
                     onClick={async () => {
                       setImporting(true);
                       try {
-                        const file =
-                          fileInputRef.current?.files?.[0];
+                        const file = selectedFileRef.current;
                         if (!file) return;
                         const formData = new FormData();
                         formData.append("file", file);
@@ -2225,8 +2230,8 @@ const AssignmentsPage: React.FC = () => {
             {/* Result step */}
             {importStep === "result" && importResult && (
               <div style={{ padding: 24 }}>
-                <div
-                  style={{ textAlign: "center", marginBottom: 20 }}
+                <div className="flex  flex-col items-center justify-center"
+                  style={{  textAlign: "center", marginBottom: 20 }}
                 >
                   {importResult.imported > 0 ? (
                     <CheckCircle
@@ -2291,6 +2296,7 @@ const AssignmentsPage: React.FC = () => {
                     setPreviewRows([]);
                     setPreviewTasks([]);
                     setImportResult(null);
+                    selectedFileRef.current = null;
                   }}
                 >
                   Done

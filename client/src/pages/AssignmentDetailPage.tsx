@@ -1086,9 +1086,19 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                 {/* Team Members */}
                 <div className="flex items-center gap-3 flex-wrap mb-2">
                     <div className="flex gap-1.5 flex-wrap">
-                        {assignment.team?.map((m: any) => (
+                        {assignment.team?.map((m: any) => {
+                            const creatorId = assignment.createdBy?._id || assignment.createdBy;
+                            const isCreatorMember = m._id === creatorId || m._id?.toString?.() === creatorId?.toString?.();
+                            const canRemoveThisMember = canEditProject && (m.name != user?.name) && (user?.role === 'admin' || !isCreatorMember);
+                            return (
                             <span key={m._id}
                                 onClick={() => {
+                                    if (!canEditProject) return;
+                                    if (isCreatorMember && user?.role !== 'admin') {
+                                        setManageTeamErrorMsg("You can not remove the creator of the project");
+                                        setTimeout(() => setManageTeamErrorMsg(""), 3000);
+                                        return;
+                                    }
                                     if(m.name != user?.name){
                                         const currentIds = assignment.team?.map((tm: any) => tm._id || tm) || [];
                                         handleUpdateTeam(currentIds.filter((tid: string) => tid !== m._id));
@@ -1097,12 +1107,12 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         setTimeout(() => setManageTeamErrorMsg(""), 3000);
                                     }
                                 }}
-                                className={`group relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-(--color-surface-hover) text-xs font-medium transition-colors ${ m.name != user?.name ? "hover:bg-red-500/10 hover:text-red-500" : null } cursor-pointer `}>
+                                className={`group relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-(--color-surface-hover) text-xs font-medium transition-colors ${ canRemoveThisMember ? "hover:bg-red-500/10 hover:text-red-500" : null } ${canEditProject ? "cursor-pointer" : "cursor-default"}`}>
                                 <Avatar src={m.avatar} name={m.name} size={20} />
                                 {m.name}
 
                                 {/* can edit and the name is not the current logged in user name */}
-                                {canEditProject && (m.name != user?.name ) && (
+                                {canRemoveThisMember && (
                                     <>
                                         <button
                                             className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex cursor-pointer items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity scale-75 group-hover:scale-100"
@@ -1113,7 +1123,8 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                     </>
                                 )}
                             </span>
-                        ))}
+                            );
+                        })}
                     </div>
                     
                     {canEditProject && (
@@ -1789,6 +1800,9 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflow: 'auto', marginBottom: 20 } as React.CSSProperties}>
                         {users.filter(u => u._id !== user?._id).map(u => {
                             const isManualMember = assignment.team?.some((m: any) => m._id === u._id);
+                            const creatorId = assignment.createdBy?._id || assignment.createdBy;
+                            const isCreatorMember = u._id === creatorId || u._id?.toString?.() === creatorId?.toString?.();
+                            const removalBlocked = isManualMember && isCreatorMember && user?.role !== 'admin';
                             const assignedTeam = assignment.teams?.find((t: any) =>
                                 t.manager?._id === u._id ||
                                 t.members?.some((m: any) => m._id === u._id) ||
@@ -1811,8 +1825,10 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                     </div>
 
                                     <button
-                                        disabled={updatingTeam}
+                                        disabled={updatingTeam || removalBlocked}
+                                        title={removalBlocked ? 'The project creator cannot be removed' : undefined}
                                         onClick={() => {
+                                            if (removalBlocked) return;
                                             const currentIds = assignment.team?.map((m: any) => m._id || m) || [];
                                             const nextIds = isManualMember
                                                 ? currentIds.filter((tid: string) => tid !== u._id)

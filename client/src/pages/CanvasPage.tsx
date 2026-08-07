@@ -912,30 +912,7 @@ const CanvasPage: React.FC = () => {
           color: "var(--color-text)",
         }}
       >
-        <button
-          className="btn btn-secondary btn-xs"
-          onClick={() => {
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (rect)
-              zoomTowards(
-                Math.min(scale + 0.2, 5),
-                rect.width / 2,
-                rect.height / 2,
-              );
-          }}
-        >
-          <Plus size={16} />
-        </button>
-        <span
-          style={{
-            fontSize: "0.8rem",
-            fontWeight: 600,
-            width: 40,
-            textAlign: "center",
-          }}
-        >
-          {Math.round(scale * 100)}%
-        </span>
+
         <button
           className="btn btn-secondary btn-xs"
           onClick={() => {
@@ -949,6 +926,32 @@ const CanvasPage: React.FC = () => {
           }}
         >
           <Minus size={16} />
+        </button>
+        
+        <span
+          style={{
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            width: 40,
+            textAlign: "center",
+          }}
+        >
+          {Math.round(scale * 100)}%
+        </span>
+        
+        <button
+          className="btn btn-secondary btn-xs"
+          onClick={() => {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect)
+              zoomTowards(
+                Math.min(scale + 0.2, 5),
+                rect.width / 2,
+                rect.height / 2,
+              );
+          }}
+        >
+          <Plus size={16} />
         </button>
         <div
           style={{ width: 1, height: 20, background: "var(--color-border)" }}

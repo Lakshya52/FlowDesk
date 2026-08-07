@@ -1102,7 +1102,7 @@ const handlePincodeChange = async (value: string) => {
 				>
 					{/* campaign selection filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[150px]"
+						className="input flex-1 sm:max-w-[150px] min-w-[150px] cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1120,7 +1120,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* Lead status filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[140px]"
+						className="input flex-1 sm:max-w-[150px] min-w-[140px] cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1137,7 +1137,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* industry filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[140px]"
+						className="input flex-1 sm:max-w-[150px] min-w-[140px] cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1154,7 +1154,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* source filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[150px]"
+						className="input flex-1 sm:max-w-[150px] min-w-[150px] cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1171,7 +1171,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* priority filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[140px]"
+						className="input flex-1 sm:max-w-[150px] min-w-[140px] cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1187,7 +1187,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* city filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[130px]"
+						className="input flex-1 sm:max-w-[150px] min-w-[130px] cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1204,7 +1204,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* state filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[130px]"
+						className="input flex-1 sm:max-w-[150px] min-w-[130px] cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1221,7 +1221,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* pincode filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[130px]"
+						className="input flex-1 sm:max-w-[150px] min-w-[130px] cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",

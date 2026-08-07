@@ -32,8 +32,8 @@ const MonthView: React.FC<MonthViewProps> = ({ events }) => {
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'var(--color-surface)', overflowX: 'auto', overflowY: 'hidden' }}>
-      <div style={{ minWidth: '700px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className='flex-1 flex flex-col h-full bg-(--color-surface) overflow-x-auto overflow-y-hidden'>
+      <div className='min-w-[500px] flex flex-col h-full'>
         {/* Days of week header */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', flexShrink: 0 }}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -55,13 +55,14 @@ const MonthView: React.FC<MonthViewProps> = ({ events }) => {
               key={day.toString()}
               onClick={() => openEventModal(undefined, day)}
               style={{
-                minHeight: '100px',
+                minHeight: '80px',
                 borderBottom: '1px solid var(--color-border)',
                 borderRight: '1px solid var(--color-border)',
                 padding: '4px',
                 cursor: 'pointer',
                 backgroundColor: !isCurrentMonth ? 'var(--color-bg)' : 'transparent',
-                transition: 'background-color 0.2s'
+                transition: 'background-color 0.2s',
+                // scrollbarWidth: 'none',
               }}
               onMouseOver={(e) => {
                 e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)';

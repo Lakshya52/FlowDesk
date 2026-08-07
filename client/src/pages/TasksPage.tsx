@@ -581,6 +581,10 @@ const TasksPage: React.FC = () => {
 
   const columnCount = activeColumns.length;
   const fitCount = columnCount <= 4 ? 4 : 5;
+  const columnsFit = columnCount > fitCount ? columnCount : fitCount;
+  const columnsWidth = `${(columnsFit / fitCount) * 90}%`;
+  const basisCount = Math.max(columnCount, 1);
+  const columnBasis = `calc((100% - ${(basisCount - 1) * 8}px) / ${basisCount})`;
 
   const grouped: Record<string, any[]> = {};
   activeColumns.forEach((col) => {
@@ -760,235 +764,242 @@ const TasksPage: React.FC = () => {
         <div
           ref={scrollRef}
           style={{
-            display: "flex",
-            gap: 8,
-            overflowX: "auto",
-            width: "100%",
+            // display: "flex",
+            // gap: 8,
+            // overflowX: "auto",
+            // width: "100%",
             // paddingBottom: 8,
-            minHeight: "60dvh",
-            scrollBehavior: "smooth",
+            // minHeight: "60dvh",
+            // scrollBehavior: "smooth",
           }}
-          className="hide-scrollbar"
+          className="hide-scrollbar flex overflow-x-auto w-full min-h-[60dvh] scroll-smooth gap-2"
         >
-          {activeColumns.map((col: any) => (
-            <div
-              key={col.key}
-              style={{
-                minHeight: "100%",
-                background: "var(--color-surface-hover)",
-                borderRadius: 12,
-                padding: 8,
-                border: draggedTaskId
-                  ? `2px dashed ${col.color}40`
-                  : draggedColumnKey === col.key
-                  ? `2px dashed ${col.color}`
-                  : "2px solid transparent",
-                transition: "all 0.2s ease",
-                flex: `0 0 calc((100% - ${(fitCount - 1) * 8}px) / ${fitCount})`,
-                minWidth: 0,
-              }}
-              onDragOver={(e) => { handleColumnDragOver(e, col.key); setHoveredColumn(col.key); }}
-              onDrop={(e) => {
-                if (draggedColumnKey) {
-                  handleColumnDrop(e, col.key);
-                } else {
-                  handleDrop(e, col.key);
-                }
-              }}
-              onMouseEnter={() => setHoveredColumn(col.key)}
-              onMouseLeave={() => setHoveredColumn(null)}
-            >
-              {/* Column header */}
+          <div className="flex gap-2 shrink-0" style={{ width: columnsWidth }} >
+            {activeColumns.map((col: any) => (
               <div
+                key={col.key}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginBottom: 12,
-                  padding: "0 4px",
+                  minHeight: "100%",
+                  background: "var(--color-surface-hover)",
+                  borderRadius: 12, 
+                  padding: 8,
+                  border: draggedTaskId
+                    ? `2px dashed ${col.color}40`
+                    : draggedColumnKey === col.key
+                    ? `2px dashed ${col.color}`
+                    : "2px solid transparent",
+                  transition: "all 0.2s ease",
+                  flex: `0 0 ${columnBasis}`,
+                  minWidth: 0,
                 }}
-                draggable={!!activeBoardId}
-                onDragStart={(e) => handleColumnDragStart(e, col.key)}
+                // className="flex-1"
+                onDragOver={(e) => { handleColumnDragOver(e, col.key); setHoveredColumn(col.key); }}
+                onDrop={(e) => {
+                  if (draggedColumnKey) {
+                    handleColumnDrop(e, col.key);
+                  } else {
+                    handleDrop(e, col.key);
+                  }
+                }}
+                onMouseEnter={() => setHoveredColumn(col.key)}
+                onMouseLeave={() => setHoveredColumn(null)}
               >
-                {activeBoardId && (
-                  <GripVertical size={14} style={{ color: "var(--color-text-tertiary)", cursor: "grab", flexShrink: 0 }} />
-                )}
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: col.color, flexShrink: 0 }} />
-                {editingColumnKey === col.key ? (
-                  <input
-                    className="input"
-                    style={{ fontSize: "0.8125rem", padding: "2px 6px", flex: 1 }}
-                    value={editColumnLabel}
-                    onChange={(e) => setEditColumnLabel(e.target.value)}
-                    onBlur={() => handleRenameColumn(col.key)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleRenameColumn(col.key);
-                      if (e.key === "Escape") setEditingColumnKey(null);
-                    }}
-                    autoFocus
-                  />
-                ) : (
-                  <span
-                    style={{ fontSize: "0.8125rem", fontWeight: 600, cursor: activeBoardId ? "pointer" : "default" }}
-                    onDoubleClick={() => {
-                      if (!activeBoardId) return;
-                      setEditingColumnKey(col.key);
-                      setEditColumnLabel(col.label);
-                    }}
-                  >
-                    {col.label}
+                {/* Column header */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 12,
+                    padding: "0 4px",
+                    // width: "fit-content",
+                  }}
+                  draggable={!!activeBoardId}
+                  onDragStart={(e) => handleColumnDragStart(e, col.key)}
+                >
+                  {activeBoardId && (
+                    <GripVertical size={14} style={{ color: "var(--color-text-tertiary)", cursor: "grab", flexShrink: 0 }} />
+                  )}
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: col.color, flexShrink: 0 }} />
+                  {editingColumnKey === col.key ? (
+                    <input
+                      className="input"
+                      style={{ fontSize: "0.8125rem", padding: "2px 6px", flex: 1 }}
+                      value={editColumnLabel}
+                      onChange={(e) => setEditColumnLabel(e.target.value)}
+                      onBlur={() => handleRenameColumn(col.key)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleRenameColumn(col.key);
+                        if (e.key === "Escape") setEditingColumnKey(null);
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      style={{ fontSize: "0.8125rem", fontWeight: 600, cursor: activeBoardId ? "pointer" : "default" }}
+                      onDoubleClick={() => {
+                        if (!activeBoardId) return;
+                        setEditingColumnKey(col.key);
+                        setEditColumnLabel(col.label);
+                      }}
+                    >
+                      {col.label}
+                    </span>
+                  )}
+                  <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>
+                    {grouped[col.key]?.length || 0}
                   </span>
-                )}
-                <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>
-                  {grouped[col.key]?.length || 0}
-                </span>
-                {activeBoardId && (
-                  <button
-                    className="btn btn-ghost btn-xs"
-                    style={{ padding: 2, marginLeft: 2 }}
-                    onClick={() => handleDeleteColumn(col.key)}
-                  >
-                    <Trash2 size={12} style={{ color: "var(--color-text-tertiary)" }} />
-                  </button>
-                )}
-              </div>
+                  {activeBoardId && (
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      style={{ padding: 2, marginLeft: 2 }}
+                      onClick={() => handleDeleteColumn(col.key)}
+                    >
+                      <Trash2 size={12} style={{ color: "var(--color-text-tertiary)" }} />
+                    </button>
+                  )}
+                </div>
 
-              {/* Task cards */}
-              <div data-col={col.key} className="h-[95%]" style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-                {grouped[col.key]?.map((t: any, colIdx: number) => (
-                      <React.Fragment key={t._id}>
-                        {draggedTaskId && dragInsertInfo?.colKey === col.key && dragInsertInfo?.index === colIdx && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: -1 }}>
-                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", flexShrink: 0 }} />
-                            <div style={{ height: 2, flex: 1, background: "var(--color-primary)", borderRadius: "0 2px 2px 0" }} />
-                          </div>
-                        )}
-                        {/* task card */}
-                        <div
-                          id={`task-card-${t._id}`}
-                          className={`card task-card${highlightedTaskId === t._id ? " task-highlight" : ""}`}
-                          style={{
-                            padding: "12px", borderRadius: "4px",
-                            cursor: canEditTask(t) ? "grab" : "default",
-                            opacity: draggedTaskId === t._id ? 0.4 : 1,
-                            border: draggedTaskId === t._id
-                              ? `1px dashed ${col.color}`
-                              : "1px solid var(--color-border)",
-                            transition: "opacity 0.15s ease",
-                          }}
-                          draggable={canEditTask(t)}
-                          onDragStart={(e) => handleDragStart(e, t._id)}
-                          onDragEnd={handleDragEnd}
-                          onMouseDown={() => {
-                            if (!canEditTask(t)) {
-                              showToast(getDeniedReason(t));
-                            }
-                          }}
-                        >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, paddingBottom: 8, borderBottom: "1px solid var(--color-border)" }}>
-                              <div
-                                style={{
-                                  fontSize: "0.6875rem", textTransform: "uppercase", color: "var(--color-primary)",
-                                  fontWeight: 600, cursor: t.assignment ? "pointer" : "default",
-                                  textDecoration: t.assignment ? "underline" : "none", textUnderlineOffset: 2,
-                                }}
-                                onClick={() => {
-                                  if (t.assignment?._id) navigate(`/assignments/${t.assignment._id}`);
-                                }}
-                              >
-                                {t.assignment?.title || "General"}
-                              </div>
-                              <span className={`badge badge-${t.priority}`} style={{ fontSize: "0.625rem" }}>
-                                {PRIORITY_LABELS[t.priority]}
-                              </span>
+                {/* Task cards */}
+                <div data-col={col.key} className="" style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+                  {grouped[col.key]?.map((t: any, colIdx: number) => (
+                        <React.Fragment key={t._id}>
+                          {draggedTaskId && dragInsertInfo?.colKey === col.key && dragInsertInfo?.index === colIdx && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: -1 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", flexShrink: 0 }} />
+                              <div style={{ height: 2, flex: 1, background: "var(--color-primary)", borderRadius: "0 2px 2px 0" }} />
                             </div>
-                            <div
-                              className="font-bold"
-                              style={{ fontSize: "0.8125rem", lineHeight: 1.4, cursor: "pointer" }}
-                              onClick={(e) => { e.stopPropagation(); openDetailModal(t); }}
-                            >
-                              {t.title}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "0.8125rem",
-                                lineHeight: 1.4,
-                                marginBottom: 8,
-                                display: "-webkit-box",
-                                WebkitLineClamp: 3,
-                                WebkitBoxOrient: "vertical",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                wordBreak: "break-word",
-                                overflowWrap: "break-word",
-                                cursor: "pointer",
-                                width: "100%",
-                                minWidth: 0,
-                              }}
-                              className="text-(--color-text-secondary)"
-                              onClick={(e) => { e.stopPropagation(); openDetailModal(t); }}
-                            >
-                              {t.description}
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <Avatar src={t.assignedTo?.avatar} name={t.assignedTo?.name} size={20} />
-                                <span style={{ fontSize: "0.6875rem", color: "var(--color-text-secondary)" }}>
-                                  {t.assignedTo?.name?.split(" ")[0]}
+                          )}
+                          {/* task card */}
+                          <div
+                            id={`task-card-${t._id}`}
+                            className={`card task-card${highlightedTaskId === t._id ? " task-highlight" : ""}`}
+                            style={{
+                              padding: "12px", borderRadius: "4px",
+                              cursor: canEditTask(t) ? "grab" : "default",
+                              opacity: draggedTaskId === t._id ? 0.4 : 1,
+                              border: draggedTaskId === t._id
+                                ? `1px dashed ${col.color}`
+                                : "1px solid var(--color-border)",
+                              transition: "opacity 0.15s ease",
+                            }}
+                            draggable={canEditTask(t)}
+                            onDragStart={(e) => handleDragStart(e, t._id)}
+                            onDragEnd={handleDragEnd}
+                            onMouseDown={() => {
+                              if (!canEditTask(t)) {
+                                showToast(getDeniedReason(t));
+                              }
+                            }}
+                          >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, paddingBottom: 8, borderBottom: "1px solid var(--color-border)" }}>
+                                <div
+                                  style={{
+                                    fontSize: "0.6875rem", textTransform: "uppercase", color: "var(--color-primary)",
+                                    fontWeight: 600, cursor: t.assignment ? "pointer" : "default",
+                                    textDecoration: t.assignment ? "underline" : "none", textUnderlineOffset: 2,
+                                  }}
+                                  onClick={() => {
+                                    if (t.assignment?._id) navigate(`/assignments/${t.assignment._id}`);
+                                  }}
+                                >
+                                  {t.assignment?.title || "General"}
+                                </div>
+                                <span className={`badge badge-${t.priority}`} style={{ fontSize: "0.625rem" }}>
+                                  {PRIORITY_LABELS[t.priority]}
                                 </span>
                               </div>
-                              <span style={{ fontSize: "0.6875rem", ...getDeadlineStyle(t.dueDate, t.status) }}>
-                                {getDeadlineLabel(t.dueDate, t.status)}
-                              </span>
-                            </div>
+                              <div
+                                className="font-bold"
+                                style={{ fontSize: "0.8125rem", lineHeight: 1.4, cursor: "pointer" }}
+                                onClick={(e) => { e.stopPropagation(); openDetailModal(t); }}
+                              >
+                                {t.title}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.8125rem",
+                                  lineHeight: 1.4,
+                                  marginBottom: 8,
+                                  display: "-webkit-box",
+                                  WebkitLineClamp: 3,
+                                  WebkitBoxOrient: "vertical",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  wordBreak: "break-word",
+                                  overflowWrap: "break-word",
+                                  cursor: "pointer",
+                                  width: "100%",
+                                  minWidth: 0,
+                                }}
+                                className="text-(--color-text-secondary)"
+                                onClick={(e) => { e.stopPropagation(); openDetailModal(t); }}
+                              >
+                                {t.description}
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <Avatar src={t.assignedTo?.avatar} name={t.assignedTo?.name} size={20} />
+                                  <span style={{ fontSize: "0.6875rem", color: "var(--color-text-secondary)" }}>
+                                    {t.assignedTo?.name?.split(" ")[0]}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: "0.6875rem", ...getDeadlineStyle(t.dueDate, t.status) }}>
+                                  {getDeadlineLabel(t.dueDate, t.status)}
+                                </span>
+                              </div>
+                          </div>
+                        </React.Fragment>
+                      ))}
+                      {draggedTaskId && dragInsertInfo?.colKey === col.key && dragInsertInfo?.index === (grouped[col.key]?.length || 0) && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 0, marginTop: -1 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", flexShrink: 0 }} />
+                          <div style={{ height: 2, flex: 1, background: "var(--color-primary)", borderRadius: "0 2px 2px 0" }} />
                         </div>
-                      </React.Fragment>
-                    ))}
-                    {draggedTaskId && dragInsertInfo?.colKey === col.key && dragInsertInfo?.index === (grouped[col.key]?.length || 0) && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 0, marginTop: -1 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", flexShrink: 0 }} />
-                        <div style={{ height: 2, flex: 1, background: "var(--color-primary)", borderRadius: "0 2px 2px 0" }} />
-                      </div>
-                    )}
-                    
+                      )}
+                      
 
-                {/* New Task button - visible on column hover */}
-                {hoveredColumn === col.key && !draggedTaskId && (
-                  <div
-                    className="card"
-                    style={{
-                      padding: "12px", borderRadius: "4px", cursor: "pointer",
-                      border: "1px dashed var(--color-border)",
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      color: "var(--color-text-tertiary)", fontSize: "0.8125rem", transition: "all 0.2s ease",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = col.color; e.currentTarget.style.color = col.color; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text-tertiary)"; }}
-                    onClick={() => { setCreateColumnStatus(col.key); setShowCreateModal(true); }}
-                  >
-                    <Plus size={14} /> New Task
-                  </div>
-                )}
-
-                
-                  <div
-                  className="card flex-1 empty-drop-zone"
-                    style={{
-                      background:"none",
-                      border:"none",
-                    }}
+                  {/* New Task button - visible on column hover */}
+                  {hoveredColumn === col.key && !draggedTaskId && (
+                    <div
+                      className="card"
+                      style={{
+                        padding: "12px", borderRadius: "4px", cursor: "pointer",
+                        border: "1px dashed var(--color-border)",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        color: "var(--color-text-tertiary)", fontSize: "0.8125rem", transition: "all 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = col.color; e.currentTarget.style.color = col.color; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text-tertiary)"; }}
+                      onClick={() => { setCreateColumnStatus(col.key); setShowCreateModal(true); }}
                     >
+                      <Plus size={14} /> New Task
+                    </div>
+                  )}
 
-                  </div>
+                  
+                    <div
+                    className="card flex-1 empty-drop-zone "
+                      style={{
+                        background:"none",
+                        border:"none",
+                        boxShadow:"none",
+                        borderRadius:0,
+                      }}
+                      >
+
+                    </div>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
 
           {/* Right-edge hover zone + New Column card - only when board is selected */}
           {activeBoardId && (
             <div
               className="relative flex items-start"
               style={{
+                width: "10%",
                 minWidth: showNewColumnCard ? 180 : 24,
                 flexShrink: 0,
                 transition: "min-width 0.2s ease",

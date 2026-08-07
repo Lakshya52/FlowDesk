@@ -243,6 +243,32 @@ export const updateAssignment = async (
       return;
     }
 
+    // Only admins and managers can modify the project's member list
+    if (
+      (req.body.team || req.body.teams) &&
+      req.user!.role !== "admin" &&
+      req.user!.role !== "manager"
+    ) {
+      res.status(403).json({
+        message: "Only admins and managers can manage project members",
+      });
+      return;
+    }
+
+    // Only admins can remove the assignment creator from the team
+    if (
+      req.body.team &&
+      req.user!.role !== "admin" &&
+      !req.body.team.some(
+        (id: any) => id.toString() === assignment.createdBy.toString(),
+      )
+    ) {
+      res.status(403).json({
+        message: "You can not remove the creator of the project",
+      });
+      return;
+    }
+
     // Capture changes for detailed logging
     const changes: Record<string, { old: any; new: any }> = {};
     Object.keys(req.body).forEach((key) => {

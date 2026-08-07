@@ -82,9 +82,9 @@ export const navItems: NavItem[] = [
 		icon: FolderKanban,
 		label: "Productivity",
 		subItems: [
-			{ to: "/assignments", label: "Porjects" },
+			{ to: "/assignments", label: "Projects" },
 			{ to: "/tasks", label: "Kanban View" },
-			{ to: "/boards", label: "Sprints" },
+			{ to: "/boards", label: "Sprint Boards" },
 		],
 	},
 	{ to: "/teams", icon: Users, label: "Our Teams" },
