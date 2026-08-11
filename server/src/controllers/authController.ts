@@ -2,7 +2,7 @@ import { Response } from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import User from "../models/User";
+import User, { UserRole } from "../models/User";
 // import Company from '../models/Company';
 import Tenant from "../models/Tenant";
 import RegistrationOtp from "../models/RegistrationOtp";
@@ -11,6 +11,10 @@ import {
 	sendOtpEmail,
 	sendRegistrationOtpEmail,
 } from "../services/emailService";
+import {
+	emitUserLogin,
+	emitTenantRegistered,
+} from "../services/superAdminEvents";
 
 const generateToken = (userId: string, tenantId?: string): string => {
 	const payload: any = { userId };
@@ -273,6 +277,8 @@ await tenant.save();
 
 await RegistrationOtp.deleteOne({ email });
 
+emitTenantRegistered(tenant, user);
+
 const token = generateToken(user._id.toString(), tenant._id.toString());
 
 res.status(201).json({
@@ -315,6 +321,11 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
 
 		user.lastLogin = new Date();
 		await user.save();
+
+		const tenantDoc = (await Tenant.findById(user.tenantId)
+			.select("name")
+			.lean()) as { name?: string } | null;
+		emitUserLogin(user, tenantDoc?.name || null);
 
 		const token = generateToken(user._id.toString(), user.tenantId.toString());
 
@@ -397,7 +408,17 @@ export const updateUser = async (
 		const updates: any = {};
 		if (name) updates.name = name;
 		if (email) updates.email = email;
-		if (role) updates.role = role;
+		if (role) {
+			if (!Object.values(UserRole).includes(role)) {
+				res.status(400).json({ message: "Invalid role" });
+				return;
+			}
+			if (role === UserRole.SUPER_ADMIN) {
+				res.status(403).json({ message: "Super admin role cannot be assigned from the application" });
+				return;
+			}
+			updates.role = role;
+		}
 		if (permissions?.allowedTabs) {
 			updates.permissions = { allowedTabs: permissions.allowedTabs };
 		}
@@ -738,6 +759,16 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
             return;
         }
 
+		const targetRole = role || 'member';
+        if (!Object.values(UserRole).includes(targetRole)) {
+            res.status(400).json({ message: 'Invalid role' });
+            return;
+        }
+        if (targetRole === UserRole.SUPER_ADMIN) {
+            res.status(403).json({ message: 'Super admin accounts cannot be created from the application' });
+            return;
+        }
+
         const existingUser = await User.findOne({ email, tenantId: req.user!.tenantId });
         if (existingUser) {
             res.status(400).json({ message: 'User with this email already exists' });
@@ -748,7 +779,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
             name,
             email,
             password,
-            role: role || 'member',
+            role: targetRole,
             tenantId: req.user!.tenantId,
             permissions: permissions || undefined, // falls back to schema default (all tabs)
         });

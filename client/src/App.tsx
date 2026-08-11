@@ -25,6 +25,7 @@ import ClientsPage from "./pages/ClientsPage";
 import CanvasPage from "./pages/CanvasPage";
 import BulkEmailPage from "./pages/BulkEmailPage";
 import ChatsPage from "./pages/ChatsPage";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 
 
 const queryClient = new QueryClient({
@@ -208,7 +209,7 @@ const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
 
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === 'admin') return <>{children}</>;
+  if (user.role === 'admin' || user.role === 'super_admin') return <>{children}</>;
 
   const allowed = user.permissions?.allowedTabs ?? [];
 
@@ -231,6 +232,12 @@ const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       return <Navigate to={getFirstAllowedRoute(user)} replace />;
   }
 
+  return <>{children}</>;
+};
+
+const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuthStore();
+  if (user?.role !== "super_admin") return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -303,6 +310,16 @@ const AppInner: React.FC = () => {
           />
           <Route path="/crm/:section/:subsection" element={<RouteGuard><CrmPage /></RouteGuard>} />
           <Route path="/crm/:section" element={<RouteGuard><CrmPage /></RouteGuard>} />
+          <Route
+            path="/super-admin"
+            element={
+              <RouteGuard>
+                <SuperAdminGuard>
+                  <SuperAdminDashboard />
+                </SuperAdminGuard>
+              </RouteGuard>
+            }
+          />
         </Route>
         <Route path="*" element={<ProtectedNotFound />} />
       </Routes>

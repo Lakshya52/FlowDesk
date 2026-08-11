@@ -28,6 +28,7 @@ import {
 	Headset,
 	PanelLeftOpen,
 	HardDrive,
+	ShieldCheck,
 	// ScrollText,
 } from "lucide-react";
 
@@ -113,11 +114,13 @@ export const navItems: NavItem[] = [
 	{ to: "/backup", icon: HardDrive, label: "Backup" },
 	{ to: "/settings", icon: Settings, label: "Settings" },
 	// { to: "/settings", icon: Settings, label: "Settings" },
+	{ break: true },
+	{ to: "/super-admin", icon: ShieldCheck, label: "Super Admin" },
 ];
 
 export const getFirstAllowedRoute = (user: any): string => {
 	if (!user) return "/dashboard";
-	if (user.role === "admin") return "/dashboard";
+	if (user.role === "admin" || user.role === "super_admin") return "/dashboard";
 
 	const allowed = user.permissions?.allowedTabs ?? navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
 
@@ -151,9 +154,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const location = useLocation();
 
 	const visibleNavItems =
-		user?.role === "admin"
-			? navItems
-            : navItems.filter((item) => {
+		user?.role === "admin" || user?.role === "super_admin"
+			? navItems.filter(
+					(item) =>
+						item.break ||
+						(item as NavLinkItem).to !== "/super-admin" ||
+						user?.role === "super_admin",
+				)
+			: navItems.filter((item) => {
                     const allowedTabs =
                         user?.permissions?.allowedTabs ??
                         navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
@@ -625,7 +633,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 											marginBottom: "4px",
 										}}
 									>
-										{item.subItems.filter(sub => !sub.adminOnly || user?.role === "admin" || user?.role === "manager").map((sub, idx, arr) => {
+										{item.subItems.filter(sub => !sub.adminOnly || user?.role === "admin" || user?.role === "manager" || user?.role === "super_admin").map((sub, idx, arr) => {
 											const isLast =
 												idx ===
 												arr.length - 1;
@@ -803,7 +811,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 					}}
 				>
 					{hoveredItem.subItems
-						.filter(sub => !sub.adminOnly || user?.role === "admin" || user?.role === "manager")
+						.filter(sub => !sub.adminOnly || user?.role === "admin" || user?.role === "manager" || user?.role === "super_admin")
 						.map((sub) => (
 							<NavLink
 								key={sub.to}

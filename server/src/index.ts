@@ -51,7 +51,10 @@ import boardRoutes from "./routes/boards";
 import { startRecurringJob, stopRecurringJob } from "./services/recurringTaskService";
 import { startFieldVisitHeartbeat } from "./services/fieldVisitHeartbeatService";
 import backupRoutes from "./routes/backup";
+import superAdminRoutes from "./routes/superAdmin";
 import { startBackupScheduler, stopBackupScheduler } from "./services/backupScheduleService";
+import { startSuperAdminBroadcast, stopSuperAdminBroadcast, emitOverviewToSocket } from "./services/superAdminBroadcast";
+import User from "./models/User";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
 
 const app = express();
@@ -283,6 +286,7 @@ app.use("/api/field-visits", fieldVisitRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/boards", boardRoutes);
 app.use("/api/backup", backupRoutes);
+app.use("/api/super-admin", superAdminRoutes);
 
 // Socket.io authentication middleware
 io.use(async (socket, next) => {
@@ -296,8 +300,15 @@ io.use(async (socket, next) => {
       token as string,
       process.env.JWT_SECRET!,
     ) as { userId: string; tenantId: string };
+
+    const user = await User.findById(decoded.userId).select("role isActive");
+    if (!user || !user.isActive) {
+      return next(new Error("Invalid token"));
+    }
+
     socket.data.userId = decoded.userId;
     socket.data.tenantId = decoded.tenantId;
+    socket.data.role = user.role;
     next();
   } catch {
     next(new Error("Invalid token"));
@@ -306,6 +317,22 @@ io.use(async (socket, next) => {
 
 // Socket.io connection logic
 io.on("connection", (socket) => {
+  // Every authenticated socket is a real logged-in user (Set dedupes by userId),
+  // so the online count reflects who is actually connected right now.
+  activeUsers.add(socket.data.userId.toString());
+
+  // Track every socket of a user in their presence room so the disconnect check
+  // below only drops them from activeUsers when the LAST socket disconnects
+  // (a user may hold several tabs / the super-admin dashboard alongside the app).
+  socket.join(`user_${socket.data.userId}`);
+
+  if (socket.data.role === "super_admin") {
+    socket.join("super_admin_room");
+    console.log("👑 Super admin connected to control room");
+    // Immediately push a fresh full overview so the dashboard loads live.
+    emitOverviewToSocket(socket).catch(() => {});
+  }
+
   socket.on("join_assignment", (assignmentId) => {
     socket.join(`assignment_${assignmentId}`);
   });
@@ -429,6 +456,7 @@ const shutdown = async (signal: string) => {
   });
   stopRecurringJob();
   stopBackupScheduler();
+  stopSuperAdminBroadcast();
   await mongoose.disconnect();
   console.log('MongoDB disconnected');
   process.exit(0);
@@ -464,6 +492,7 @@ const startServer = async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       startRecurringJob();
       startBackupScheduler();
+      startSuperAdminBroadcast();
     });
   } catch (error) {
     console.error("❌ Failed to connect to MongoDB:", error);

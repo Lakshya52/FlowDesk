@@ -1,5 +1,7 @@
 import BackupSchedule from '../models/BackupSchedule';
+import Tenant from '../models/Tenant';
 import { triggerScheduledBackup } from '../controllers/backupController';
+import { emitBackupCompleted } from './superAdminEvents';
 
 const calculateNextRun = (schedule: any): Date => {
   const now = new Date();
@@ -26,6 +28,12 @@ const CONCURRENCY = 5;
 
 let nextTimer: ReturnType<typeof setTimeout> | null = null;
 let safetyInterval: ReturnType<typeof setInterval> | null = null;
+let nextBackupAt: Date | null = null;
+
+export const getBackupJobStatus = () => ({
+  nextBackupAt,
+  safetyScanIntervalMs: 1.5 * 60 * 60 * 1000,
+});
 
 const runBackup = async (schedule: any) => {
   try {
@@ -45,6 +53,15 @@ const runBackup = async (schedule: any) => {
     fresh.nextRunAt = calculateNextRun(fresh);
     await fresh.save();
 
+    let tenantName: string | null = null;
+    try {
+      const tenant = await Tenant.findById(fresh.tenantId).select('name').lean();
+      tenantName = tenant?.name || null;
+    } catch {
+      // tenant name is optional
+    }
+    emitBackupCompleted(tenantName, success);
+
     console.log(`[BACKUP-SCHEDULER] Tenant ${fresh.tenantId}: ${success ? 'OK' : 'FAILED'}`);
   } catch (error) {
     console.error('[BACKUP-SCHEDULER] Error:', error);
@@ -63,6 +80,7 @@ const scheduleNext = async () => {
       .sort({ nextRunAt: 1 });
 
     if (!nearest) {
+      nextBackupAt = null;
       console.log('[BACKUP-SCHEDULER] No future backups scheduled');
       return;
     }
@@ -73,6 +91,7 @@ const scheduleNext = async () => {
       return;
     }
 
+    nextBackupAt = nearest.nextRunAt;
     nextTimer = setTimeout(() => scanAllSchedules(), delay);
     console.log(`[BACKUP-SCHEDULER] Next backup at ${nearest.nextRunAt.toISOString()} (in ${Math.round(delay / 1000)}s)`);
   } catch (error) {

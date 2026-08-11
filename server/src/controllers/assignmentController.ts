@@ -7,9 +7,93 @@ import {
   NotificationPayload,
 } from "../services/notificationService";
 import { NotificationType } from "../models/Notification";
-import { processRecurringAssignments } from "../services/recurringTaskService";
+import { processRecurringAssignments, rescheduleRecurringJob } from "../services/recurringTaskService";
 import { getTenantUserIds, getTenantId } from "../utils/tenant";
 import XLSX from "xlsx";
+
+const RECURRING_PATTERNS = ["daily", "weekly", "monthly", "yearly"];
+
+const validateRecurring = (payload: any): string[] => {
+  const errors: string[] = [];
+  const pattern = payload.recurringPattern;
+
+  if (!pattern || !RECURRING_PATTERNS.includes(pattern)) {
+    errors.push(
+      "recurringPattern is required and must be one of: " +
+        RECURRING_PATTERNS.join(", "),
+    );
+    return errors;
+  }
+
+  if (!payload.recurringStartDate) {
+    errors.push("recurringStartDate is required for recurring projects");
+  }
+
+  if (!payload.recurringTime && (pattern === "daily" || pattern === "weekly")) {
+    errors.push("recurringTime is required for daily and weekly recurring projects");
+  }
+
+  if (pattern === "weekly") {
+    const weekdays = Array.isArray(payload.recurringWeekdays)
+      ? payload.recurringWeekdays
+      : [];
+    if (weekdays.length === 0) {
+      errors.push(
+        "recurringWeekdays is required for weekly projects (select at least one day)",
+      );
+    }
+    const invalid = weekdays.some(
+      (d: any) =>
+        !Number.isInteger(Number(d)) || Number(d) < 0 || Number(d) > 6,
+    );
+    if (invalid) {
+      errors.push("recurringWeekdays must contain numbers 0 (Sun) through 6 (Sat)");
+    }
+  }
+
+  if (pattern === "monthly") {
+    const dom = Number(payload.recurringDayOfMonth);
+    if (!Number.isInteger(dom) || dom < 1 || dom > 31) {
+      errors.push("recurringDayOfMonth must be an integer between 1 and 31");
+    }
+  }
+
+  if (payload.recurringEndDate) {
+    const start = payload.recurringStartDate
+      ? new Date(payload.recurringStartDate)
+      : null;
+    const end = new Date(payload.recurringEndDate);
+    if (isNaN(end.getTime())) {
+      errors.push("recurringEndDate is not a valid date");
+    } else if (start && !isNaN(start.getTime()) && end < start) {
+      errors.push("recurringEndDate must be after recurringStartDate");
+    }
+  }
+
+  if (
+    payload.recurringMaxInstances !== undefined &&
+    payload.recurringMaxInstances !== null &&
+    payload.recurringMaxInstances !== ""
+  ) {
+    const mi = Number(payload.recurringMaxInstances);
+    if (!Number.isInteger(mi) || mi <= 0) {
+      errors.push("recurringMaxInstances must be a positive integer");
+    }
+  }
+
+  if (
+    payload.recurringDueDays !== undefined &&
+    payload.recurringDueDays !== null &&
+    payload.recurringDueDays !== ""
+  ) {
+    const dd = Number(payload.recurringDueDays);
+    if (!Number.isInteger(dd) || dd < 0) {
+      errors.push("recurringDueDays must be a non-negative integer");
+    }
+  }
+
+  return errors;
+};
 
 export const createAssignment = async (
   req: AuthRequest,
@@ -17,6 +101,16 @@ export const createAssignment = async (
 ): Promise<void> => {
   try {
     const { teams: teamIds, team: memberIds = [], ...rest } = req.body;
+
+    const isRecurring =
+      rest.isRecurring === true || rest.isRecurring === "true";
+    if (isRecurring) {
+      const errors = validateRecurring(rest);
+      if (errors.length > 0) {
+        res.status(400).json({ message: errors.join("; ") });
+        return;
+      }
+    }
 
     // Only include the creator and the members they explicitly selected
     let allMemberIds = new Set([
@@ -74,9 +168,10 @@ export const createAssignment = async (
       console.log("⚠️ No other members to notify for this project.");
     }
 
-    // if (assignment.isRecurring) {
-    //   await processRecurringAssignments();
-    // }
+    if (assignment.isRecurring) {
+      await processRecurringAssignments();
+      rescheduleRecurringJob();
+    }
 
     res.status(201).json({ assignment: populated });
   } catch (error: any) {
@@ -283,6 +378,37 @@ export const updateAssignment = async (
     const sanitizedBody: any = { ...req.body };
     if (sanitizedBody.companyId === "") sanitizedBody.companyId = null;
 
+    // Validate recurring config whenever the payload touches recurring settings
+    const touchesRecurring = [
+      "isRecurring",
+      "recurringPattern",
+      "recurringStartDate",
+      "recurringTime",
+      "recurringEndDate",
+      "recurringWeekdays",
+      "recurringDayOfMonth",
+      "recurringMaxInstances",
+      "recurringDueDays",
+      "recurringNotifyOnSpawn",
+      "recurringPaused",
+    ].some((key) => key in req.body);
+
+    if (touchesRecurring) {
+      const merged = {
+        ...assignment.toObject(),
+        ...sanitizedBody,
+      };
+      const mergedIsRecurring =
+        merged.isRecurring === true || merged.isRecurring === "true";
+      if (mergedIsRecurring) {
+        const errors = validateRecurring(merged);
+        if (errors.length > 0) {
+          res.status(400).json({ message: errors.join("; ") });
+          return;
+        }
+      }
+    }
+
     Object.assign(assignment, sanitizedBody);
 
     if (req.body.teams || req.body.team) {
@@ -344,9 +470,10 @@ export const updateAssignment = async (
       }
     }
 
-    // if (updated!.isRecurring) {
-    //   await processRecurringAssignments();
-    // }
+    if (updated!.isRecurring) {
+      await processRecurringAssignments();
+      rescheduleRecurringJob();
+    }
 
     res.json({ assignment: updated });
   } catch (error: any) {
@@ -490,6 +617,8 @@ export const updateAssignmentCanvas = async (
 const ASSIGNMENT_IMPORT_COLUMNS = [
   "title", "clientName", "description", "priority",
   "status", "startDate", "dueDate", "isRecurring",
+  "recurringPattern", "recurringTime", "recurringStartDate", "recurringEndDate",
+  "recurringWeekdays",
 ];
 
 const TASK_IMPORT_COLUMNS = [
@@ -506,6 +635,11 @@ const normalizeRow = (row: any): Record<string, any> => {
     startDate: row.startDate || row.start_date || row["Start Date"] || row.StartDate || "",
     dueDate: row.dueDate || row.due_date || row["Due Date"] || row.DueDate || "",
     isRecurring: row.isRecurring || row["Is Recurring"] || row.is_recurring || false,
+    recurringPattern: row.recurringPattern || row["Recurring Pattern"] || row.recurring_pattern || "",
+    recurringTime: row.recurringTime || row["Recurring Time"] || row.recurring_time || "",
+    recurringStartDate: row.recurringStartDate || row["Recurring Start Date"] || row.recurring_start_date || "",
+    recurringEndDate: row.recurringEndDate || row["Recurring End Date"] || row.recurring_end_date || "",
+    recurringWeekdays: row.recurringWeekdays || row["Recurring Weekdays"] || row.recurring_weekdays || "",
   };
 };
 
@@ -574,6 +708,11 @@ const INSTRUCTIONS_ROWS = [
   ["startDate *    Yes       Project start date (YYYY-MM-DD, e.g. 2025-01-15)"],
   ["dueDate        No        Project due date (YYYY-MM-DD). Leave blank for no due date"],
   ["isRecurring    No        TRUE or FALSE (default: FALSE). Marks as recurring blueprint"],
+  ["recurringPattern  No     daily | weekly | monthly | yearly (default for recurring: daily)"],
+  ["recurringTime  No        Spawn time as HH:MM, e.g. 09:30 (default: 00:00)"],
+  ["recurringStartDate No   First spawn date (default: the project startDate)"],
+  ["recurringEndDate  No     Last allowed spawn date (leave blank for no end date)"],
+  ["recurringWeekdays  No    Weekly only: comma-separated days 0 (Sun) - 6 (Sat), e.g. 1,3,5"],
   [""],
   ["━━━ TASKS SHEET ━━━"],
   ["Each row = one task. Tasks are linked to projects using the projectTitle column."],
@@ -609,7 +748,7 @@ export const downloadSampleAssignmentsExcel = async (
   // Projects sheet
   const projectData = [
     { title: "Website Redesign", clientName: "TechCorp Pvt Ltd", description: "Complete overhaul of company website with modern UI", priority: "high", status: "not_started", startDate: "2025-01-15", dueDate: "2025-03-30", isRecurring: false },
-    { title: "Monthly Social Media Posts", clientName: "Brandify Inc", description: "Create and schedule 20 social media posts for the month", priority: "medium", status: "in_progress", startDate: "2025-01-01", dueDate: "", isRecurring: true },
+    { title: "Weekly Social Media Posts", clientName: "Brandify Inc", description: "Create and schedule social media posts for the week", priority: "medium", status: "in_progress", startDate: "2025-01-01", dueDate: "", isRecurring: true, recurringPattern: "weekly", recurringTime: "09:00", recurringStartDate: "2025-01-01", recurringEndDate: "2025-03-31", recurringWeekdays: "1,3,5" },
     { title: "SEO Audit", clientName: "GrowthWings Consulting", description: "Full SEO audit including backlinks, on-page, and technical", priority: "urgent", status: "not_started", startDate: "2025-02-01", dueDate: "2025-02-20", isRecurring: false },
   ];
   const ws = XLSX.utils.json_to_sheet(projectData, { header: ASSIGNMENT_IMPORT_COLUMNS });
@@ -713,6 +852,7 @@ export const importAssignmentsExcel = async (
           errors.push({ row: i + 1, message: validationErrors.join("; ") });
           continue;
         }
+        const isRecurring = String(normalized.isRecurring).toLowerCase() === "true" || normalized.isRecurring === true;
         const assignment = await Assignment.create({
           title: normalized.title,
           clientName: normalized.clientName,
@@ -721,7 +861,21 @@ export const importAssignmentsExcel = async (
           status: ["not_started", "in_progress", "completed", "delayed"].includes(normalized.status) ? normalized.status : "not_started",
           startDate: new Date(normalized.startDate),
           dueDate: normalized.dueDate ? new Date(normalized.dueDate) : null,
-          isRecurring: String(normalized.isRecurring).toLowerCase() === "true" || normalized.isRecurring === true,
+          isRecurring,
+          recurringPattern: isRecurring ? normalized.recurringPattern || "daily" : undefined,
+          recurringTime: isRecurring ? normalized.recurringTime || "00:00" : undefined,
+          recurringStartDate: isRecurring
+            ? normalized.recurringStartDate
+              ? new Date(normalized.recurringStartDate)
+              : new Date(normalized.startDate)
+            : undefined,
+          recurringEndDate: isRecurring && normalized.recurringEndDate ? new Date(normalized.recurringEndDate) : undefined,
+          recurringWeekdays: isRecurring && normalized.recurringWeekdays
+            ? String(normalized.recurringWeekdays)
+                .split(",")
+                .map((d: string) => Number(d.trim()))
+                .filter((d: number) => !isNaN(d))
+            : undefined,
           createdBy: req.user!._id,
           team: [req.user!._id],
         });

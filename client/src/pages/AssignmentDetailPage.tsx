@@ -9,13 +9,16 @@ import toast from 'react-hot-toast';
 import api from '../lib/api';
 import Avatar from '../components/common/Avatar';
 import { useAuthStore } from '../store/authStore';
-import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload, Download, Trash2, Send, Users,  FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock, Check, SquarePen } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload, 
+Download, Trash2, Send, Users,  FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock, 
+Check, SquarePen, Pause, Play } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import ProjectCanvas from '../components/assignments/ProjectCanvas';
 import FilePreviewModal from '../components/common/FilePreviewModal';
 import Modal from '../components/common/Modal';
 
 const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const STATUS_LABELS: Record<string, string> = { not_started: 'Not Started', in_progress: 'In Progress', completed: 'Completed', delayed: 'Delayed' };
 const TASK_STATUS_LABELS: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', review: 'Review', completed: 'Completed' };
 
@@ -188,8 +191,17 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         clientName: '',
         companyId: '',
         isRecurring: false,
-        recurringPattern: 'monthly',
-        recurringStartDate: ''
+        recurringPattern: 'daily',
+        recurringStartDate: '',
+        recurringTime: '00:00',
+        recurringEndDate: '',
+        recurringNoEndDate: true,
+        recurringWeekdays: [] as number[],
+        recurringDayOfMonth: '1',
+        recurringMaxInstances: '',
+        recurringDueDays: '',
+        recurringNotifyOnSpawn: true,
+        recurringPaused: false
     });
     const [allCompanies, setAllCompanies] = useState<any[]>([]);
     const [companySearch, setCompanySearch] = useState('');
@@ -335,12 +347,42 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         } catch { }
     };
 
+    const toggleRecurringPaused = async () => {
+        try {
+            const { data } = await api.put(`/assignments/${id}`, {
+                recurringPaused: !assignment.recurringPaused,
+            });
+            setAssignment(data.assignment);
+        } catch (e: any) {
+            alert(e.response?.data?.message || 'Failed to toggle blueprint status');
+        }
+    };
+
     const handleUpdateProject = async () => {
         setSaving(true);
         try {
             const payload = {
                 ...editProjectForm,
-                dueDate: editProjectForm.noDueDate ? null : editProjectForm.dueDate
+                dueDate: editProjectForm.noDueDate ? null : editProjectForm.dueDate,
+                recurringEndDate: editProjectForm.recurringNoEndDate
+                    ? null
+                    : editProjectForm.recurringEndDate,
+                recurringWeekdays:
+                    editProjectForm.recurringPattern === 'weekly'
+                        ? editProjectForm.recurringWeekdays
+                        : null,
+                recurringDayOfMonth:
+                    editProjectForm.recurringPattern === 'monthly'
+                        ? Number(editProjectForm.recurringDayOfMonth)
+                        : null,
+                recurringMaxInstances:
+                    editProjectForm.recurringMaxInstances !== ''
+                        ? Number(editProjectForm.recurringMaxInstances)
+                        : null,
+                recurringDueDays:
+                    editProjectForm.recurringDueDays !== ''
+                        ? Number(editProjectForm.recurringDueDays)
+                        : null,
             };
             const { data } = await api.put(`/assignments/${id}`, payload);
             setAssignment(data.assignment);
@@ -363,8 +405,17 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             clientName: assignment.clientName || '',
             companyId: assignment.companyId?._id || assignment.companyId || '',
             isRecurring: assignment.isRecurring || false,
-            recurringPattern: assignment.recurringPattern || 'monthly',
-            recurringStartDate: assignment.recurringStartDate ? new Date(assignment.recurringStartDate).toISOString().split('T')[0] : ''
+            recurringPattern: assignment.recurringPattern || 'daily',
+            recurringStartDate: assignment.recurringStartDate ? new Date(assignment.recurringStartDate).toISOString().split('T')[0] : '',
+            recurringTime: assignment.recurringTime || '00:00',
+            recurringEndDate: assignment.recurringEndDate ? new Date(assignment.recurringEndDate).toISOString().split('T')[0] : '',
+            recurringNoEndDate: !assignment.recurringEndDate,
+            recurringWeekdays: Array.isArray(assignment.recurringWeekdays) ? assignment.recurringWeekdays : [],
+            recurringDayOfMonth: assignment.recurringDayOfMonth ? String(assignment.recurringDayOfMonth) : '1',
+            recurringMaxInstances: assignment.recurringMaxInstances ? String(assignment.recurringMaxInstances) : '',
+            recurringDueDays: assignment.recurringDueDays != null ? String(assignment.recurringDueDays) : '',
+            recurringNotifyOnSpawn: assignment.recurringNotifyOnSpawn !== false,
+            recurringPaused: !!assignment.recurringPaused
         });
         setCompanySearch(assignment.clientName || '');
         setIsEditingProject(true);
@@ -948,28 +999,154 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                     </div>
 
                                     {editProjectForm.isRecurring && (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            <div>
-                                                <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Pattern</label>
-                                                <select
-                                                    className="select"
-                                                    value={editProjectForm.recurringPattern}
-                                                    onChange={e => setEditProjectForm({ ...editProjectForm, recurringPattern: e.target.value })}
-                                                >
-                                                    <option value="daily">Daily</option>
-                                                    <option value="weekly">Weekly</option>
-                                                    <option value="monthly">Monthly</option>
-                                                    <option value="yearly">Yearly</option>
-                                                </select>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Pattern</label>
+                                                    <select
+                                                        className="select"
+                                                        value={editProjectForm.recurringPattern}
+                                                        onChange={e => setEditProjectForm({ ...editProjectForm, recurringPattern: e.target.value })}
+                                                    >
+                                                        <option value="daily">Daily</option>
+                                                        <option value="weekly">Weekly</option>
+                                                        <option value="monthly">Monthly</option>
+                                                        <option value="yearly">Yearly</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Anchor Start Date</label>
+                                                    <input
+                                                        className="input"
+                                                        type="date"
+                                                        value={editProjectForm.recurringStartDate}
+                                                        onChange={e => setEditProjectForm({ ...editProjectForm, recurringStartDate: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Spawn Time</label>
+                                                    <input
+                                                        className="input"
+                                                        type="time"
+                                                        value={editProjectForm.recurringTime}
+                                                        onChange={e => setEditProjectForm({ ...editProjectForm, recurringTime: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>End Date</label>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: editProjectForm.recurringNoEndDate ? 0 : 6 }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            id="editRecurringNoEndDate"
+                                                            checked={editProjectForm.recurringNoEndDate}
+                                                            onChange={e => setEditProjectForm({ ...editProjectForm, recurringNoEndDate: e.target.checked, recurringEndDate: e.target.checked ? '' : editProjectForm.recurringEndDate })}
+                                                        />
+                                                        <label htmlFor="editRecurringNoEndDate" style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>No end date</label>
+                                                    </div>
+                                                    {!editProjectForm.recurringNoEndDate && (
+                                                        <input
+                                                            className="input"
+                                                            type="date"
+                                                            value={editProjectForm.recurringEndDate}
+                                                            onChange={e => setEditProjectForm({ ...editProjectForm, recurringEndDate: e.target.value })}
+                                                        />
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Anchor Start Date</label>
-                                                <input
-                                                    className="input"
-                                                    type="date"
-                                                    value={editProjectForm.recurringStartDate}
-                                                    onChange={e => setEditProjectForm({ ...editProjectForm, recurringStartDate: e.target.value })}
-                                                />
+
+                                            {editProjectForm.recurringPattern === 'weekly' && (
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Repeat On</label>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                        {WEEKDAY_LABELS.map((label, idx) => {
+                                                            const selected = editProjectForm.recurringWeekdays.includes(idx);
+                                                            return (
+                                                                <button
+                                                                    key={idx}
+                                                                    type="button"
+                                                                    onClick={() => setEditProjectForm({
+                                                                        ...editProjectForm,
+                                                                        recurringWeekdays: selected
+                                                                            ? editProjectForm.recurringWeekdays.filter((d: number) => d !== idx)
+                                                                            : [...editProjectForm.recurringWeekdays, idx],
+                                                                    })}
+                                                                    style={{
+                                                                        padding: '4px 10px',
+                                                                        borderRadius: 6,
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: 600,
+                                                                        border: '1px solid var(--color-border)',
+                                                                        background: selected ? 'var(--color-primary)' : 'var(--color-bg)',
+                                                                        color: selected ? '#fff' : 'var(--color-text-secondary)',
+                                                                        cursor: 'pointer',
+                                                                    }}
+                                                                >
+                                                                    {label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {editProjectForm.recurringPattern === 'monthly' && (
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Day of Month</label>
+                                                    <input
+                                                        className="input"
+                                                        type="number"
+                                                        min="1"
+                                                        max="31"
+                                                        value={editProjectForm.recurringDayOfMonth}
+                                                        onChange={e => setEditProjectForm({ ...editProjectForm, recurringDayOfMonth: e.target.value })}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Max Instances</label>
+                                                    <input
+                                                        className="input"
+                                                        type="number"
+                                                        min="1"
+                                                        placeholder="Unlimited"
+                                                        value={editProjectForm.recurringMaxInstances}
+                                                        onChange={e => setEditProjectForm({ ...editProjectForm, recurringMaxInstances: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Due Date After Spawn (days)</label>
+                                                    <input
+                                                        className="input"
+                                                        type="number"
+                                                        min="0"
+                                                        placeholder="Same day"
+                                                        value={editProjectForm.recurringDueDays}
+                                                        onChange={e => setEditProjectForm({ ...editProjectForm, recurringDueDays: e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        id="editRecurringNotifyOnSpawn"
+                                                        checked={editProjectForm.recurringNotifyOnSpawn}
+                                                        onChange={e => setEditProjectForm({ ...editProjectForm, recurringNotifyOnSpawn: e.target.checked })}
+                                                    />
+                                                    <label htmlFor="editRecurringNotifyOnSpawn" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Notify team on each spawn</label>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        id="editRecurringPaused"
+                                                        checked={editProjectForm.recurringPaused}
+                                                        onChange={e => setEditProjectForm({ ...editProjectForm, recurringPaused: e.target.checked })}
+                                                    />
+                                                    <label htmlFor="editRecurringPaused" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Paused</label>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -990,18 +1167,59 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                 {assignment.isRecurring && !assignment.parentAssignmentId && (
                                     <div style={{
                                         padding: '12px 16px',
-                                        background: 'var(--color-primary-light)',
+                                        background: assignment.recurringPaused ? '#fef3c7' : 'var(--color-primary-light)',
                                         borderRadius: 8,
                                         marginBottom: 16,
-                                        border: '1px solid var(--color-primary)',
+                                        border: '1px solid ' + (assignment.recurringPaused ? '#f59e0b' : 'var(--color-primary)'),
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: 12
+                                        justifyContent: 'space-between',
+                                        gap: 12,
+                                        flexWrap: 'wrap'
                                     }}>
-                                        <div style={{ fontSize: '1.25rem' }}>📋</div>
-                                        <div style={{ fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 500 }}>
-                                            This is a <b>Recurring Blueprint</b>. Any tasks added here will be automatically copied to every new project instance created according to the <b>{assignment.recurringPattern}</b> schedule.
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                                            <div style={{ fontSize: '1.25rem' }}>{assignment.recurringPaused ? '⏸️' : '📋'}</div>
+                                            <div style={{ fontSize: '0.8125rem', color: assignment.recurringPaused ? '#92400e' : 'var(--color-primary)', fontWeight: 500 }}>
+                                                This is a <b>Recurring Blueprint</b>. Tasks added here are copied to each new instance created on the <b style={{ textTransform: 'capitalize' }}>{assignment.recurringPattern}</b> schedule.
+                                                <div style={{ marginTop: 4, fontSize: '0.75rem', opacity: 0.9 }}>
+                                                    Spawn time: <b>{assignment.recurringTime || '00:00'}</b>
+                                                    {assignment.recurringPattern === 'weekly' && Array.isArray(assignment.recurringWeekdays) && assignment.recurringWeekdays.length > 0 && (
+                                                        <> · Days: <b>{assignment.recurringWeekdays.map((d: number) => WEEKDAY_LABELS[d]).join(', ')}</b></>
+                                                    )}
+                                                    {assignment.recurringEndDate && (
+                                                        <> · Until: <b>{format(new Date(assignment.recurringEndDate), 'MMM d, yyyy')}</b></>
+                                                    )}
+                                                    {typeof assignment.recurringSpawnedCount === 'number' && (
+                                                        <> · Instances: <b>{assignment.recurringSpawnedCount}</b></>
+                                                    )}
+                                                    {assignment.recurringMaxInstances && (
+                                                        <> / {assignment.recurringMaxInstances} max</>
+                                                    )}
+                                                    {assignment.recurringPaused && <b> · PAUSED</b>}
+                                                </div>
+                                            </div>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={toggleRecurringPaused}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 6,
+                                                padding: '6px 12px',
+                                                borderRadius: 6,
+                                                border: '1px solid var(--color-border)',
+                                                background: '#fff',
+                                                color: assignment.recurringPaused ? '#16a34a' : '#b45309',
+                                                fontSize: '0.8125rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                        >
+                                            {assignment.recurringPaused ? <Play size={14} /> : <Pause size={14} />}
+                                            {assignment.recurringPaused ? 'Resume' : 'Pause'}
+                                        </button>
                                     </div>
                                 )}
                                 {assignment.description && <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>{assignment.description}</p>}

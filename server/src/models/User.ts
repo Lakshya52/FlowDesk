@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export enum UserRole {
+    SUPER_ADMIN = 'super_admin',
     ADMIN = 'admin',
     MANAGER = 'manager',
     MEMBER = 'member',
@@ -10,7 +11,7 @@ export enum UserRole {
 export interface IUser extends Document {
     name: string;
     // companyId: string;
-    tenantId: mongoose.Types.ObjectId;
+    tenantId?: mongoose.Types.ObjectId | null;
     email: string;
     password: string;
     role: UserRole;
@@ -45,7 +46,15 @@ const userSchema = new Schema<IUser>(
         role: { type: String, enum: Object.values(UserRole), default: UserRole.MEMBER },
         employeeId: { type: String, unique: true, sparse: true },
         // companyId: { type: String, required: true, index: true },
-        tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
+        tenantId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Tenant',
+            index: true,
+            // Super admin accounts are platform-level and do not belong to a tenant.
+            required: function (this: any) {
+                return this.role !== 'super_admin';
+            },
+        },
         avatar: { type: String },
         isActive: { type: Boolean, default: true },
         pushSubscriptions: [
