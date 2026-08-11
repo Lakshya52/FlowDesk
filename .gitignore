@@ -48,3 +48,5 @@ pnpm-debug.log*
 /playwright/.cache/
 /playwright/.auth/
 
+# removing scripts folder from github tracking
+/scripts/
