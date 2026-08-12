@@ -34,6 +34,15 @@ export interface IAssignment extends Document {
     createdAt: Date;
     updatedAt: Date;
     recurringTime?: string;
+    recurringEndDate?: Date;
+    recurringPaused?: boolean;
+    recurringWeekdays?: number[];
+    recurringDayOfMonth?: number;
+    recurringMaxInstances?: number;
+    recurringDueDays?: number;
+    recurringNotifyOnSpawn?: boolean;
+    recurringLastSpawnedAt?: Date;
+    recurringSpawnedCount?: number;
 }
 
 const assignmentSchema = new Schema<IAssignment>(
@@ -55,6 +64,15 @@ const assignmentSchema = new Schema<IAssignment>(
         parentAssignmentId: { type: Schema.Types.ObjectId, ref: 'Assignment', default: null },
         canvasData: { type: Schema.Types.Mixed, default: null },
         recurringTime: { type: String, default: undefined },
+        recurringEndDate: { type: Date, default: undefined },
+        recurringPaused: { type: Boolean, default: false },
+        recurringWeekdays: { type: [Number], default: undefined },
+        recurringDayOfMonth: { type: Number, default: undefined },
+        recurringMaxInstances: { type: Number, default: undefined },
+        recurringDueDays: { type: Number, default: undefined },
+        recurringNotifyOnSpawn: { type: Boolean, default: true },
+        recurringLastSpawnedAt: { type: Date, default: undefined },
+        recurringSpawnedCount: { type: Number, default: 0 },
     },
     { timestamps: true }
 );
@@ -62,5 +80,11 @@ const assignmentSchema = new Schema<IAssignment>(
 assignmentSchema.index({ status: 1 });
 assignmentSchema.index({ dueDate: 1 });
 assignmentSchema.index({ createdBy: 1 });
+assignmentSchema.index({ parentAssignmentId: 1 });
+// Unique guard against double-spawning the same slot for a given blueprint
+assignmentSchema.index(
+    { parentAssignmentId: 1, startDate: 1 },
+    { unique: true, partialFilterExpression: { parentAssignmentId: { $type: 'objectId' } } }
+);
 
 export default mongoose.model<IAssignment>('Assignment', assignmentSchema);

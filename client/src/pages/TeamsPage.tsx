@@ -188,7 +188,7 @@ const TeamsPage: React.FC = () => {
     const isMobile = window.innerWidth < 768;
 
     return (
-        <div style={{ maxWidth: 1200, width: '100%' }}>
+        <div className='max-w-[1200px] w-full' >
 
             {/* Header */}
             <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'flex-start', marginBottom: isMobile ? 20 : 32, gap: isMobile ? 12 : 0 }}>
@@ -198,8 +198,8 @@ const TeamsPage: React.FC = () => {
                     </h1>
                     <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
                         {teams.length} team{teams.length !== 1 ? 's' : ''}
-                        {isAdmin   && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 20, background: 'var(--color-primary-light)', color: 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 600 }}>Admin</span>}
-                        {isManager && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 20, background: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)', fontSize: '0.75rem', fontWeight: 600 }}>Manager</span>}
+                        {isAdmin   && <span className="ml--[8px] px-[2px] py-[8px] rounded-2xl bg-(--color-primary-light) text-(--color-primary)" style={{fontSize: '0.75rem', fontWeight: 600 }}>Admin</span>}
+                        {isManager && <span className="ml--[8px] px-[2px] py-[8px] rounded-2xl bg-(--color-primary-light) text-(--color-text-secondary)" style={{fontSize: '0.75rem', fontWeight: 600 }}>Manager</span>}
                     </p>
                 </div>
                 {isAdmin && (
