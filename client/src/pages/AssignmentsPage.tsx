@@ -34,6 +34,7 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
   delayed: "Delayed",
 };
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const thStyle: React.CSSProperties = {
   padding: "8px 10px",
@@ -100,9 +101,17 @@ const AssignmentsPage: React.FC = () => {
     team: [] as string[],
     teams: [] as string[],
     isRecurring: false,
-    recurringPattern: "monthly" as any,
+    recurringPattern: "daily" as any,
     recurringStartDate: "",
     recurringTime: "00:00",
+    recurringEndDate: "",
+    recurringNoEndDate: true,
+    recurringWeekdays: [] as number[],
+    recurringDayOfMonth: "1",
+    recurringMaxInstances: "",
+    recurringDueDays: "",
+    recurringNotifyOnSpawn: true,
+    recurringPaused: false,
   });
 
   const [saving, setSaving] = useState(false);
@@ -398,6 +407,17 @@ const AssignmentsPage: React.FC = () => {
   };
 
   const saveProject = async (projectData: typeof form) => {
+    if (
+      projectData.isRecurring &&
+      !projectData.recurringNoEndDate &&
+      projectData.recurringEndDate &&
+      projectData.recurringStartDate &&
+      new Date(projectData.recurringEndDate) <
+        new Date(projectData.recurringStartDate)
+    ) {
+      alert("Recurring end date must be after the start date");
+      return;
+    }
     setSaving(true);
     try {
       const creatorTeam = user?._id
@@ -413,10 +433,35 @@ const AssignmentsPage: React.FC = () => {
         recurringPattern: projectData.isRecurring
           ? projectData.recurringPattern
           : undefined,
-        recurringTime:
-          projectData.isRecurring && projectData.recurringPattern === "daily"
-            ? projectData.recurringTime
+        recurringTime: projectData.isRecurring
+          ? projectData.recurringTime
+          : undefined,
+        recurringEndDate:
+          projectData.isRecurring && !projectData.recurringNoEndDate
+            ? projectData.recurringEndDate
             : undefined,
+        recurringWeekdays:
+          projectData.isRecurring && projectData.recurringPattern === "weekly"
+            ? projectData.recurringWeekdays
+            : undefined,
+        recurringDayOfMonth:
+          projectData.isRecurring && projectData.recurringPattern === "monthly"
+            ? Number(projectData.recurringDayOfMonth)
+            : undefined,
+        recurringMaxInstances:
+          projectData.isRecurring && projectData.recurringMaxInstances !== ""
+            ? Number(projectData.recurringMaxInstances)
+            : undefined,
+        recurringDueDays:
+          projectData.isRecurring && projectData.recurringDueDays !== ""
+            ? Number(projectData.recurringDueDays)
+            : undefined,
+        recurringNotifyOnSpawn: projectData.isRecurring
+          ? projectData.recurringNotifyOnSpawn
+          : undefined,
+        recurringPaused: projectData.isRecurring
+          ? projectData.recurringPaused
+          : undefined,
       });
       setShowCreate(false);
       setForm({
@@ -432,9 +477,17 @@ const AssignmentsPage: React.FC = () => {
         team: [],
         teams: [],
         isRecurring: false,
-        recurringPattern: "monthly",
+        recurringPattern: "daily",
         recurringStartDate: "",
         recurringTime: "00:00",
+        recurringEndDate: "",
+        recurringNoEndDate: true,
+        recurringWeekdays: [],
+        recurringDayOfMonth: "1",
+        recurringMaxInstances: "",
+        recurringDueDays: "",
+        recurringNotifyOnSpawn: true,
+        recurringPaused: false,
       });
       setCompanySearch("");
       if (data.assignment?._id) {
@@ -1142,6 +1195,17 @@ const AssignmentsPage: React.FC = () => {
                           Blueprint
                         </span>
                       )}
+                      {a.recurringPaused && (
+                        <span
+                          className="badge"
+                          style={{
+                            background: "#fef3c7",
+                            color: "#b45309",
+                          }}
+                        >
+                          Paused
+                        </span>
+                      )}
                       <span className={`badge badge-${a.priority}`}>
                         {PRIORITY_LABELS[a.priority]}
                       </span>
@@ -1163,7 +1227,27 @@ const AssignmentsPage: React.FC = () => {
                     {activeTab === "blueprints" ? (
                       <span style={{ textTransform: "capitalize" }}>
                         {" "}
-                        · Pattern: {a.recurringPattern}
+                        · {a.recurringPattern}
+                        {a.recurringTime ? ` at ${a.recurringTime}` : ""}
+                        {a.recurringPattern === "weekly" &&
+                          Array.isArray(a.recurringWeekdays) &&
+                          a.recurringWeekdays.length > 0 &&
+                          ` · ${a.recurringWeekdays
+                            .map((d: number) => WEEKDAY_LABELS[d])
+                            .join(", ")}`}
+                        {a.recurringEndDate
+                          ? ` · until ${format(
+                              new Date(a.recurringEndDate),
+                              "MMM d, yyyy",
+                            )}`
+                          : ""}
+                        {typeof a.recurringSpawnedCount === "number" &&
+                          ` · ${a.recurringSpawnedCount} instance${
+                            a.recurringSpawnedCount === 1 ? "" : "s"
+                          }`}
+                        {a.recurringMaxInstances
+                          ? ` / ${a.recurringMaxInstances} max`
+                          : ""}
                       </span>
                     ) : (
                       <span>
@@ -1519,7 +1603,7 @@ const AssignmentsPage: React.FC = () => {
                 </div>
               )}
 
-              {form.isRecurring && form.recurringPattern === "daily" && (
+              {form.isRecurring && (
                 <div>
                   <label
                     style={{
@@ -1530,7 +1614,7 @@ const AssignmentsPage: React.FC = () => {
                       color: "var(--color-text-secondary)",
                     }}
                   >
-                    Daily Time *
+                    Spawn Time *
                   </label>
                   <input
                     className="input"
@@ -1541,6 +1625,257 @@ const AssignmentsPage: React.FC = () => {
                       setForm({ ...form, recurringTime: e.target.value })
                     }
                   />
+                </div>
+              )}
+
+              {form.isRecurring && (
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8125rem",
+                      fontWeight: 500,
+                      marginBottom: 4,
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    End Date
+                  </label>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: form.recurringNoEndDate ? 0 : 8,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="recurringNoEndDate"
+                      checked={form.recurringNoEndDate}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          recurringNoEndDate: e.target.checked,
+                          recurringEndDate: e.target.checked ? "" : form.recurringEndDate,
+                        })
+                      }
+                    />
+                    <label
+                      htmlFor="recurringNoEndDate"
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-secondary)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      No end date
+                    </label>
+                  </div>
+                  {!form.recurringNoEndDate && (
+                    <input
+                      className="input"
+                      type="date"
+                      value={form.recurringEndDate}
+                      onChange={(e) =>
+                        setForm({ ...form, recurringEndDate: e.target.value })
+                      }
+                    />
+                  )}
+                </div>
+              )}
+
+              {form.isRecurring && form.recurringPattern === "weekly" && (
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8125rem",
+                      fontWeight: 500,
+                      marginBottom: 4,
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    Repeat On
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {WEEKDAY_LABELS.map((label, idx) => {
+                      const selected = form.recurringWeekdays.includes(idx);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              recurringWeekdays: selected
+                                ? form.recurringWeekdays.filter((d) => d !== idx)
+                                : [...form.recurringWeekdays, idx],
+                            })
+                          }
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            border: "1px solid var(--color-border)",
+                            background: selected
+                              ? "var(--color-primary)"
+                              : "var(--color-bg)",
+                            color: selected
+                              ? "#fff"
+                              : "var(--color-text-secondary)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {form.isRecurring && form.recurringPattern === "monthly" && (
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8125rem",
+                      fontWeight: 500,
+                      marginBottom: 4,
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    Day of Month
+                  </label>
+                  <input
+                    className="input"
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={form.recurringDayOfMonth}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        recurringDayOfMonth: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              )}
+
+              {form.isRecurring && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.8125rem",
+                        fontWeight: 500,
+                        marginBottom: 4,
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      Max Instances
+                    </label>
+                    <input
+                      className="input"
+                      type="number"
+                      min="1"
+                      placeholder="Unlimited"
+                      value={form.recurringMaxInstances}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          recurringMaxInstances: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.8125rem",
+                        fontWeight: 500,
+                        marginBottom: 4,
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      Due Date After Spawn (days)
+                    </label>
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      placeholder="Same day"
+                      value={form.recurringDueDays}
+                      onChange={(e) =>
+                        setForm({ ...form, recurringDueDays: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+
+              {form.isRecurring && (
+                <div
+                  style={{ display: "flex", flexWrap: "wrap", gap: 16 }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="recurringNotifyOnSpawn"
+                      checked={form.recurringNotifyOnSpawn}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          recurringNotifyOnSpawn: e.target.checked,
+                        })
+                      }
+                    />
+                    <label
+                      htmlFor="recurringNotifyOnSpawn"
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-secondary)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Notify team on each spawn
+                    </label>
+                  </div>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="recurringPaused"
+                      checked={form.recurringPaused}
+                      onChange={(e) =>
+                        setForm({ ...form, recurringPaused: e.target.checked })
+                      }
+                    />
+                    <label
+                      htmlFor="recurringPaused"
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-secondary)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Start paused
+                    </label>
+                  </div>
                 </div>
               )}
 
