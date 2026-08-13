@@ -3,24 +3,24 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { io } from "socket.io-client";
 import api from "../lib/api";
 
-const styleBlock = `
-@keyframes cr-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-@keyframes cr-scan {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(400%); }
-}
-@keyframes cr-flash {
-  0% { background: rgba(63, 214, 138, 0.25); }
-  100% { background: transparent; }
-}
-.cr-led { display: inline-block; border-radius: 50%; }
-.cr-scanline { position: absolute; left: 0; right: 0; height: 40%; background: linear-gradient(180deg, transparent, rgba(120,180,255,0.06), transparent); animation: cr-scan 6s linear infinite; pointer-events: none; }
-.cr-num { font-family: "Consolas", "SF Mono", "Menlo", "Roboto Mono", monospace; font-variant-numeric: tabular-nums; }
-.cr-event-new { animation: cr-flash 1.2s ease-out; border-radius: 4px; }
-`;
+// const styleBlock = `
+// @keyframes cr-blink {
+//   0%, 100% { opacity: 1; }
+//   50% { opacity: 0.35; }
+// }
+// @keyframes cr-scan {
+//   0% { transform: translateY(-100%); }
+//   100% { transform: translateY(400%); }
+// }
+// @keyframes cr-flash {
+//   0% { background: rgba(63, 214, 138, 0.25); }
+//   100% { background: transparent; }
+// }
+// .cr-led { display: inline-block; border-radius: 50%; }
+// .cr-scanline { position: absolute; left: 0; right: 0; height: 40%; background: linear-gradient(180deg, transparent, rgba(120,180,255,0.06), transparent); animation: cr-scan 6s linear infinite; pointer-events: none; }
+// .cr-num { font-family: "Consolas", "SF Mono", "Menlo", "Roboto Mono", monospace; font-variant-numeric: tabular-nums; }
+// .cr-event-new { animation: cr-flash 1.2s ease-out; border-radius: 4px; }
+// `;
 
 const C = {
   bg: "#0b0d10",
@@ -254,11 +254,11 @@ const Gauge: React.FC<{
     return { x1, y1, x2, y2 };
   });
   const needleR = r - 12;
-  const nx = cx + needleR * Math.cos((angle * Math.PI) / 180);
+  const nx = cx + needleR * Math.cos((angle * Math.PI) / 180); // added - Math.PI / 2 for straight angle 
   const ny = cy + needleR * Math.sin((angle * Math.PI) / 180);
   return (
     <div style={{ textAlign: "center" }}>
-      <svg viewBox="0 0 200 118" style={{ width: "100%", maxWidth: 210, height: "auto" }}>
+      <svg viewBox="0 0 200 200" style={{ width: "100%", maxWidth: 210, height: "fit-content", rotate: "-90deg" }}>
         <path d={arc(a0, a1, r)} fill="none" stroke="#05070a" strokeWidth={13} strokeLinecap="round" />
         <path
           d={arc(a0, valEnd, r)}
@@ -752,8 +752,8 @@ const SuperAdminDashboard: React.FC = () => {
 
   return (
     <div style={{ background: C.bg, minHeight: "calc(100vh - 130px)", borderRadius: 14, border: `1px solid ${C.bezel}`, padding: 18, color: C.text, fontFamily: '"Inter", system-ui, sans-serif', position: "relative" }}>
-      <style>{styleBlock}</style>
-      <div className="cr-scanline" />
+      {/* <style>{styleBlock}</style> */}
+      {/* <div className="cr-scanline" /> */}
 
       {/* ============ TOP BAR ============ */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -901,7 +901,7 @@ const SuperAdminDashboard: React.FC = () => {
           <DigitalReadout label="Activity 24h" value={counts?.activity?.last24h || 0} color={C.amber} sub={`${counts?.activity?.last7d || 0} last 7d`} />
           <DigitalReadout label="Comments" value={counts?.comments || 0} color={C.silver} />
         </div>
-        <div style={{ marginTop: 12, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+        <div className="flex flex-col mt-3 gap-2">
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
               <span style={{ color: C.dim, fontSize: "0.62rem", letterSpacing: "0.14em", textTransform: "uppercase" }}>RAM Load</span>
