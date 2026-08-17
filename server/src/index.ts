@@ -19,7 +19,9 @@ import http from "http";
 import dns from "node:dns";
 
 import buddyRoute from "./routes/buddy";
+import buddyRagRoute from "./routes/buddyRag";
 import { authenticate } from "./middlewares/auth";
+import { seedKnowledgeBase } from "./services/ragService";
 
 // Force DNS to resolve IPv4 first to avoid Atlas connection issues on Windows
 dns.setDefaultResultOrder("ipv4first");
@@ -258,6 +260,7 @@ app.post("/api/buddy/ollama", authenticate, async (req, res) => {
 
 // API Routes
 app.use("/api/buddy", authenticate, buddyRoute);
+app.use("/api/buddy/rag", authenticate, buddyRagRoute);
 app.use("/api/auth", authRoutes);
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/tasks", taskRoutes);
@@ -459,6 +462,16 @@ const startServer = async () => {
       family: 4, // Force IPv4
     });
     console.log("✅ Connected to MongoDB");
+
+    // Auto-seed RAG knowledge base if empty
+    try {
+      const result = await seedKnowledgeBase();
+      if (result.chunks > 0 && result.sources > 0) {
+        console.log(`📚 RAG knowledge base ready: ${result.chunks} chunks from ${result.sources} sources`);
+      }
+    } catch (err) {
+      console.warn("⚠️ RAG seed skipped (Ollama may not be running):", (err as Error).message);
+    }
 
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);

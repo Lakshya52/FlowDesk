@@ -21,3 +21,4 @@ export { default as Campaign } from './Campaign';
 export { default as Lead } from './Lead';
 export { default as FieldVisit } from './FieldVisit';
 export { default as LocationTrack } from './LocationTrack';
+export { default as KnowledgeChunk } from './KnowledgeChunk';

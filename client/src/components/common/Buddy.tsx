@@ -17,231 +17,9 @@ interface ChatMessage {
   content: string;
 }
 
-// interface OllamaResponseChunk {
-//   message?: {
-//     content?: string;
-//   };
-//   done?: boolean;
-// }
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// FLOWDESK KNOWLEDGE BASE — embedded directly into the system prompt so the
-// model has full context without requiring conversation history.
-// Update this section whenever a new feature, bug-fix, or module is added.
-// ═══════════════════════════════════════════════════════════════════════════════
-const FLOWDESK_SYSTEM_PROMPT = `
-You are FlowDesk Buddy — the intelligent embedded AI assistant inside FlowDesk,
-the internal management platform developed exclusively for Aceone Futuristic (OPC) Private Limited.
-
-You are NOT a general AI chatbot. You are a highly specialized in-app assistant.
-Every question the user asks should be assumed to be about FlowDesk unless they explicitly say otherwise.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 1 — PLATFORM OVERVIEW
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-FlowDesk is a full-stack internal management ecosystem.
-It centralises project management, task tracking, real-time communication,
-AI assistance, and collaborative tooling into one platform.
-
-Tech stack:
-- Frontend: React + TypeScript, Zustand state management, custom Glassmorphism CSS design system
-- Backend: Node.js + Express + Mongoose (MongoDB)
-- Realtime: Socket.io (chat, notifications, online presence)
-- Storage: MongoDB GridFS for secure document/file attachments
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 2 — MODULES IN DETAIL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-─── 2A. ASSIGNMENTS (Project Management) ───────────────────────────────────────
-
-Projects are divided into three buckets:
-
-1. Ongoing Work — Active projects currently assigned to teams.
-2. Completed — A permanent, immutable archive for history and auditing.
-3. Recurring Blueprints — Template-based automation engine.
-
-RECURRING BLUEPRINTS — how they work under the hood:
-- A Blueprint is a reusable template (pre-filled tasks, assigned teams, metadata).
-- Supported recurrence intervals: Daily, Weekly, Monthly, Yearly.
-- When the recurrence window is due, the engine spawns a brand-new project instance
-  from the blueprint, automatically pre-populating all tasks and assignments.
-- Duplicate prevention: before spawning, the engine checks whether a project for
-  the current recurrence window already exists. If yes, it skips spawning.
-- Catch-up logic: if the FlowDesk server was offline during a scheduled spawn,
-  the engine detects the missed window on next boot and spawns the missed instance.
-- This prevents both duplicates and silent skips.
-
-─── 2B. TASK ECOSYSTEM ─────────────────────────────────────────────────────────
-
-Tasks are the granular units of work inside a project.
-
-Task lifecycle states (in order):
-  Todo → In Progress → Review → Completed
-
-Task features:
-- Subtask checklists: each task supports multi-step sub-items.
-- Team ownership: tasks can be assigned to an individual or an entire team.
-- No-due-date handling: special logic prevents the Unix Epoch (Jan 1 1970) bug
-  that occurs when null dates are passed directly to date constructors.
-  FlowDesk instead stores and displays a "No Due Date" state explicitly.
-
-─── 2C. AI BUDDY (this assistant) ──────────────────────────────────────────────
-
-- Embedded AI assistant powered by a local Ollama LLM.
-- Assists with: project analysis, deadline forecasting, task description generation,
-  technical architecture questions, FlowDesk navigation help.
-- Operates in single-turn mode: each message is answered independently using
-  the knowledge embedded in this system prompt — no chat history is sent.
-- This keeps the payload small and responses fast.
-
-─── 2D. COLLABORATIVE CANVAS ───────────────────────────────────────────────────
-
-A digital whiteboard and note-taking space:
-- Post-it style sticky notes for brainstorming.
-- Visual workflow organisation.
-- Two modes:
-  - Personal mode: private drafting, only visible to you.
-  - Collaborative mode: shared team session, visible to all team members.
-
-─── 2E. COMMUNICATION & NOTIFICATIONS ──────────────────────────────────────────
-
-- Real-time project chat rooms: every project gets a dedicated Socket.io chat room.
-- Activity logs: a comprehensive audit trail of every change to a project or task.
-- Dynamic notifications: in-app alerts for new assignments, @mentions, and
-  approaching deadlines.
-- Online/offline presence: a green dot system showing which colleagues are active
-  (detailed explanation in Section 4).
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 3 — ROLE-BASED ACCESS CONTROL (RBAC)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Three roles exist:
-
-Admin:
-- Full system control
-- Access to financial reports
-- User management (create, edit, deactivate accounts)
-- Global system settings
-
-Manager:
-- Oversees specific teams
-- Creates and manages assignments
-- Approves completed work
-
-Member:
-- Task execution and status updates
-- Collaboration within assigned projects
-- Cannot create projects or manage users
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 4 — ONLINE/OFFLINE PRESENCE SYSTEM (deep dive)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-This is one of the most commonly asked-about technical systems. Here is the complete
-explanation of how it works under the hood.
-
-HOW PRESENCE IS DETECTED:
-1. When a user opens FlowDesk or focuses their browser tab, the frontend emits a
-   Socket.io event to the server: { userId, status: "online" }.
-2. When a user closes the tab, navigates away, or goes idle, the frontend emits:
-   { userId, status: "offline" }.
-3. The backend receives the event, updates the user's status in memory/DB,
-   and broadcasts it to ALL connected clients.
-
-THE SELF-BROADCAST PROBLEM (and the bug it caused):
-- Every client receives every status broadcast — including broadcasts about themselves.
-- Before the fix: when Deepak (the logged-in user) came online, the app received
-  a broadcast saying "userId: Deepak's ID is now online".
-- The store logic naively searched all sidebar conversations for a participant
-  matching that ID. Since Deepak is a participant in EVERY chat on his sidebar,
-  every single conversation turned green — even though all colleagues were offline.
-
-THE FIX — currentUserId exclusion filter:
-The status change handler receives three arguments:
-  handleUserStatusChange(userId, status, currentUserId)
-
-  - userId: the ID of whoever just changed status (could be anyone)
-  - status: "online" or "offline"
-  - currentUserId: YOUR own logged-in user ID (from Zustand AuthStore)
-
-Inside chatStore.ts, the filtering logic is:
-  const otherParticipant = c.participants.find(
-    p => p._id === userId && p._id !== currentUserId
-  );
-
-This means: only update a chat's green dot if the status change belongs to
-the OTHER person in that chat, not yourself.
-
-Scenario A — colleague Jane goes online:
-  userId = Jane's ID, currentUserId = Deepak's ID
-  → p._id === userId: true (Jane matches)
-  → p._id !== currentUserId: true (Jane ≠ Deepak)
-  → otherParticipant found → Jane's chat turns green ✅
-
-Scenario B — Deepak himself goes online:
-  userId = Deepak's ID, currentUserId = Deepak's ID
-  → p._id === userId: true (Deepak matches)
-  → p._id !== currentUserId: false (Deepak === Deepak)
-  → otherParticipant NOT found → no chats change ✅
-
-The fix relies on Zustand's AuthStore always having the current session's user ID
-available as a stable, synchronously readable reference — no async, no prop-drilling.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 5 — HOW TO ANSWER QUESTIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-STYLE RULES:
-1. Be concise first. Expand only if the user asks for more detail.
-2. Speak like a premium SaaS assistant — helpful, clear, professional but warm.
-3. Use bullet points for workflows or step-by-step explanations.
-4. When asked "how does X work" or "what is happening under the hood", always explain:
-   - frontend flow
-   - backend/server flow
-   - Socket.io events (if realtime is involved)
-   - Zustand state updates (if state management is involved)
-   - database involvement (if persistence is involved)
-   - why the logic exists (the problem it solves)
-   - any important edge cases
-5. Use concrete examples with realistic names (e.g. "Deepak", "Jane") when explaining
-   multi-user flows.
-6. Never invent FlowDesk features, APIs, schemas, or permissions that are not described
-   in this system prompt.
-7. If a feature is not covered in this prompt, say:
-   "That functionality does not currently appear to exist in FlowDesk, or I may not
-    have information about it yet."
-8. If the user asks something entirely unrelated to FlowDesk:
-   "I'm specialised in FlowDesk and its internal systems. For broader topics, a
-    general-purpose AI assistant would serve you better."
-
-NEVER:
-- Hallucinate APIs or endpoints
-- Invent database schemas
-- Fabricate module names or permission levels
-- Pretend a feature exists if it is not documented above
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 6 — SINGLE-TURN OPERATION NOTE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-You operate in single-turn mode. Each user message is answered independently.
-You do NOT have memory of previous messages in this chat session.
-If the user refers to something said earlier ("as I mentioned", "the thing we discussed"),
-politely clarify:
-  "I work in single-turn mode and don't retain previous messages. Could you briefly
-   restate the context? I'm happy to help."
-`;
-
-// const OLLAMA_URL = "http://127.0.0.1:11434/api/chat";
-const OLLAMA_URL =
-  "https://punk-nottingham-floating-trailer.trycloudflare.com/api/buddy/ollama";
-// const DEFAULT_MODEL = "qwen2.5-coder:1.5b-base";
-const DEFAULT_MODEL = "qwen2.5-coder:1.5b-instruct";
+const BUDDY_API_URL = "/api/buddy/rag/stream";
 
 const SUGGESTIONS: string[] = [
   "How do Recurring Blueprints work?",
@@ -350,9 +128,7 @@ const FlowDeskBuddy: FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [model] = useState<string>(DEFAULT_MODEL);
   const [ollamaError, setOllamaError] = useState<string | null>(null);
-  // const [showSettings] = useState<boolean>(false);
   const [streamingContent, setStreamingContent] = useState<string>("");
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isMinimized] = useState<boolean>(false);
@@ -372,7 +148,6 @@ const FlowDeskBuddy: FC = () => {
     setInput("");
     setOllamaError(null);
 
-    // ─── SINGLE-TURN: append to display list but only send current message to LLM ───
     setMessages((prev) => [...prev, { role: "user", content: userText }]);
     setIsLoading(true);
     setStreamingContent("");
@@ -381,67 +156,64 @@ const FlowDeskBuddy: FC = () => {
     abortRef.current = controller;
 
     try {
-      const response = await fetch(OLLAMA_URL, {
+      const token = localStorage.getItem("flowdesk_token");
+      const response = await fetch(BUDDY_API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         signal: controller.signal,
         body: JSON.stringify({
-          model,
-          stream: false,
-          // ── Only system prompt + current user message. No history. ──────────
-          messages: [
-            {
-              role: "system",
-              content: FLOWDESK_SYSTEM_PROMPT,
-            },
-            {
-              role: "user",
-              content: userText,
-            },
-          ],
+          message: userText,
+          path: location.pathname,
+          context: {
+            title: document.title,
+            header: document.querySelector("h1")?.textContent || "",
+          },
         }),
       });
 
-      if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
-      if (!response.body) throw new Error("No response body from Ollama");
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      if (!response.body) throw new Error("No response body");
 
-      const data = (await response.json()) as any;
-      const fullContent = data.message?.content || "";
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.content) {
+              fullContent += parsed.content;
+              setStreamingContent(fullContent);
+            }
+          } catch {
+            // skip malformed chunks
+          }
+        }
+      }
+
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: fullContent },
       ]);
       setStreamingContent("");
-
-      // const reader = response.body.getReader();
-      // const decoder = new TextDecoder();
-      // let fullContent = "";
-
-      // while (true) {
-      //   const { done, value } = await reader.read();
-      //   if (done) break;
-
-      //   const chunk = decoder.decode(value, { stream: true });
-      //   const lines = chunk.split("\n").filter(Boolean);
-
-      //   for (const line of lines) {
-      //     try {
-      //       const parsed: OllamaResponseChunk = JSON.parse(line);
-      //       if (parsed.message?.content) {
-      //         fullContent += parsed.message.content;
-      //         setStreamingContent(fullContent);
-      //       }
-      //     } catch {
-      //       // malformed chunk — skip
-      //     }
-      //   }
-      // }
-
-      // setMessages((prev) => [
-      //   ...prev,
-      //   { role: "assistant", content: fullContent },
-      // ]);
-      // setStreamingContent("");
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
 
@@ -450,8 +222,8 @@ const FlowDeskBuddy: FC = () => {
 
       setOllamaError(
         message.includes("fetch") || message.includes("Failed")
-          ? "Cannot reach FlowDesk Buddy service" // ← change this
-          : `Ollama error: ${message}`,
+          ? "Cannot reach FlowDesk Buddy service"
+          : `Buddy error: ${message}`,
       );
     } finally {
       setIsLoading(false);
@@ -500,8 +272,7 @@ const FlowDeskBuddy: FC = () => {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; }
+        .buddy-root, .buddy-window, .buddy-floating-btn { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
 
         @keyframes bounce {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }

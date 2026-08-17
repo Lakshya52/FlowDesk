@@ -1,11 +1,11 @@
-import React from "react";
-// import React, { useState, useEffect } from "react";
+// import React from "react";
+import React, { useState, useEffect } from "react";
 import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
 import { getFirstAllowedRoute, navItems } from "./components/layout/Sidebar";
 import { useAuthStore } from "./store/authStore";
-// import { WifiOff } from "lucide-react";
+import { WifiOff } from "lucide-react";
 // import axios from 'axios';
 // import api from "./lib/api";
 import AppLayout from "./components/layout/AppLayout";
@@ -41,68 +41,68 @@ import Footer from "./components/common/Footer";
 import Release from "./pages/Releases";
 import Documentation from "./pages/Documentation";
 import CrmPage from "./pages/CrmPage";
-// import Buddy from "./components/common/Buddy";
+import Buddy from "./components/common/Buddy";
 
-// const OfflineBanner: React.FC = () => {
-//   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+const OfflineBanner: React.FC = () => {
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-//   useEffect(() => {
-//     const goOffline = () => setIsOffline(true);
-//     const goOnline = () => setIsOffline(false);
-//     window.addEventListener("offline", goOffline);
-//     window.addEventListener("online", goOnline);
-//     return () => {
-//       window.removeEventListener("offline", goOffline);
-//       window.removeEventListener("online", goOnline);
-//     };
-//   }, []);
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
 
-//   if (!isOffline) return null;
+  if (!isOffline) return null;
 
-//   return (
-//     <div
-//       style={{
-//         position: "fixed",
-//         top: 0,
-//         left: 0,
-//         right: 0,
-//         zIndex: 99999,
-//         display: "flex",
-//         justifyContent: "center",
-//         padding: "12px 16px",
-//         pointerEvents: "none",
-//         animation: "slideDown 0.35s ease-out",
-//       }}
-//     >
-//       <div
-//         style={{
-//           display: "flex",
-//           alignItems: "center",
-//           gap: 10,
-//           padding: "12px 24px",
-//           borderRadius: 12,
-//           background: "linear-gradient(135deg, #1e293b, #0f172a)",
-//           color: "#f8fafc",
-//           fontSize: "0.875rem",
-//           fontWeight: 600,
-//           boxShadow:
-//             "0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05)",
-//           backdropFilter: "blur(12px)",
-//           pointerEvents: "auto",
-//         }}
-//       >
-//         <WifiOff size={18} style={{ color: "#f87171", flexShrink: 0 }} />
-//         <span>Internet Connection Required</span>
-//       </div>
-//       <style>{`
-//         @keyframes slideDown {
-//           from { opacity: 0; transform: translateY(-20px); }
-//           to   { opacity: 1; transform: translateY(0); }
-//         }
-//       `}</style>
-//     </div>
-//   );
-// };
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 99999,
+        display: "flex",
+        justifyContent: "center",
+        padding: "12px 16px",
+        pointerEvents: "none",
+        animation: "slideDown 0.35s ease-out",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "12px 24px",
+          borderRadius: 12,
+          background: "linear-gradient(135deg, #1e293b, #0f172a)",
+          color: "#f8fafc",
+          fontSize: "0.875rem",
+          fontWeight: 600,
+          boxShadow:
+            "0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05)",
+          backdropFilter: "blur(12px)",
+          pointerEvents: "auto",
+        }}
+      >
+        <WifiOff size={18} style={{ color: "#f87171", flexShrink: 0 }} />
+        <span>Internet Connection Required</span>
+      </div>
+      <style>{`
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   // const [isBackendReady, setIsBackendReady] = useState<boolean | null>(null);
@@ -186,7 +186,7 @@ const App: React.FC = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* <OfflineBanner /> */}
+      <OfflineBanner />
       <Toaster position="top-right" />
       <HashRouter>
         <AppInner />
@@ -269,6 +269,7 @@ const AppInner: React.FC = () => {
   return (
     <>
       {showNavbar && <Navbar />}
+      <Buddy />
       <Routes>
         <Route path="/" element={<LandingOrDashboard  />} />
         <Route path="/release" element={<Release />} />
