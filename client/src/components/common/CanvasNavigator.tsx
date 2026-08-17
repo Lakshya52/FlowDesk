@@ -90,7 +90,7 @@ const CanvasNavigator: React.FC<CanvasNavigatorProps> = ({
 
     return (
         <div
-            className="absolute bottom-4 left-4 z-[1000] select-none"
+            className="absolute bottom-4 left-4 z-1000 select-none"
             style={{ fontFamily: 'Inter, sans-serif' }}
         >
             <div

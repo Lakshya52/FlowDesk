@@ -294,7 +294,7 @@ const FieldVisitRemarks: React.FC<Props> = ({ visitId, onComplete, onCancel }) =
         </div>
 
         <div className="flex justify-between pt-2">
-          <button onClick={onCancel} className="px-4 cursor-pointer py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
+          <button onClick={onCancel} className="px-4 cursor-pointer py-2 text-sm text-(--color-text-secondary)">
             Cancel
           </button>
           <button

@@ -52,7 +52,7 @@ const EmployeeTrackingReport = ({ filters, onDrilldown }: EmployeeTrackingReport
 
             {/* Chart Skeleton */}
             <div className="grid grid-cols-1 gap-6" style={{ marginBottom: "20px" }}>
-                <div className="card p-8 border-border/40 bg-surface/50 h-[450px]">
+                <div className="card p-8 border-border/40 bg-surface/50 h-112.5">
                     <div className="flex justify-between mb-8">
                         <div className="space-y-3">
                             <div className="w-48 h-6 bg-surface-hover rounded-lg"></div>
@@ -60,15 +60,15 @@ const EmployeeTrackingReport = ({ filters, onDrilldown }: EmployeeTrackingReport
                         </div>
                         <div className="w-24 h-9 bg-surface-hover rounded-lg"></div>
                     </div>
-                    <div className="w-full h-[300px] bg-surface-hover rounded-2xl opacity-40"></div>
+                    <div className="w-full h-75 bg-surface-hover rounded-2xl opacity-40"></div>
                 </div>
             </div>
 
             {/* Comparison Skeleton */}
-            <div className="card p-10 border-border/40 bg-surface/50 h-[500px]">
+            <div className="card p-10 border-border/40 bg-surface/50 h-125">
                 <div className="w-64 h-7 bg-surface-hover rounded-lg mb-4"></div>
                 <div className="w-96 h-4 bg-surface-hover rounded-lg mb-12 opacity-60"></div>
-                <div className="w-full h-[320px] bg-surface-hover rounded-2xl opacity-40"></div>
+                <div className="w-full h-80 bg-surface-hover rounded-2xl opacity-40"></div>
             </div>
         </div>
     );
@@ -125,7 +125,7 @@ const EmployeeTrackingReport = ({ filters, onDrilldown }: EmployeeTrackingReport
                             View Data
                         </button>
                     </div>
-                    <div className="h-[350px]">
+                    <div className="h-87.5">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={data.dailyTrends || []}>
                                 <defs>
@@ -176,7 +176,7 @@ const EmployeeTrackingReport = ({ filters, onDrilldown }: EmployeeTrackingReport
                         <p className="text-sm text-text-secondary mt-2">Correlating total assignments touched against volume of tasks handled.</p>
                     </div>
                 </div>
-                <div className="h-[400px]">
+                <div className="h-100">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data.employeeStats || []} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.4} />

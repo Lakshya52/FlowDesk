@@ -35,32 +35,32 @@ const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JS
         <div className="space-y-8 animate-pulse pb-10">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5" style={{ marginBottom:"20px" }}>
                 {/* Distribution Skeleton */}
-                <div className="card p-8 flex flex-col items-center border-border/40 bg-surface/50 h-[500px]">
+                <div className="card p-8 flex flex-col items-center border-border/40 bg-surface/50 h-125">
                     <div className="w-full mb-8">
                         <div className="w-40 h-6 bg-surface-hover rounded-lg mb-2"></div>
                         <div className="w-32 h-3 bg-surface-hover rounded-full opacity-50"></div>
                     </div>
-                    <div className="w-48 h-48 rounded-full border-[16px] border-surface-hover opacity-40"></div>
+                    <div className="w-48 h-48 rounded-full border-16 border-surface-hover opacity-40"></div>
                     <div className="mt-8 grid grid-cols-2 gap-2 w-full">
                         {[1, 2, 3, 4].map(i => <div key={i} className="h-10 bg-surface-hover rounded-lg"></div>)}
                     </div>
                 </div>
 
                 {/* Bar Chart Skeleton */}
-                <div className="lg:col-span-2 card p-8 border-border/40 bg-surface/50 h-[500px]">
+                <div className="lg:col-span-2 card p-8 border-border/40 bg-surface/50 h-125">
                     <div className="flex justify-between mb-10">
                         <div className="space-y-3">
                             <div className="w-48 h-7 bg-surface-hover rounded-lg"></div>
                             <div className="w-64 h-4 bg-surface-hover rounded-lg opacity-60"></div>
                         </div>
                     </div>
-                    <div className="w-full h-[320px] bg-surface-hover rounded-2xl opacity-30"></div>
+                    <div className="w-full h-80 bg-surface-hover rounded-2xl opacity-30"></div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* List Skeleton */}
-                <div className="card p-8 border-border/40 bg-surface/50 h-[600px]">
+                <div className="card p-8 border-border/40 bg-surface/50 h-150">
                     <div className="flex gap-4 mb-8">
                         <div className="w-10 h-10 rounded-xl bg-surface-hover"></div>
                         <div className="space-y-2">
@@ -74,12 +74,12 @@ const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JS
                 </div>
 
                 {/* Timeline Skeleton */}
-                <div className="lg:col-span-2 card p-8 border-border/40 bg-surface/50 h-[600px]">
+                <div className="lg:col-span-2 card p-8 border-border/40 bg-surface/50 h-150">
                     <div className="w-48 h-7 bg-surface-hover rounded-lg mb-10"></div>
                     <div className="space-y-8">
                         {[1, 2, 3].map(i => (
                             <div key={i} className="flex gap-6">
-                                <div className="w-10 h-10 rounded-xl bg-surface-hover flex-shrink-0"></div>
+                                <div className="w-10 h-10 rounded-xl bg-surface-hover shrink-0"></div>
                                 <div className="flex-1 space-y-3">
                                     <div className="flex justify-between">
                                         <div className="w-24 h-4 bg-surface-hover rounded-full"></div>
@@ -128,7 +128,7 @@ const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JS
                         <h3 className="text-lg font-bold tracking-tight text-text">Activity Dynamic</h3>
                         <p className="text-xs text-text-tertiary mt-1 uppercase tracking-widest font-bold">Action distribution mix</p>
                     </div>
-                    <div className="h-[280px] w-full relative z-10 flex items-center justify-center">
+                    <div className="h-70 w-full relative z-10 flex items-center justify-center">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -192,7 +192,7 @@ const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JS
                             Sync History
                         </button>
                     </div>
-                    <div className="h-[350px] relative z-10">
+                    <div className="h-87.5 relative z-10">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={data.fileCountPerProject || []} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.4} />
@@ -231,7 +231,7 @@ const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JS
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* Resource List */}
-                <div className="card p-8 border-border/60 bg-surface/50 group h-fit max-h-[600px] flex flex-col">
+                <div className="card p-8 border-border/60 bg-surface/50 group h-fit max-h-150 flex flex-col">
                     <div className="flex items-center gap-4 mb-8">
                         <div className="p-2.5 bg-primary/10 text-primary rounded-xl border border-primary/20">
                             <Archive size={20} />
@@ -248,7 +248,7 @@ const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JS
                                     <div className="p-2 bg-surface text-text-tertiary rounded-lg border border-border group-hover/item:bg-primary/10 group-hover/item:text-primary group-hover/item:border-primary/20 transition-all">
                                         <Box size={16} />
                                     </div>
-                                    <span className="text-sm font-semibold text-text truncate max-w-[120px]">{proj.title}</span>
+                                    <span className="text-sm font-semibold text-text truncate max-w-30">{proj.title}</span>
                                 </div>
                                 <div className="text-right">
                                     <span className="text-base font-bold text-primary">{proj.fileCount}</span>
@@ -260,7 +260,7 @@ const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JS
                 </div>
 
                 {/* Activity Timeline */}
-                <div className="lg:col-span-2 card p-8 border-border/60 bg-surface/50 h-[600px] flex flex-col">
+                <div className="lg:col-span-2 card p-8 border-border/60 bg-surface/50 h-150 flex flex-col">
                     <div style={{
                         marginBottom: "20px"
                     }} className="flex items-center justify-between mb-10">

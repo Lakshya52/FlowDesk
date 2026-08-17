@@ -878,7 +878,7 @@ const handlePincodeChange = async (value: string) => {
 	}
 
 	return (
-		<div className="w-full max-w-[1200px] mx-auto">
+		<div className="w-full max-w-300 mx-auto">
 			<div
 				className="flex flex-col sm:flex-row items-start sm:items-end sm:justify-between gap-4"
 				style={{ marginBottom: 20 }}
@@ -1029,7 +1029,7 @@ const handlePincodeChange = async (value: string) => {
 				// }}
 			>
 				<div
-					className="flex flex-wrap gap-2 w-full border border-(--color-border) rounded-md p-2 bg-(--color-surface) h-[60px]"
+					className="flex flex-wrap gap-2 w-full border border-(--color-border) rounded-md p-2 bg-(--color-surface) h-15"
 					style={{
 						// flex: "1 1 280px",
 						display: "flex",
@@ -1102,7 +1102,7 @@ const handlePincodeChange = async (value: string) => {
 				>
 					{/* campaign selection filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[150px] cursor-pointer"
+						className="input flex-1 sm:max-w-37.5 min-w-37.5 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1120,7 +1120,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* Lead status filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[140px] cursor-pointer"
+						className="input flex-1 sm:max-w-37.5 min-w-35 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1137,7 +1137,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* industry filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[140px] cursor-pointer"
+						className="input flex-1 sm:max-w-37.5 min-w-35 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1154,7 +1154,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* source filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[150px] cursor-pointer"
+						className="input flex-1 sm:max-w-37.5 min-w-37.5 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1171,7 +1171,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* priority filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[140px] cursor-pointer"
+						className="input flex-1 sm:max-w-37.5 min-w-35 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1187,7 +1187,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* city filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[130px] cursor-pointer"
+						className="input flex-1 sm:max-w-37.5 min-w-32.5 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1204,7 +1204,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* state filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[130px] cursor-pointer"
+						className="input flex-1 sm:max-w-37.5 min-w-32.5 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1221,7 +1221,7 @@ const handlePincodeChange = async (value: string) => {
 					</select>
 					{/* pincode filter dropdown */}
 					<select
-						className="input flex-1 sm:max-w-[150px] min-w-[130px] cursor-pointer"
+						className="input flex-1 sm:max-w-37.5 min-w-32.5 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
@@ -1595,7 +1595,7 @@ const handlePincodeChange = async (value: string) => {
 					}}
 				>
 					<div
-						className="card animate-fade-in w-full max-w-[480px] mx-4"
+						className="card animate-fade-in w-full max-w-120 mx-4"
 						style={{
 							padding: 0,
 							overflow: "hidden",
@@ -2100,7 +2100,7 @@ const handlePincodeChange = async (value: string) => {
 					onClick={() => setShowCreateForm(false)}
 				>
 					<div
-						className="card animate-fade-in w-full max-w-[520px] mx-4 p-4 sm:p-7"
+						className="card animate-fade-in w-full max-w-130 mx-4 p-4 sm:p-7"
 						style={{
 							maxHeight: "90vh",
 							overflowY: "auto",

@@ -35,19 +35,19 @@ const WorkloadReport = ({ filters, onDrilldown }: WorkloadReportProps): React.JS
     if (loading) return (
         <div className="space-y-8 animate-pulse">
             {/* Main Distribution Chart Skeleton */}
-            <div style={{ marginBottom: "20px" }} className="card p-8 border-border/40 bg-surface/50 h-[500px]">
+            <div style={{ marginBottom: "20px" }} className="card p-8 border-border/40 bg-surface/50 h-125">
                 <div className="flex justify-between mb-12">
                     <div className="space-y-3">
                         <div className="w-56 h-7 bg-surface-hover rounded-lg"></div>
                         <div className="w-72 h-4 bg-surface-hover rounded-lg opacity-60"></div>
                     </div>
                 </div>
-                <div className="w-full h-[320px] bg-surface-hover rounded-2xl opacity-40"></div>
+                <div className="w-full h-80 bg-surface-hover rounded-2xl opacity-40"></div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Intensity Heatmap Skeleton */}
-                <div className="card p-8 border-border/40 bg-surface/50 h-[400px]">
+                <div className="card p-8 border-border/40 bg-surface/50 h-100">
                     <div className="w-48 h-6 bg-surface-hover rounded-lg mb-10"></div>
                     <div className="grid grid-cols-7 gap-3">
                         {[...Array(28)].map((_, i) => (
@@ -57,7 +57,7 @@ const WorkloadReport = ({ filters, onDrilldown }: WorkloadReportProps): React.JS
                 </div>
 
                 {/* Capacity Alerts Skeleton */}
-                <div className="card p-8 border-border/40 bg-surface/50 h-[400px] border-l-4 border-l-border">
+                <div className="card p-8 border-border/40 bg-surface/50 h-100 border-l-4 border-l-border">
                     <div className="flex gap-3 mb-10">
                         <div className="w-10 h-10 rounded-lg bg-surface-hover"></div>
                         <div className="space-y-2">
@@ -133,7 +133,7 @@ const WorkloadReport = ({ filters, onDrilldown }: WorkloadReportProps): React.JS
                     </button>
                 </div>
 
-                <div className="h-[400px]">
+                <div className="h-100">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data.workloadDistribution || []} margin={{ left: 20, right: 30, top: 0, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.4} />

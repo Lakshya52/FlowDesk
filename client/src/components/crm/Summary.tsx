@@ -263,7 +263,7 @@ const Summary = () => {
           <div className="flex items-center gap-1.5">
             <Users size={14} className="text-(--color-text-tertiary)" />
             <select
-              className="select text-xs py-1 px-2 min-w-[130px]"
+              className="select text-xs py-1 px-2 min-w-32.5"
               value={selectedUserId}
               onChange={e => setSelectedUserId(e.target.value)}
             >
@@ -294,7 +294,7 @@ const Summary = () => {
             >
               <ChevronLeft size={15} />
             </button>
-            <span className="text-sm font-semibold text-(--color-text) min-w-[140px] sm:min-w-[160px] text-center">
+            <span className="text-sm font-semibold text-(--color-text) min-w-35 sm:min-w-40 text-center">
               {getPeriodLabel()}
             </span>
             <button
@@ -531,7 +531,7 @@ const Summary = () => {
           <span className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-tertiary)">Period Breakdown</span>
         </div>
 
-        <div className="overflow-x-auto min-h-[160px]">
+        <div className="overflow-x-auto min-h-40">
           {data && data.chartData && data.chartData.length > 0 ? (
             <table className="w-full text-xs border-collapse">
               <thead>

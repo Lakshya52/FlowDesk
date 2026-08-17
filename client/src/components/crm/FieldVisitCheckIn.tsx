@@ -393,7 +393,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           )}
 
           <div className="flex justify-between">
-            <button onClick={onCancel} className="px-4 py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
+            <button onClick={onCancel} className="px-4 py-2 text-sm text-(--color-text-secondary)">
               Back
             </button>
             <button
@@ -489,7 +489,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           )}
 
           <div className="flex justify-between">
-            <button onClick={() => !visitId && setStep("client")} className="px-4 py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
+            <button onClick={() => !visitId && setStep("client")} className="px-4 py-2 text-sm text-(--color-text-secondary)">
               {visitId ? (
                 <span className="text-(--color-text-tertiary) cursor-not-allowed">Back</span>
               ) : "Back"}
@@ -576,7 +576,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           )}
 
           <div className="flex justify-between">
-            <button onClick={() => setStep("selfie")} className="cursor-pointer px-4 py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
+            <button onClick={() => setStep("selfie")} className="cursor-pointer px-4 py-2 text-sm text-(--color-text-secondary)">
               Back
             </button>
             <button

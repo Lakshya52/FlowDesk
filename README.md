@@ -54,7 +54,7 @@
 ## 📁 Project Structure
 
 ```
-FlowDesk-Aceone-Internal-software/
+FlowDesk/
 ├── client/          # Frontend application (React + TypeScript)
 │   ├── src/
 │   ├── public/
@@ -83,8 +83,8 @@ Make sure you have the following installed:
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/Lakshya52/FlowDesk-Aceone-Internal-software.git
-   cd FlowDesk-Aceone-Internal-software
+   git clone https://github.com/Lakshya52/FlowDesk.git
+   cd FlowDesk
    ```
 
 2. **Install dependencies for the server**

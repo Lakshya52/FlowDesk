@@ -350,7 +350,7 @@ export default function LeadDetailModal({
 		>
 			<div
 				ref={cardRef}
-				className="w-full sm:max-w-[1200px] max-h-[80dvh] sm:max-h-[90dvh] flex flex-col bg-(--color-surface)
+				className="w-full sm:max-w-300 max-h-[80dvh] sm:max-h-[90dvh] flex flex-col bg-(--color-surface)
 					rounded-t-3xl sm:rounded-2xl
 					border border-(--color-border) sm:m-4 sm:shadow-xl
 					overflow-hidden"
@@ -407,16 +407,16 @@ export default function LeadDetailModal({
 							</div>
 							<div className="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2.5 text-(--color-text-tertiary) text-[0.62rem] sm:text-[0.72rem] mt-0.5 truncate">
 								{selectedLead.designation && (
-									<span className="truncate max-w-[120px] sm:max-w-none">
+									<span className="truncate max-w-30 sm:max-w-none">
 										{selectedLead.designation}
 									</span>
 								)}
 								<span className="hidden sm:inline">|</span>
-								<span className="truncate max-w-[80px] sm:max-w-none">
+								<span className="truncate max-w-20 sm:max-w-none">
 									Src: {selectedLead.source}
 								</span>
 								<span className="hidden sm:inline">|</span>
-								<span className="truncate max-w-[100px] sm:max-w-none">
+								<span className="truncate max-w-25 sm:max-w-none">
 									Camp:{" "}
 									{getCampaignName(selectedLead.campaignId)}
 								</span>
@@ -430,14 +430,14 @@ export default function LeadDetailModal({
 								title="Delete Lead"
 								className="bg-(--color-danger-light) text-(--color-danger) border-none cursor-pointer w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center hover:opacity-80"
 							>
-								<Trash2 size={20} className="sm:size-[14px]" />
+								<Trash2 size={20} className="sm:size-3.5" />
 							</button>
 						)}
 						<button
 							onClick={closeModal}
 							className="bg-(--color-primary) text-(--color-bg) border-none cursor-pointer w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center hover:opacity-90"
 						>
-							<X size={20} className="sm:size-[16px]" />
+							<X size={20} className="sm:size-4" />
 						</button>
 					</div>
 				</div>
@@ -510,7 +510,7 @@ export default function LeadDetailModal({
 											>
 												<Pen
 													size={12}
-													className="sm:size-[14px]"
+													className="sm:size-3.5"
 												/>
 											</button>
 										)
@@ -755,7 +755,7 @@ export default function LeadDetailModal({
 														<>
 															<Clock
 																size={11}
-																className="sm:size-[13px]"
+																className="sm:size-3.25"
 															/>
 															{formatDuration(
 																callDuration,
@@ -807,7 +807,7 @@ export default function LeadDetailModal({
 													createPortal(
 														<div
 															ref={statusDropdownRef}
-															className="fixed z-[9999] bg-(--color-surface) border border-(--color-border) rounded-lg shadow-lg max-h-[200px] overflow-y-auto"
+															className="fixed z-9999 bg-(--color-surface) border border-(--color-border) rounded-lg shadow-lg max-h-50 overflow-y-auto"
 															style={{
 																top: statusDropdownPos.top,
 																left: statusDropdownPos.left,
@@ -869,7 +869,7 @@ export default function LeadDetailModal({
 										>
 											<PhoneCall
 												size={14}
-												className="sm:size-[16px]"
+												className="sm:size-4"
 											/>
 											{isCalling ? "End Call" : "Start Call"}
 										</button>
@@ -1027,7 +1027,7 @@ export default function LeadDetailModal({
 												</div>
 											))}
 									</div>
-									<div className="my-1 h-px bg-gradient-to-r from-transparent via-(--color-border) to-transparent" />
+									<div className="my-1 h-px bg-linear-to-r from-transparent via-(--color-border) to-transparent" />
 									<div className="max-h-50 overflow-scroll ">
 										{[...selectedLead.meetingLogs]
 											.reverse()
@@ -1099,7 +1099,7 @@ export default function LeadDetailModal({
 									</span>
 								</div>
 							</div>
-							<div className="overflow-y-auto max-h-[220px] sm:max-h-[50dvh] p-3 sm:p-4">
+							<div className="overflow-y-auto max-h-55 sm:max-h-[50dvh] p-3 sm:p-4">
 								{selectedLead.notes.length === 0 ? (
 									<p className="text-(--color-text-tertiary) text-xs sm:text-sm text-center mt-6 sm:mt-10">
 										No notes yet. Add the first note below.
@@ -1117,7 +1117,7 @@ export default function LeadDetailModal({
 														selectedLead.notes
 															.length -
 															1 && (
-														<div className="absolute left-2.5 sm:left-3 top-7 sm:top-8 bottom-0 w-[2px] bg-(--color-border)" />
+														<div className="absolute left-2.5 sm:left-3 top-7 sm:top-8 bottom-0 w-0.5 bg-(--color-border)" />
 													)}
 													<div className="flex items-center justify-center rounded-full w-6 h-6 sm:w-7 sm:h-7 bg-(--color-primary-light) text-(--color-primary) text-[0.55rem] sm:text-[0.65rem] font-semibold border-2 border-(--color-bg) z-10 shrink-0">
 														{getInitials(
@@ -1127,7 +1127,7 @@ export default function LeadDetailModal({
 													</div>
 													<div className="flex-1 min-w-0">
 														<div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
-															<span className="text-(--color-text) font-semibold text-[0.7rem] sm:text-[0.78rem] truncate max-w-[120px] sm:max-w-none">
+															<span className="text-(--color-text) font-semibold text-[0.7rem] sm:text-[0.78rem] truncate max-w-30 sm:max-w-none">
 																{note.createdBy
 																	?.name ||
 																	"Unknown"}
@@ -1138,7 +1138,7 @@ export default function LeadDetailModal({
 																)}
 															</span>
 														</div>
-														<p className="text-(--color-text-secondary) text-[0.75rem] sm:text-[0.82rem] leading-5 sm:leading-6 m-0 whitespace-pre-wrap break-words">
+														<p className="text-(--color-text-secondary) text-[0.75rem] sm:text-[0.82rem] leading-5 sm:leading-6 m-0 whitespace-pre-wrap wrap-break-word">
 															{note.text}
 														</p>
 													</div>
@@ -1150,7 +1150,7 @@ export default function LeadDetailModal({
 							<div className="flex gap-2 p-2.5 sm:p-3 border-t border-(--color-border)">
 								<textarea
 									id="note-input"
-									className="input flex-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[0.72rem] sm:text-[0.8rem] rounded-lg resize-none min-h-[52px] sm:min-h-[60px] max-h-[100px] sm:max-h-[120px]"
+									className="input flex-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[0.72rem] sm:text-[0.8rem] rounded-lg resize-none min-h-13 sm:min-h-15 max-h-25 sm:max-h-30"
 									placeholder="Add a note..."
 									rows={2}
 									value={newNote}

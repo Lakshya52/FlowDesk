@@ -231,7 +231,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         </button>
                         {showFontFamilyDropdown && (
                             <div
-                                className="absolute top-full left-0 bg-white border border-slate-200 rounded shadow-lg z-50 py-1 min-w-[140px]"
+                                className="absolute top-full left-0 bg-white border border-slate-200 rounded shadow-lg z-50 py-1 min-w-35"
                                 style={{ marginTop: "4px", padding: "10px", cursor: "pointer" }}
                                 onMouseDown={(e) => e.stopPropagation()}
                             >
@@ -276,7 +276,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         </button>
                         {showFontSizeDropdown && (
                             <div
-                                className="absolute top-full left-0 bg-white border border-slate-200 rounded shadow-lg z-50 py-1 min-w-[80px]"
+                                className="absolute top-full left-0 bg-white border border-slate-200 rounded shadow-lg z-50 py-1 min-w-20"
                                 style={{ marginTop: "4px", padding: "4px" }}
                                 onMouseDown={(e) => e.stopPropagation()}
                             >

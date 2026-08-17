@@ -42,7 +42,7 @@ const DrilldownModal: React.FC<DrilldownModalProps> = ({ isOpen, onClose, title,
                 {/* Data Grid */}
                 <div className="flex-1 overflow-auto p-8 bg-bg/50">
                     {data.length === 0 ? (
-                        <div className="h-[400px] flex flex-col items-center justify-center text-text-tertiary p-20 bg-surface rounded-2xl border-2 border-dashed border-border/60 group">
+                        <div className="h-100 flex flex-col items-center justify-center text-text-tertiary p-20 bg-surface rounded-2xl border-2 border-dashed border-border/60 group">
                              <div className="w-20 h-20 bg-surface-hover rounded-2xl border border-border mb-6 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-500">
                                 <Search size={32} className="opacity-20 text-primary" />
                              </div>

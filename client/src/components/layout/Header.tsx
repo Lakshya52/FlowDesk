@@ -386,7 +386,7 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
           padding: "5px 10px",
           borderRadius: "10px",
         }}
-        className="py-[5px] px-[10px] bg-[#fafafa]/10 text-white"
+        className="py-1.25 px-2.5 bg-[#fafafa]/10 text-white"
       >
         <Search size={16} color="var(--color-text-tertiary)" />
         <input

@@ -6,11 +6,11 @@ const NotFoundPage: React.FC = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="h-dvh flex items-center justify-center bg-(--color-bg) p-[24px] text-center">
-            <div className="card animate-fade-in max-w-[480px] w-full px-[32px] py-[48px] flex flex-col items-center" style={{
+        <div className="h-dvh flex items-center justify-center bg-(--color-bg) p-6 text-center">
+            <div className="card animate-fade-in max-w-120 w-full px-8 py-12 flex flex-col items-center" style={{
                 boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
             }}>
-                <div className="w-[80px] h-[80px] rounded-[50%] bg-(--color-danger-light) items-center justify-center mb-[24px]">
+                <div className="w-20 h-20 rounded-[50%] bg-(--color-danger-light) flex items-center justify-center mb-6">
                     <AlertCircle size={40} color="var(--color-danger)" />
                 </div>
 
@@ -24,20 +24,20 @@ const NotFoundPage: React.FC = () => {
                     404
                 </h1>
 
-                <h2 className="text-(--color-text) mb-[12px] mt-[8px] font-bold text-[1.5rem]">
+                <h2 className="text-(--color-text) mb-3 mt-2 font-bold text-[1.5rem]">
                     Something went wrong
                 </h2>
 
-                <p className="text-(--color-text-secondary) text-[1rem] mb-[32px] leading-[1.6]">
+                <p className="text-(--color-text-secondary) text-[1rem] mb-8 leading-[1.6]">
                     The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.
                 </p>
 
                 <div className="flex gap-3" >
-                    <button className="btn btn-secondary py-[12px] px-[24px]" onClick={() => navigate(-1)} >
+                    <button className="btn btn-secondary py-3 px-6" onClick={() => navigate(-1)} >
                         <ArrowLeft size={18} />
                         Go Back
                     </button>
-                    <button className="btn btn-primary py-[12px] px-[24px]" onClick={() => navigate('/')}>
+                    <button className="btn btn-primary py-3 px-6" onClick={() => navigate('/')}>
                         <Home size={18} />
                         Home Page
                     </button>

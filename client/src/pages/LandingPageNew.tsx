@@ -50,7 +50,7 @@ function CloudLayer({
 const LandingPageNew = () => {
 	return (
 		<>
-			<div className="relative h-[75dvh] md:h-[90dvh] md:min-h-[720px] w-full overflow-hidden bg-white">
+			<div className="relative h-[75dvh] md:h-[90dvh] md:min-h-180 w-full overflow-hidden bg-white">
 				{/* Grid */}
 				<div className="flex sm:hidden h-full w-full">
 					{Array.from({ length: 7 }).map((_, index) => (

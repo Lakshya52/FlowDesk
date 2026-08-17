@@ -291,7 +291,7 @@ const FieldVisitList: React.FC<Props> = ({
 						<select
 							value={statusFilter}
 							onChange={(e) => setStatusFilter(e.target.value)}
-							className="px-3 py-2 border border-(--color-border) rounded-lg text-sm min-w-[130px] cursor-pointer"
+							className="px-3 py-2 border border-(--color-border) rounded-lg text-sm min-w-32.5 cursor-pointer"
 						>
 							<option value="">All Status</option>
 							<option value="scheduled">Scheduled</option>
@@ -302,7 +302,7 @@ const FieldVisitList: React.FC<Props> = ({
 						<select
 							value={outcomeFilter}
 							onChange={(e) => setOutcomeFilter(e.target.value)}
-							className="px-3 py-2 border border-(--color-border) rounded-lg text-sm min-w-[140px] cursor-pointer"
+							className="px-3 py-2 border border-(--color-border) rounded-lg text-sm min-w-35 cursor-pointer"
 						>
 							<option value="">All Outcomes</option>
 							<option value="completed">Completed</option>
@@ -356,7 +356,7 @@ const FieldVisitList: React.FC<Props> = ({
 									)
 									.catch(() => {});
 							}}
-							className="btn btn-primary flex items-center cursor-pointer justify-center gap-1.5 px-4 py-2 bg-(--color-surface) border border-(--color-primary-light) text-(--color-primary) text-sm font-medium rounded-lg hover:bg-(--color-primary-light) transition-colors min-w-[100px]"
+							className="btn btn-primary flex items-center cursor-pointer justify-center gap-1.5 px-4 py-2 bg-(--color-surface) border border-(--color-primary-light) text-(--color-primary) text-sm font-medium rounded-lg hover:bg-(--color-primary-light) transition-colors min-w-25"
 						>
 							<CalendarDays size={16} />
 							Schedule

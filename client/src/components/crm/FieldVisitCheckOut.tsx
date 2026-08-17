@@ -110,7 +110,7 @@ const FieldVisitCheckOut: React.FC<Props> = ({ visitId, onComplete, onCancel }) 
               <img src={signature} alt="Signature" className="h-16 border rounded" />
               <button
                 onClick={() => setSignature("")}
-                className="ml-2 text-xs text-(--color-danger) text-(--color-danger)"
+                className="ml-2 text-xs text-(--color-danger)"
               >
                 Remove
               </button>
@@ -139,7 +139,7 @@ const FieldVisitCheckOut: React.FC<Props> = ({ visitId, onComplete, onCancel }) 
         </div>
 
         <div className="flex justify-between pt-2">
-          <button onClick={onCancel} className="px-4 py-2 text-sm text-(--color-text-secondary) text-(--color-text-secondary)">
+          <button onClick={onCancel} className="px-4 py-2 text-sm text-(--color-text-secondary)">
             Cancel
           </button>
           <button

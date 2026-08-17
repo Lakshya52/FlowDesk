@@ -203,7 +203,7 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[200px]">
+        <div className="flex-1 min-w-50">
           <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Employee</label>
           <select
             value={selectedEmployee}
@@ -313,7 +313,7 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
                     </p>
                     <p className="text-xs text-(--color-text-tertiary) capitalize">{visit.clientType}</p>
                   </div>
-                  <div className="min-w-[120px]">
+                  <div className="min-w-30">
                     <div className="flex items-center gap-1">
                       <Clock size={12} className="text-(--color-text-tertiary) shrink-0" />
                       <input

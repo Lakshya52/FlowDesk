@@ -21,7 +21,7 @@ interface ReleaseData {
   downloads: OsDownloads[]
 }
 
-const GITHUB_API = "https://api.github.com/repos/Lakshya52/FlowDesk-Aceone-Internal-software/releases?per_page=10"
+const GITHUB_API = "https://api.github.com/repos/Lakshya52/FlowDesk/releases?per_page=10"
 
 const WindowsIcon: ComponentType<{ size?: number; className?: string }> = ({ size = 20, className }) => (
   <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -182,7 +182,7 @@ function VersionCard({
       </button>
       <div
         className={`overflow-hidden transition-all duration-300 ease-in-out ${
-          isOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
+          isOpen ? "max-h-150 opacity-100" : "max-h-0 opacity-0"
         }`}
       >
         <div className="px-6 pb-6 pt-2 border-t border-gray-100">
@@ -247,7 +247,7 @@ export default function Releases() {
   return (
     <div className="min-h-screen w-full">
       {/* Hero */}
-      <div className="relative overflow-hidden min-h-[300px] max-h-[500px] h-[60dvh] md:h-[70dvh] w-full bg-white">
+      <div className="relative overflow-hidden min-h-75 max-h-125 h-[60dvh] md:h-[70dvh] w-full bg-white">
         <div className="sm:flex hidden h-full w-full absolute inset-0">
           {Array.from({ length: 24 }).map((_, index) => (
             <div

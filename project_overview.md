@@ -1,6 +1,6 @@
 # 🏢 FlowDesk Project Overview
 
-FlowDesk is a sophisticated, full-stack internal management ecosystem designed exclusively for **Aceone Futuristic (OPC) Private Limited**. It centralizes complex business operations—from high-level project management to granular day-to-day tasks—into a single, high-performance platform.
+FlowDesk is a sophisticated, full-stack internal management ecosystem. It centralizes complex business operations—from high-level project management to granular day-to-day tasks—into a single, high-performance platform.
 
 ## 🏗 Modular Architecture
 
@@ -105,7 +105,7 @@ Since **you** are a participant in **every single chat** on your sidebar, the mo
 By passing **your own ID** (`user?._id`) to the Zustand chat store as the third parameter (`currentUserId`), we tell the store:
 > *"Only update the green dot of a conversation if the status change belongs to the **other person** in the chat, not me."*
 
-Inside [chatStore.ts](file:///c:\Users\ACEONE\Desktop\flowdesk\FlowDesk-Password-reset=problem-fixed\FlowDesk-Aceone-Internal-software\client\src\store\chatStore.ts#L172-L184), the filtering is now performed as:
+Inside [chatStore.ts](file:///c:\Users\ACEONE\Desktop\flowdesk\FlowDesk-Password-reset=problem-fixed\FlowDesk\client\src\store\chatStore.ts#L172-L184), the filtering is now performed as:
 ```typescript
 // Find if the status update is for the OTHER participant in this direct chat
 const otherParticipant = c.participants.find(p => p._id === userId && p._id !== currentUserId);

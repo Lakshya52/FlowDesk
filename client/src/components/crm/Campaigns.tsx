@@ -251,14 +251,14 @@ const Campaigns = () => {
 
     const leadsPanel = selectedCampaign && (
         <div className={`flex flex-col overflow-hidden  border-l border-r border-b border-(--color-border) rounded-xl
-            ${selectedCampaignId ? 'w-full lg:w-[400px] lg:min-w-[400px]' : 'w-0 lg:w-0'}`}
+            ${selectedCampaignId ? 'w-full lg:w-100 lg:min-w-100' : 'w-0 lg:w-0'}`}
             style={{ transition: 'width 0.2s, min-width 0.2s' }}>
             <div className="px-[16px_20px] py-4  border-b border-t border-(--color-border) flex items-center justify-between rounded-xl bg-(--color-surface) shrink-0">
                 <div>
                     <h3 className="text-base font-bold m-0">
                         {selectedCampaign.name}
                     </h3>
-                    <p className="text-[0.75rem] text-(--color-text-secondary) mt-[2px] m-0">
+                    <p className="text-[0.75rem] text-(--color-text-secondary) mt-0.5 m-0">
                         {leads.length} lead{leads.length !== 1 ? 's' : ''}
                     </p>
                 </div>
@@ -282,11 +282,11 @@ const Campaigns = () => {
             </div>
 
             <div className="px-4 py-3 border-b border-(--color-border) shrink-0">
-                <div className="flex items-center gap-1.5 border border-(--color-border) rounded-lg px-[10px]">
+                <div className="flex items-center gap-1.5 border border-(--color-border) rounded-lg px-2.5">
                     <Search size={14} className="text-(--color-text-tertiary) shrink-0" />
                     <input
                         placeholder="Search leads..."
-                        className="flex-1 border-none py-[7px] text-[0.8rem] outline-none shadow-none bg-transparent"
+                        className="flex-1 border-none py-1.75 text-[0.8rem] outline-none shadow-none bg-transparent"
                         value={leadSearch}
                         onChange={e => setLeadSearch(e.target.value)}
                     />
@@ -393,7 +393,7 @@ const Campaigns = () => {
                     <h3 className="text-[1.1rem] font-semibold text-(--color-text) mb-2">
                         No Campaigns Yet
                     </h3>
-                    <p className="text-[0.85rem] text-(--color-text-secondary) max-w-[360px] mx-auto">
+                    <p className="text-[0.85rem] text-(--color-text-secondary) max-w-90 mx-auto">
                         Create your first campaign to start managing outreach, tracking leads, and organising your CRM efforts.
                     </p>
                 </div>
@@ -403,7 +403,7 @@ const Campaigns = () => {
                         <div
                             key={campaign._id}
                             className={`card animate-fade-in flex flex-col overflow-hidden relative cursor-pointer transition-shadow transition-border-color
-                                ${selectedCampaignId === campaign._id ? '!border-(--color-primary) !border-2' : ''}`}
+                                ${selectedCampaignId === campaign._id ? 'border-(--color-primary)! border-2!' : ''}`}
                             style={{ padding: 0 }}
                             onClick={() => setSelectedCampaignId(campaign._id)}
                         >
@@ -413,7 +413,7 @@ const Campaigns = () => {
                                         <h4 className="text-[1.05rem] font-bold text-(--color-text) leading-tight m-0">
                                             {campaign.name}
                                         </h4>
-                                        <div className="bg-(--color-primary-light) text-(--color-primary) text-[0.7rem] font-semibold px-[10px] py-[2px] rounded-full inline-block self-start">
+                                        <div className="bg-(--color-primary-light) text-(--color-primary) text-[0.7rem] font-semibold px-2.5 py-0.5 rounded-full inline-block self-start">
                                             {campaign.purpose}
                                         </div>
                                     </div>
@@ -422,7 +422,7 @@ const Campaigns = () => {
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleCampaignEdit(campaign); }}
                                             title="Edit campaign"
-                                            className="bg-transparent border-none cursor-pointer text-(--color-text-tertiary) p-1 rounded-md shrink-0 leading-none hover:bg-[#C7FFD1] hover:!text-[#00961C]"
+                                            className="bg-transparent border-none cursor-pointer text-(--color-text-tertiary) p-1 rounded-md shrink-0 leading-none hover:bg-[#C7FFD1] hover:text-[#00961C]!"
                                         >
                                             <Pencil size={14} />
                                         </button>
@@ -431,7 +431,7 @@ const Campaigns = () => {
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleDelete(campaign._id); }}
                                             title="Delete campaign"
-                                            className="bg-transparent border-none cursor-pointer text-(--color-text-tertiary) p-1 rounded-md shrink-0 leading-none hover:bg-[#fef2f2] hover:!text-[#ef4444]"
+                                            className="bg-transparent border-none cursor-pointer text-(--color-text-tertiary) p-1 rounded-md shrink-0 leading-none hover:bg-[#fef2f2] hover:text-[#ef4444]!"
                                         >
                                             <Trash2 size={14} />
                                         </button>
@@ -463,7 +463,7 @@ const Campaigns = () => {
                             </div>
 
                             {campaign.people.length > 0 && (
-                                <div className="px-[20px] py-[10px_12px] border-t border-(--color-border) bg-(--color-surface)">
+                                <div className="px-5 py-[10px_12px] border-t border-(--color-border) bg-(--color-surface)">
                                     <div className="text-[0.68rem] text-(--color-text-tertiary) mb-1.5">
                                         Members ({campaign.people.length})
                                     </div>
@@ -501,7 +501,7 @@ const Campaigns = () => {
 
     if (isLoading) {
         return (
-            <div className="flex justify-center p-[60px]">
+            <div className="flex justify-center p-15">
                 <Loader2 size={32} className="animate-spin text-(--color-primary)" />
             </div>
         );
@@ -510,13 +510,13 @@ const Campaigns = () => {
     return (
         <>
         {toast && (
-            <div className={`fixed top-4 right-4 z-[100] px-4 py-2.5 rounded-lg shadow-lg text-sm font-semibold text-white animate-fade-in ${
+            <div className={`fixed top-4 right-4 z-100 px-4 py-2.5 rounded-lg shadow-lg text-sm font-semibold text-white animate-fade-in ${
                 toast.type === 'error' ? 'bg-(--color-danger)' : 'bg-green-600'
             }`}>
                 {toast.message}
             </div>
         )}
-        <div className="max-w-[1400px] mx-auto h-[80dvh] flex flex-col lg:flex-row gap-0 overflow-hidden">
+        <div className="max-w-350 mx-auto h-[80dvh] flex flex-col lg:flex-row gap-0 overflow-hidden">
             <div className={`flex flex-col min-h-0 h-full flex-1 min-w-0 ${selectedCampaignId ? 'hidden lg:flex lg:pr-6' : 'flex'}`}>
                 {campaignsContent}
             </div>
@@ -524,7 +524,7 @@ const Campaigns = () => {
 
             {/* Create Campaign Modal */}
             <Modal isOpen={showCreateModal} onClose={() => { setShowCreateModal(false); resetForm(); }}>
-                <div className="card animate-fade-in max-w-[500px] w-full p-0 overflow-hidden rounded-2xl" style={{padding:0}}>
+                <div className="card animate-fade-in max-w-125 w-full p-0 overflow-hidden rounded-2xl" style={{padding:0}}>
                         <div className="px-6 py-5 border-b border-(--color-border) flex items-center justify-between bg-(--color-surface)">
                             <div className="flex items-center gap-2.5">
                                 <div className="w-9 h-9 rounded-xl bg-(--color-primary-light) flex items-center justify-center">
@@ -545,7 +545,7 @@ const Campaigns = () => {
                             </button>
                         </div>
 
-                        <div className="p-6 flex flex-col gap-[18px]">
+                        <div className="p-6 flex flex-col gap-4.5">
                             <div>
                                 <label className="block text-[0.75rem] text-(--color-text-secondary) mb-1.5">
                                     Campaign Name <span className="text-(--color-danger)">*</span>
@@ -577,7 +577,7 @@ const Campaigns = () => {
                                     Description (optional)
                                 </label>
                                 <textarea
-                                    className="input min-h-[70px] resize-y"
+                                    className="input min-h-17.5 resize-y"
                                     placeholder="Campaign details..."
                                     value={form.description}
                                     onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
@@ -618,7 +618,7 @@ const Campaigns = () => {
                             </div>
 
                             <button
-                                className="btn btn-primary w-full mt-1 py-[10px]"
+                                className="btn btn-primary w-full mt-1 py-2.5"
                                 disabled={!form.name.trim() || !form.purpose.trim() || createMutation.isPending || updateMutation.isPending}
                                 onClick={handleCreate}
                             >
@@ -633,7 +633,7 @@ const Campaigns = () => {
 
             {/* Import Leads Modal */}
             <Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportResult(null); }}>
-                <div className="card animate-fade-in max-w-[480px] w-full p-0 overflow-hidden rounded-2xl">
+                <div className="card animate-fade-in max-w-120 w-full p-0 overflow-hidden rounded-2xl">
                         <div className="px-6 py-5 border-b border-(--color-border) flex items-center justify-between bg-(--color-surface)">
                             <div className="flex items-center gap-2.5">
                                 <div className="w-9 h-9 rounded-xl bg-(--color-primary-light) flex items-center justify-center">
@@ -641,7 +641,7 @@ const Campaigns = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-base font-bold m-0">Import Leads</h3>
-                                    <p className="text-[0.72rem] text-(--color-text-tertiary) mt-[2px] m-0">
+                                    <p className="text-[0.72rem] text-(--color-text-tertiary) mt-0.5 m-0">
                                         to {selectedCampaign?.name || 'campaign'}
                                     </p>
                                 </div>
@@ -675,7 +675,7 @@ const Campaigns = () => {
                                     </p>
                                 </div>
                                 {importResult.errors.length > 0 && (
-                                    <div className="mb-4 p-3 bg-red-50 rounded-lg text-[0.78rem] max-h-[150px] overflow-y-auto border border-red-200">
+                                    <div className="mb-4 p-3 bg-red-50 rounded-lg text-[0.78rem] max-h-37.5 overflow-y-auto border border-red-200">
                                         <div className="font-semibold text-red-600 mb-2 flex items-center gap-1.5">
                                             <AlertCircle size={14} /> {importResult.errors.length} error{importResult.errors.length !== 1 ? 's' : ''}
                                         </div>
@@ -687,7 +687,7 @@ const Campaigns = () => {
                                     </div>
                                 )}
                                 <button
-                                    className="btn btn-primary w-full py-[10px] rounded-lg font-semibold"
+                                    className="btn btn-primary w-full py-2.5 rounded-lg font-semibold"
                                     onClick={() => { setShowImportModal(false); setImportResult(null); }}
                                 >
                                     Done

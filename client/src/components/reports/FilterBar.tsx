@@ -60,7 +60,7 @@ const FilterBar = ({ filters, setFilters, filterOptions, onReset, user }: Filter
         <div className="card p-6  border-border/80 shadow-md " style={{ marginTop: "20px" }}>
             <div className="flex flex-wrap items-end gap-4 sm:gap-6">
                 {/* Date Range Group */}
-                <div className="flex flex-col gap-2 w-full sm:w-auto min-w-[280px]">
+                <div className="flex flex-col gap-2 w-full sm:w-auto min-w-70">
                     <label className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
                         <Calendar size={16} className="text-primary" />
                         Time Period
@@ -84,7 +84,7 @@ const FilterBar = ({ filters, setFilters, filterOptions, onReset, user }: Filter
 
                 {/* Team Filter */}
                 {isAdminOrManager && (
-                    <div className="flex flex-col gap-2 w-full sm:w-auto min-w-[180px]">
+                    <div className="flex flex-col gap-2 w-full sm:w-auto min-w-45">
                         <label className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
                             <Users size={16} className="text-primary" />
                             Team
@@ -104,7 +104,7 @@ const FilterBar = ({ filters, setFilters, filterOptions, onReset, user }: Filter
 
                 {/* Employee Filter */}
                 {isAdminOrManager && (
-                    <div className="flex flex-col gap-2 w-full sm:w-auto min-w-[180px]">
+                    <div className="flex flex-col gap-2 w-full sm:w-auto min-w-45">
                         <label className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
                             <User size={16} className="text-primary" />
                             Member
@@ -123,7 +123,7 @@ const FilterBar = ({ filters, setFilters, filterOptions, onReset, user }: Filter
                 )}
 
                 {/* Project Filter */}
-                <div className="flex flex-col gap-2 w-full sm:w-auto min-w-[200px]">
+                <div className="flex flex-col gap-2 w-full sm:w-auto min-w-50">
                     <label className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
                         <Target size={16} className="text-primary" />
                         Project
@@ -141,7 +141,7 @@ const FilterBar = ({ filters, setFilters, filterOptions, onReset, user }: Filter
                 </div>
 
                 {/* Status Filter */}
-                <div className="flex flex-col gap-2 w-full sm:w-auto min-w-[150px]">
+                <div className="flex flex-col gap-2 w-full sm:w-auto min-w-37.5">
                     <label className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
                         <Activity size={16} className="text-primary" />
                         Status

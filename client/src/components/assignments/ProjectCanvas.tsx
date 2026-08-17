@@ -401,14 +401,14 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
                             }
                         }}
                     >
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, opacity: 0.4 }}>
-                            <Move size={16} style={{ cursor: "grab" }} />
+                        <div className="flex justify-between mb-2 opacity-40" >
+                            <Move size={16} className="cursor-grab" />
                             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                 <NoteExportMenu noteContent={note.content} noteId={note.id} iconSize={16} />
                                 {activeEditId === note.id && (
                                     <X
                                         size={16}
-                                        style={{ cursor: "pointer", }}
+                                        className="cursor-pointer"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             saveContent(note.id, note.content);
@@ -418,7 +418,7 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
                                 )}
                                 <Trash2
                                     size={16}
-                                    style={{ cursor: "pointer" }}
+                                    className="cursor-pointer"
                                     onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
                                 />
                             </div>
@@ -449,41 +449,29 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
                                 />
                             ) : (
                                 <div
-                                    className="note-content-area"
+                                    className="note-content-area flex-1 cursor-text max-w-none"
                                     onClick={() => setActiveEditId(note.id)}
-                                    style={{
-                                        flex: 1,
-                                        cursor: 'text',
-                                        maxWidth: 'none'
-                                    }}
                                     dangerouslySetInnerHTML={{ __html: note.content }}
                                 />
                             )}
                         </div>
                         {activeEditId !== note.id && (
-                            <div style={{ fontSize: '0.65rem', opacity: 0.4, textAlign: 'right', marginTop: 6 }}>
+                            <div className="text-xs text-muted-foreground text-right mt-1.5" >
                                 Click to edit
                             </div>
                         )}
-
+{/* b lock some ngnix nagri */}
                         {/* Authorship Info */}
-                        <div style={{
-                            marginTop: 12,
-                            paddingTop: 8,
-                            borderTop: "1px solid rgba(0,0,0,0.05)",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center"
-                        }}>
+                        <div className="mt-3 pt-2 flex justify-between items-center " style={{ borderTop: "1px solid rgba(0,0,0,0.05)"}}>
                             {note.createdBy && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div className="flex items-center gap-1.5">
                                     <Avatar src={note.createdBy.avatar} name={note.createdBy.name} size={18} />
-                                    <span style={{ fontSize: "0.65rem", fontWeight: 600, opacity: 0.6 }}>{note.createdBy.name}</span>
+                                    <span className="text-xs font-medium opacity-60">{note.createdBy.name}</span>
                                 </div>
                             )}
 
                             {note.editedBy && note.editedBy.length > 0 && (
-                                <div style={{ display: "flex", alignItems: "center" }}>
+                                <div className="flex items-center">
                                     {note.editedBy.slice(0, 3).map((editor, idx) => (
                                         <div key={editor._id} style={{ marginLeft: idx === 0 ? 0 : -6 }}>
                                             <Avatar
@@ -514,18 +502,7 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
                                 setResizingNoteId(note.id);
                                 setMousePos({ x: e.clientX, y: e.clientY });
                             }}
-                            style={{
-                                position: "absolute",
-                                bottom: 0,
-                                right: 0,
-                                width: 20,
-                                height: 20,
-                                cursor: "nwse-resize",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                opacity: 0.3
-                            }}
+                            className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize flex items-center justify-center opacity-30"
                         >
                             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M10 0L0 10M10 5L5 10M10 8L8 10" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
@@ -536,21 +513,7 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
             </div>
 
             {/* Controls */}
-            <div
-                style={{
-                    position: "absolute",
-                    bottom: 12,
-                    right: 12,
-                    background: "var(--color-surface)",
-                    padding: "6px 10px",
-                    borderRadius: 8,
-                    display: "flex",
-                    gap: 10,
-                    boxShadow: "var(--shadow-md)",
-                    alignItems: "center",
-                    border: "1px solid var(--color-border)"
-                }}
-            >
+            <div className="absolute bottom-3 right-3 bg-(--color-surface py-1.5 px-2.5 rounded-lg flex gap-2.5 items-center shadow-[var(--shadow-md) border border-(--color-border)">
                 <button className="btn btn-ghost btn-xs" onClick={() => {
                     const rect = containerRef.current?.getBoundingClientRect();
                     if (rect) zoomTowards(Math.min(scale + 0.2, 5), rect.width / 2, rect.height / 2);

@@ -797,7 +797,7 @@ const AssignmentsPage: React.FC = () => {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4  sm:items-center">
-        <div className="w-full sm:max-w-[360px] relative">
+        <div className="w-full sm:max-w-90 relative">
           <Search
             size={16}
             style={{
@@ -1367,7 +1367,7 @@ const AssignmentsPage: React.FC = () => {
       {/* Create Modal */}
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} zIndex={100}>
         <div
-          className="card animate-fade-in w-full max-w-[560px] p-5 sm:p-7 max-h-[90vh] overflow-auto"
+          className="card animate-fade-in w-full max-w-140 p-5 sm:p-7 max-h-[90vh] overflow-auto"
         >
             <h2 className="text-lg font-bold mb-5">Create Project</h2>
             <form onSubmit={handleCreate} className="flex flex-col gap-4">

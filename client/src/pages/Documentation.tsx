@@ -68,8 +68,8 @@ function ActiveNavLink({
 			onClick={onClick}
 			className={`text-sm py-1.5 pl-3 rounded-lg cursor-pointer block transition-all duration-200 ${
 				active
-					? "bg-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] text-[var(--color-text)] font-semibold border-l-[3px] border-[var(--color-primary)] pl-[9px]"
-					: "text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] hover:text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-primary)_5%,transparent)]"
+					? "bg-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] text-(--color-text) font-semibold border-l-[3px] border-(--color-primary) pl-2.25"
+					: "text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] hover:text-(--color-text) hover:bg-[color-mix(in_srgb,var(--color-primary)_5%,transparent)]"
 			}`}
 		>
 			{children}
@@ -114,11 +114,11 @@ function Sidebar({
 			<aside
 				className={`${
 					open ? "translate-x-0" : "-translate-x-full"
-				} lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-[calc(100dvh-56px)] w-[260px] backdrop-blur-xl bg-[color-mix(in_srgb,var(--color-surface)_80%,transparent)] border-r border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] flex flex-col transition-transform duration-300 ease-in-out`}
+				} lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-[calc(100dvh-56px)] w-65 backdrop-blur-xl bg-[color-mix(in_srgb,var(--color-surface)_80%,transparent)] border-r border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] flex flex-col transition-transform duration-300 ease-in-out`}
 			>
 				<button
 					onClick={onClose}
-					className="lg:hidden text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-[var(--color-text)] -ml-1"
+					className="lg:hidden text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text) -ml-1"
 				>
 					<X size={18} className="m-5" />
 				</button>
@@ -135,10 +135,11 @@ function Sidebar({
 						placeholder="Search docs..."
 						value={searchQuery}
 						onChange={(e) => onSearchChange(e.target.value)}
-						className="w-full pl-9 pr-10 py-2 text-sm bg-[color-mix(in_srgb,var(--color-primary)_5%,transparent)] border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded-lg outline-none focus:border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] transition-colors font-manrope text-[var(--color-text)]"
+						className="w-full pl-9 pr-10 py-2 text-sm bg-[color-mix(in_srgb,var(--color-primary)_5%,transparent)] border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded-lg outline-none focus:border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] transition-colors font-manrope text-(--color-text)"
 					/>
-					<kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[color-mix(in_srgb,var(--color-text)_30%,transparent)] bg-[var(--color-surface)] border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded px-1.5 py-0.5 font-mono">
-							⌘K
+					<kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[color-mix(in_srgb,var(--color-text)_30%,transparent)] bg-(--color-surface) border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded px-1.5 py-0.5 font-mono">
+							{/* ⌘K */}
+							Ctrl + K
 						</kbd>
 					</div>
 				</div>
@@ -183,7 +184,7 @@ function Sidebar({
 function CodeBlock({ children }: { children: React.ReactNode }) {
 	const [copied, setCopied] = useState(false);
 	return (
-		<div className="relative group bg-[var(--color-text)] rounded-xl p-4 my-4">
+		<div className="relative group bg-(--color-text) rounded-xl p-4 my-4">
 			<button
 				onClick={() => {
 					navigator.clipboard.writeText(
@@ -195,12 +196,12 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 				className="absolute top-3 right-3 text-white/40 hover:text-white transition-colors"
 			>
 				{copied ? (
-					<Check size={14} className="text-[var(--color-primary)]" />
+					<Check size={14} className="text-(--color-primary)" />
 				) : (
 					<Clipboard size={14} />
 				)}
 			</button>
-			<pre className="text-sm font-mono text-[var(--color-primary)] overflow-x-auto whitespace-pre-wrap">
+			<pre className="text-sm font-mono text-(--color-primary) overflow-x-auto whitespace-pre-wrap">
 				{children}
 			</pre>
 		</div>
@@ -209,7 +210,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 
 function Callout({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="bg-[color-mix(in_srgb,var(--color-primary)_5%,transparent)] border-l-4 border-[var(--color-primary)] p-4 rounded-r-lg text-sm text-[var(--color-text)] my-6 font-manrope">
+		<div className="bg-[color-mix(in_srgb,var(--color-primary)_5%,transparent)] border-l-4 border-(--color-primary) p-4 rounded-r-lg text-sm text-(--color-text) my-6 font-manrope">
 			{children}
 		</div>
 	);
@@ -224,7 +225,7 @@ function renderSections(sections: Section[]) {
 						key={i}
 						id={s.id}
 						data-heading={s.id}
-						className="text-xl font-bold text-[var(--color-text)] mt-10 mb-3 pb-2 border-b border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] font-manrope"
+						className="text-xl font-bold text-(--color-text) mt-10 mb-3 pb-2 border-b border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] font-manrope"
 					>
 						{s.content}
 					</h2>
@@ -233,7 +234,7 @@ function renderSections(sections: Section[]) {
 				return (
 					<h3
 						key={i}
-						className="text-base font-bold text-[var(--color-text)] mt-6 mb-2 font-manrope"
+						className="text-base font-bold text-(--color-text) mt-6 mb-2 font-manrope"
 					>
 						{s.content}
 					</h3>
@@ -281,11 +282,11 @@ function renderSections(sections: Section[]) {
 								>
 									<Check
 										size={16}
-										className="text-[var(--color-primary)] mt-[5px] shrink-0"
+										className="text-(--color-primary) mt-1.25 shrink-0"
 									/>
 									<span>
 										<strong
-											className="text-[var(--color-text)] font-semibold"
+											className="text-(--color-text) font-semibold"
 											dangerouslySetInnerHTML={{ __html: linkedTitle + ":" }}
 										/>{" "}
 										<span dangerouslySetInnerHTML={{ __html: linkedDesc }} />
@@ -334,7 +335,7 @@ function renderSections(sections: Section[]) {
 									{headers.map((h) => (
 										<th
 											key={h}
-											className="text-left py-3 pr-4 font-bold text-[var(--color-text)] font-manrope"
+											className="text-left py-3 pr-4 font-bold text-(--color-text) font-manrope"
 										>
 											{h}
 										</th>
@@ -350,7 +351,7 @@ function renderSections(sections: Section[]) {
 										{row.map((cell, ci) => (
 											<td
 												key={ci}
-												className={`py-3 ${ci === 0 ? "pr-4 font-semibold text-[var(--color-text)] font-manrope" : ci === 1 ? "px-4 text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] font-manrope" : "pl-4 text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] font-manrope"}`}
+												className={`py-3 ${ci === 0 ? "pr-4 font-semibold text-(--color-text) font-manrope" : ci === 1 ? "px-4 text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] font-manrope" : "pl-4 text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] font-manrope"}`}
 											>
 												{cell}
 											</td>
@@ -371,7 +372,7 @@ function renderSections(sections: Section[]) {
 								key={title}
 								className="border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--color-primary)_3%,transparent)]"
 							>
-								<h4 className="text-sm font-bold text-[var(--color-text)] mb-1 font-manrope">
+								<h4 className="text-sm font-bold text-(--color-text) mb-1 font-manrope">
 									{title}
 								</h4>
 								<p className="text-sm text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] leading-6 font-manrope">
@@ -479,9 +480,9 @@ export default function Documentation() {
 
 	if (!page) {
 		return (
-			<div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)]">
+			<div className="min-h-screen flex items-center justify-center bg-(--color-bg)">
 				<div className="text-center">
-					<h1 className="text-2xl font-bold text-[var(--color-text)] mb-2 font-manrope">
+					<h1 className="text-2xl font-bold text-(--color-text) mb-2 font-manrope">
 						Page not found
 					</h1>
 					<p className="text-[color-mix(in_srgb,var(--color-text)_50%,transparent)] mb-4 font-manrope">
@@ -489,7 +490,7 @@ export default function Documentation() {
 					</p>
 					<Link
 						to="/documentation/introduction"
-						className="text-[var(--color-primary)] hover:underline font-medium font-manrope"
+						className="text-(--color-primary) hover:underline font-medium font-manrope"
 					>
 						Back to Introduction
 					</Link>
@@ -505,7 +506,7 @@ export default function Documentation() {
 				<header className="h-14 border-b border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_80%,transparent)] backdrop-blur-xl flex items-center px-4 lg:px-6 shrink-0 sticky top-0 z-30">
 					<button
 						onClick={() => setSidebarOpen(true)}
-						className="lg:hidden text-[color-mix(in_srgb,var(--color-text)_50%,transparent)] hover:text-[var(--color-text)] mr-3"
+						className="lg:hidden text-[color-mix(in_srgb,var(--color-text)_50%,transparent)] hover:text-(--color-text) mr-3"
 					>
 						<Menu size={18} />
 					</button>
@@ -530,7 +531,7 @@ export default function Documentation() {
 
 					<Link
 						to="/"
-						className="font-bold text-sm text-[var(--color-text)] font-manrope"
+						className="font-bold text-sm text-(--color-text) font-manrope"
 					>
 						FlowDesk
 					</Link>
@@ -548,7 +549,7 @@ export default function Documentation() {
 					{isDark ? <Sun size={20} /> : <Moon size={20} />}
 				</button>
 				<Link
-					to="https://github.com/Lakshya52/flowdesk-aceone-internal-software/"
+					to="https://github.com/Lakshya52/flowdesk/"
 					target="_blank"
 					className="text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text) transition-colors hidden sm:inline"
 				>
@@ -608,7 +609,7 @@ export default function Documentation() {
 							))}
 						</nav>
 
-						<h1 className="text-3xl font-bold text-[var(--color-text)] mb-2 font-manrope">
+						<h1 className="text-3xl font-bold text-(--color-text) mb-2 font-manrope">
 							{page.title}
 						</h1>
 						<p className="text-[color-mix(in_srgb,var(--color-text)_50%,transparent)] text-sm mb-2 font-manrope">
@@ -626,7 +627,7 @@ export default function Documentation() {
 							{page.prev ? (
 								<Link
 									to={`/documentation/${page.prev.slug}`}
-									className="flex items-center gap-1 text-sm text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-[var(--color-primary)] transition-colors font-manrope"
+									className="flex items-center gap-1 text-sm text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-primary) transition-colors font-manrope"
 								>
 									<ArrowLeft size={14} />
 									{page.prev.title}
@@ -637,7 +638,7 @@ export default function Documentation() {
 							{page.next ? (
 								<Link
 									to={`/documentation/${page.next.slug}`}
-									className="flex items-center gap-1 text-sm text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-[var(--color-primary)] transition-colors font-manrope"
+									className="flex items-center gap-1 text-sm text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-primary) transition-colors font-manrope"
 								>
 									{page.next.title}
 									<ArrowRight size={14} />
@@ -649,7 +650,7 @@ export default function Documentation() {
 					</div>
 				</main>
 
-			<aside className="hidden xl:block w-[200px] shrink-0 border-l border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] h-[calc(100vh-3.5rem)] sticky top-14 overflow-y-auto">
+			<aside className="hidden xl:block w-50 shrink-0 border-l border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] h-[calc(100vh-3.5rem)] sticky top-14 overflow-y-auto">
 				<div ref={tocRef} className="px-4 py-8">
 					<h4 className="text-[11px] uppercase tracking-wide text-[color-mix(in_srgb,var(--color-primary)_50%,transparent)] mb-3 font-bold font-manrope">
 						On this page
@@ -661,7 +662,7 @@ export default function Documentation() {
 								data-toc-heading={h.id}
 								href={`#${h.id}`}
 								onClick={(e) => {
-									e.preventDefault();
+									e.preventDefault(); 
 									const el = document.getElementById(h.id);
 									if (el)
 										el.scrollIntoView({
@@ -670,8 +671,8 @@ export default function Documentation() {
 								}}
 								className={`text-sm py-1 transition-colors font-manrope ${
 									activeHeading === h.id
-										? "text-[var(--color-text)] font-semibold"
-										: "text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-[var(--color-text)]"
+										? "text-(--color-text) font-semibold"
+										: "text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text)"
 								}`}
 							>
 								{h.text}

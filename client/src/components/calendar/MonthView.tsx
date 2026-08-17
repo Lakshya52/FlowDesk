@@ -33,7 +33,7 @@ const MonthView: React.FC<MonthViewProps> = ({ events }) => {
 
   return (
     <div className='flex-1 flex flex-col h-full bg-(--color-surface) overflow-x-auto overflow-y-hidden'>
-      <div className='min-w-[500px] flex flex-col h-full'>
+      <div className='min-w-125 flex flex-col h-full'>
         {/* Days of week header */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', flexShrink: 0 }}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
