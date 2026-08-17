@@ -15,6 +15,12 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
 
+    /* Path aliases */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
     /* Explicit types for IDE */
     "types": ["react", "react-dom", "vite/client"],
 

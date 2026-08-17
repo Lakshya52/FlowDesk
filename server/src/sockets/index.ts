@@ -1,0 +1,2 @@
+export { emitTaskCreated, emitTaskUpdated, emitTaskDeleted, emitBoardCreated, emitBoardUpdated, emitBoardDeleted } from './taskSocket.service';
+export { emitLeadCreated, emitLeadUpdated, emitLeadDeleted, emitCampaignCreated, emitCampaignUpdated, emitCampaignDeleted } from './crmSocket.service';

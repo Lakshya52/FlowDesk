@@ -18,41 +18,41 @@ import { Server } from "socket.io";
 import http from "http";
 import dns from "node:dns";
 
-import buddyRoute from "./routes/buddy";
-import { authenticate } from "./middlewares/auth";
+import buddyRoute from "./modules/auth/buddy.routes";
+import { authenticate } from "./shared/middlewares/auth.middleware";
 
 // Force DNS to resolve IPv4 first to avoid Atlas connection issues on Windows
 dns.setDefaultResultOrder("ipv4first");
 
-import authRoutes from "./routes/auth";
-import assignmentRoutes from "./routes/assignments";
-import taskRoutes from "./routes/tasks";
-import commentRoutes from "./routes/comments";
-import fileRoutes from "./routes/files";
-import notificationRoutes from "./routes/notifications";
-import dashboardRoutes from "./routes/dashboard";
-import teamRoutes from "./routes/teams";
-import chatRoutes from "./routes/chat";
-import reportRoutes from "./routes/reports";
-import companyRoutes from "./routes/companies";
-import canvasRoutes from "./routes/canvas";
-import conversationRoutes from "./routes/conversations";
-import calendarRoutes from "./routes/calendars";
-import calendarEventRoutes from "./routes/calendarEvents";
-import googleCalendarImport from "./routes/googleCalendarImport";
-import campaignRoutes from "./routes/campaigns";
-import leadRoutes from "./routes/leads";
-import userRoutes from "./routes/users";
-import activityLogRoutes from "./routes/activityLogs";
-import crmSummaryRoutes from "./routes/crmSummary";
-import fieldVisitRoutes from "./routes/fieldVisits";
-import settingsRoutes from "./routes/settings";
-import boardRoutes from "./routes/boards";
-import { startRecurringJob, stopRecurringJob } from "./services/recurringTaskService";
-import { startFieldVisitHeartbeat } from "./services/fieldVisitHeartbeatService";
-import backupRoutes from "./routes/backup";
-import { startBackupScheduler, stopBackupScheduler } from "./services/backupScheduleService";
-import { errorHandler, notFound } from "./middlewares/errorHandler";
+import authRoutes from "./modules/auth/auth.routes";
+import assignmentRoutes from "./modules/assignments/assignment.routes";
+import taskRoutes from "./modules/tasks/task.routes";
+import commentRoutes from "./modules/comments/comment.routes";
+import fileRoutes from "./modules/files/file.routes";
+import notificationRoutes from "./modules/notifications/notification.routes";
+import dashboardRoutes from "./modules/dashboard/dashboard.routes";
+import teamRoutes from "./modules/teams/team.routes";
+import chatRoutes from "./modules/chat/chat.routes";
+import reportRoutes from "./modules/reports/report.routes";
+import companyRoutes from "./modules/crm/company/company.routes";
+import canvasRoutes from "./modules/canvas/canvas.routes";
+import conversationRoutes from "./modules/conversations/conversation.routes";
+import calendarRoutes from "./modules/calendar/calendar.routes";
+import calendarEventRoutes from "./modules/calendar/calendarEvent.routes";
+import googleCalendarImport from "./modules/calendar/googleCalendarImport.routes";
+import campaignRoutes from "./modules/crm/campaigns/campaign.routes";
+import leadRoutes from "./modules/crm/leads/lead.routes";
+import userRoutes from "./modules/users/user.routes";
+import activityLogRoutes from "./modules/activityLogs/activityLog.routes";
+import crmSummaryRoutes from "./modules/crm/crmSummary/crmSummary.routes";
+import fieldVisitRoutes from "./modules/crm/fieldVisits/fieldVisit.routes";
+import settingsRoutes from "./modules/settings/settings.routes";
+import boardRoutes from "./modules/boards/board.routes";
+import { startRecurringJob, stopRecurringJob } from "./jobs/recurringTask.service";
+import { startFieldVisitHeartbeat } from "./modules/crm/fieldVisits/fieldVisitHeartbeat.service";
+import backupRoutes from "./modules/backup/backup.routes";
+import { startBackupScheduler, stopBackupScheduler } from "./jobs/backupSchedule.service";
+import { errorHandler, notFound } from "./shared/middlewares/errorHandler.middleware";
 
 const app = express();
 const server = http.createServer(app);
@@ -372,7 +372,7 @@ io.on("connection", (socket) => {
 
   socket.on("mark_messages_read", async ({ conversationId, readerId }) => {
     try {
-      const Message = (await import("./models/Message")).default;
+      const Message = (await import("./modules/conversations/message.model")).default;
       const readAt = new Date();
       await Message.updateMany(
         {
