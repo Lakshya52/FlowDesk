@@ -151,8 +151,3 @@ VITE_API_URL=http://localhost:5000
 
 ---
 
-## 📄 License
-
-This project is **proprietary and confidential**. Unauthorized use, distribution, or modification is strictly prohibited. All rights reserved.
-
----
