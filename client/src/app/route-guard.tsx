@@ -1,6 +1,6 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { getFirstAllowedRoute, navItems } from "@/layout/Sidebar";
+import { getFirstAllowedRoute, navItems } from "@/shared/navigation";
 import { useAuthStore } from "@/store/authStore";
 
 const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -23,8 +23,8 @@ const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 
   if (!isExactOrParentMatch && !isSubItemOfAllowedParent) {
-      console.log('[RouteGuard] BLOCKED — redirecting to', getFirstAllowedRoute(user));
-      return <Navigate to={getFirstAllowedRoute(user)} replace />;
+      console.log('[RouteGuard] BLOCKED — redirecting to', getFirstAllowedRoute(user as any));
+      return <Navigate to={getFirstAllowedRoute(user as any)} replace />;
   }
 
   return <>{children}</>;
