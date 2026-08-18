@@ -306,7 +306,7 @@ const AppInner: React.FC = () => {
         </Route>
         <Route path="*" element={<ProtectedNotFound />} />
       </Routes>
-      {showFooter && <Footer />}
+      {/* {showFooter && <Footer />} */}
     </>
   );
 };

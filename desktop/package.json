@@ -60,7 +60,7 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": false,

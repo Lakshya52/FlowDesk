@@ -1,7 +1,5 @@
-import { useState, useEffect, type ComponentType } from "react"
-import {
-  ChevronDown, Download, Apple, Loader2, AlertCircle, RefreshCw, Calendar, Tag,
-} from "lucide-react"
+import { useState, useEffect } from "react"
+import { ChevronDown, Download, Loader2, AlertCircle, RefreshCw, Calendar, Tag } from "lucide-react"
 
 interface DownloadLink {
   label: string
@@ -10,7 +8,7 @@ interface DownloadLink {
 
 interface OsDownloads {
   os: string
-  icon: ComponentType<{ size?: number; className?: string }>
+  icon: string
   links: DownloadLink[]
 }
 
@@ -23,22 +21,22 @@ interface ReleaseData {
 
 const GITHUB_API = "https://api.github.com/repos/Lakshya52/FlowDesk/releases?per_page=10"
 
-const WindowsIcon: ComponentType<{ size?: number; className?: string }> = ({ size = 20, className }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="8" height="8" rx="1" />
-    <rect x="13" y="3" width="8" height="8" rx="1" />
-    <rect x="3" y="13" width="8" height="8" rx="1" />
-    <rect x="13" y="13" width="8" height="8" rx="1" />
-  </svg>
-)
+// const WindowsIcon: ComponentType<{ size?: number; className?: string }> = ({ size = 20, className }) => (
+//   <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+//     <rect x="3" y="3" width="8" height="8" rx="1" />
+//     <rect x="13" y="3" width="8" height="8" rx="1" />
+//     <rect x="3" y="13" width="8" height="8" rx="1" />
+//     <rect x="13" y="13" width="8" height="8" rx="1" />
+//   </svg>
+// )
 
-const LinuxIcon: ComponentType<{ size?: number; className?: string }> = ({ size = 20, className }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="5" r="2.5" />
-    <path d="M9 8h6l1.5 3.5L18 13v3l-1.5 1.5L15 16l-1 2h-4l-1-2-1.5 1.5L6 16v-3l1.5-1.5L9 8Z" />
-    <path d="M9 16v3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-3" />
-  </svg>
-)
+// const LinuxIcon: ComponentType<{ size?: number; className?: string }> = ({ size = 20, className }) => (
+//   <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+//     <circle cx="12" cy="5" r="2.5" />
+//     <path d="M9 8h6l1.5 3.5L18 13v3l-1.5 1.5L15 16l-1 2h-4l-1-2-1.5 1.5L6 16v-3l1.5-1.5L9 8Z" />
+//     <path d="M9 16v3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-3" />
+//   </svg>
+// )
 
 function skipAsset(name: string): boolean {
   return /latest\.yml|\.blockmap|builder-debug\.yml/i.test(name)
@@ -52,6 +50,14 @@ function categorizeAsset(name: string, version: string): { os: string; label: st
     return { os: "macOS", label: `macOS ${arch} (.dmg)` }
   }
 
+  if (base.includes(".apk")) {
+    return { os: "Android", label: "Android (.apk)" }
+  }
+
+  if (base.includes(".appimage")) {
+    return { os: "Linux", label: "Linux x64 (.AppImage)" }
+  }
+
   if (base.includes(".tar.gz")) {
     const arch = base.includes("arm64") ? "ARM64" : "x64"
     return { os: "Linux", label: `Linux ${arch} (.tar.gz)` }
@@ -62,18 +68,19 @@ function categorizeAsset(name: string, version: string): { os: string; label: st
       return { os: "Windows", label: "Windows ARM64 (.exe)" }
     }
     if (base.includes("setup")) {
-      return { os: "Windows", label: "Windows x64 (.exe)" }
+      return { os: "Windows", label: "Windows x64 Installer (.exe)" }
     }
-    return null
+    return { os: "Windows", label: "Windows x64 Portable (.exe)" }
   }
 
   return null
 }
 
-const osIcons: Record<string, ComponentType<{ size?: number; className?: string }>> = {
-  macOS: Apple,
-  Windows: WindowsIcon,
-  Linux: LinuxIcon,
+const osIcons: Record<string, string> = {
+  macOS: "/AppleIcon.svg",
+  Windows: "/WindowsIcon.svg",
+  Linux: "/LinuxIcon.svg",
+  Android: "/AndroidIcon.svg",
 }
 
 function buildDownloads(assets: { name: string; browser_download_url: string }[], version: string): OsDownloads[] {
@@ -89,7 +96,7 @@ function buildDownloads(assets: { name: string; browser_download_url: string }[]
 
   return Array.from(map.entries()).map(([os, links]) => ({
     os,
-    icon: osIcons[os] || WindowsIcon,
+    icon: osIcons[os] || "/WindowsIcon.svg",
     links,
   }))
 }
@@ -107,11 +114,11 @@ function formatDate(dateStr: string): string {
   }
 }
 
-function DownloadCard({ os, icon: Icon, links }: OsDownloads) {
+function DownloadCard({ os, icon, links }: OsDownloads) {
   return (
     <div className="border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-colors">
       <div className="flex items-center gap-2 mb-3">
-        <Icon size={20} className="text-gray-700" />
+        <img src={icon} alt={os} className="w-5 h-5" />
         <h4 className="text-sm font-semibold text-gray-900">{os}</h4>
       </div>
       <div className="flex flex-col gap-2">
@@ -130,14 +137,7 @@ function DownloadCard({ os, icon: Icon, links }: OsDownloads) {
   )
 }
 
-function VersionCard({
-  version,
-  isLatest,
-  isOpen,
-  onToggle,
-  downloads,
-  published,
-}: {
+function VersionCard({ version, isLatest, isOpen, onToggle, downloads, published }: {
   version: string
   isLatest?: boolean
   isOpen: boolean
@@ -146,11 +146,7 @@ function VersionCard({
   published: string
 }) {
   return (
-    <div className={`rounded-2xl border transition-all duration-300 ${
-      isOpen
-        ? "border-[#a87ef7]/30 shadow-sm shadow-[#a87ef7]/10"
-        : "border-gray-200 hover:border-gray-300"
-    } ${isLatest ? "bg-white" : "bg-white/80"}`}
+    <div className={`rounded-2xl border transition-all duration-300 ${ isOpen ? "border-[#a87ef7]/30 shadow-sm shadow-[#a87ef7]/10" : "border-gray-200 hover:border-gray-300" } ${isLatest ? "bg-white" : "bg-white/80"}`}
     >
       <button
         onClick={onToggle}
@@ -191,7 +187,7 @@ function VersionCard({
               No download assets available for this release.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               {downloads.map((os) => (
                 <DownloadCard key={os.os} {...os} />
               ))}
@@ -245,7 +241,7 @@ export default function Releases() {
   }, [])
 
   return (
-    <div className="min-h-screen w-full">
+    <div className="min-h-screen w-full bg-[#f8fafc]">
       {/* Hero */}
       <div className="relative overflow-hidden min-h-75 max-h-125 h-[60dvh] md:h-[70dvh] w-full bg-white">
         <div className="sm:flex hidden h-full w-full absolute inset-0">
@@ -275,7 +271,7 @@ export default function Releases() {
       </div>
 
       {/* Content */}
-      <div className="w-[90dvw] sm:w-[80vw] md:w-[75vw] mx-auto -mt-6 relative z-10 pb-16">
+      <div className="w-[90dvw] sm:w-[80vw] md:w-[75vw] mx-auto -mt-6 relative z-10 pb-16 ">
         {loading && (
           <div className="flex items-center justify-center py-20 text-gray-400 bg-white rounded-2xl border border-gray-200">
             <Loader2 size={24} className="animate-spin mr-3" />
