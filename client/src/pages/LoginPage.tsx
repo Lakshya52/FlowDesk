@@ -2,7 +2,11 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { getFirstAllowedRoute } from "../components/layout/Sidebar";
-import { Eye, EyeOff, ArrowLeft, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, CheckCircle, Sun, Moon } from "lucide-react";
+import { useThemeStore } from "../store/themeStore";
+
+
+
 
 type ViewState =
 	| "login"
@@ -97,19 +101,18 @@ const LoginPage: React.FC = () => {
 			setError(err.message);
 		}
 	};
+	
+	const { isDark, toggle } = useThemeStore();
 
 	return (
-		<div
-			style={{
-				minHeight: "100vh",
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
-				background: "var(--color-bg)",
-				padding: window.innerWidth < 768 ? 16 : 24,
-				position: "relative",
-			}}
+	
+		
+		
+		<div className=" relative min-h-screen flex flex-col items-center justify-between bg-(--color-bg) "
+			style={{ padding: window.innerWidth < 768 ? 16 : 24, }}
 		>
+			<div className="flex itens-center justify-between w-full">
+
 			{/* Back Button */}
 			<button
 				onClick={() => {
@@ -125,23 +128,26 @@ const LoginPage: React.FC = () => {
 						navigate("/");
 					}
 				}}
-				className="btn btn-ghost"
-				style={{
-					position: "absolute",
-					top: 24,
-					left: 24,
-					gap: 8,
-					color: "var(--color-text-secondary)",
-					fontWeight: 500,
-				}}
+				className="btn btn-ghost  top-6 left-6 flex items-center gap-2 text-(--color-text-secondary) font-medium"
 			>
 				<ArrowLeft size={18} />{" "}
 				{view === "login" ? "Back" : "Back to Login"}
 			</button>
 
+
+			{/* theme changing button */}
+			<button
+				className="btn btn-ghost btn-sm"
+				onClick={toggle}
+				title="Toggle theme"
+				>
+				{isDark ? <Sun size={20} /> : <Moon size={20} />}
+			</button>
+			</div>
+
 			<div
-				className="animate-fade-in"
-				style={{ width: "100%", maxWidth: 400 }}
+				className="animate-fade-in h-[90dvh] flex flex-col items-center justify-center w-full"
+				style={{ maxWidth: 400 }}
 			>
 				{/* Brand */}
 				<div style={{ textAlign: "center", marginBottom: 40 }}>
@@ -190,7 +196,7 @@ const LoginPage: React.FC = () => {
 				</div>
 
 				{/* Form Card */}
-				<div className="card" style={{ padding: 32 }}>
+				<div className="card w-full" style={{ padding: 32 }}>
 					{error && (
 						<div
 							style={{
@@ -660,6 +666,7 @@ const LoginPage: React.FC = () => {
 				</div>
 			</div>
 		</div>
+		
 	);
 };
 

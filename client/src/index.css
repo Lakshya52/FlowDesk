@@ -217,8 +217,13 @@ body {
   cursor: pointer;
   transition: all 0.15s ease;
   border: none;
+  /* margin: 1; */
   outline: none;
   white-space: nowrap;
+}
+.btn:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .btn:disabled {

@@ -12,7 +12,7 @@ const Navbar = () => {
 					{/* Logo */}
 					<Link
 						to="/"
-						className="text-[#0a0038] font-manrope-bold text-xl tracking-tight pl-5 flex items-center gap-2 w-1/2 sm:w-1/3"
+						className="text-[#0a0038] outline-none font-manrope-bold text-xl tracking-tight pl-5 flex items-center gap-2 w-1/2 sm:w-1/3"
 					>
                         <div
 						style={{
@@ -44,7 +44,9 @@ const Navbar = () => {
 							<Link
 								key={link.name}
 								to={link.href}
-								className="text-[#0a0038] font-manrope hover:text-[#0a0038]/50 text-sm font-medium tracking-wide transition-colors duration-100"
+								className={`text-[#0a0038] focus:text-(--color-primary) focus:text-bold font-manrope hover:text-[#0a0038]/50 text-sm font-medium tracking-wide transition-colors duration-100  focus:outline-(--color-primary) focus:outline rounded-full px-2  focus:outline-offset-2 
+								
+								`}
 							>
 								{link.name}
 							</Link>
@@ -57,7 +59,7 @@ const Navbar = () => {
 					{/* CTA */}
 					<Link
 						to="/login"
-						className="bg-white text-[#0a0038] font-bold text-sm px-5 py-2.5 rounded-full cursor-pointer hover:bg-[#0a0038] hover:text-white font-manrope transition-colors duration-200 inline-flex items-center "
+						className="bg-white text-[#0a0038] font-bold text-sm px-5 py-2.5 rounded-full cursor-pointer hover:bg-[#0a0038] hover:text-white font-manrope transition-colors duration-200 inline-flex items-center focus:outline focus:outline-offset-2 focus:outline-(--color-primary)"
                         >
 						<span className="sm:block hidden ">Get Started</span>
 						<span className="sm:hidden block">
