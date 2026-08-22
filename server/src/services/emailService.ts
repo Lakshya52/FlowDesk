@@ -38,7 +38,7 @@ export const sendOtpEmail = async (to: string, otp: string) => {
             to: [{ email: to }]
         });
 
-        console.log(`[EMAIL] ✅ OTP sent successfully. ID: ${result.messageId}`);
+        // console.log(`[EMAIL] ✅ OTP sent successfully. ID: ${result.messageId}`);
     } catch (error) {
         console.error(`[EMAIL] ❌ Failed to send OTP to ${to}:`, error);
         throw error;

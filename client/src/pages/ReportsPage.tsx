@@ -228,7 +228,7 @@ const ReportsPage = (): React.JSX.Element => {
         </div>
       </div>
 
-      <div className="max-w-350 mx-auto px-4 sm:px-6 lg:px-12 mt-6 sm:mt-8">
+      <div className="max-w-350 mx-auto mt-6 sm:mt-8">
 
 
         {/* Filters Section */}

@@ -5,9 +5,6 @@ import { getFirstAllowedRoute } from "../components/layout/Sidebar";
 import { Eye, EyeOff, ArrowLeft, CheckCircle, Sun, Moon } from "lucide-react";
 import { useThemeStore } from "../store/themeStore";
 
-
-
-
 type ViewState =
 	| "login"
 	| "forgot-email"
@@ -72,7 +69,7 @@ const LoginPage: React.FC = () => {
 			await forgotPassword(trimmedEmail);
 			setView("forgot-otp");
 			setSuccessMsg(
-				"If an account exists, an OTP has been sent to your email.",
+				"An OTP has been sent to your email. It is valid for 15 minutes.",
 			);
 		} catch (err: any) {
 			setError(getErrorMessage(err));
@@ -101,92 +98,59 @@ const LoginPage: React.FC = () => {
 			setError(err.message);
 		}
 	};
-	
+
 	const { isDark, toggle } = useThemeStore();
 
 	return (
-	
-		
-		
-		<div className=" relative min-h-screen flex flex-col items-center justify-between bg-(--color-bg) "
-			style={{ padding: window.innerWidth < 768 ? 16 : 24, }}
+		<div
+			className=" relative min-h-screen flex flex-col items-center justify-between bg-(--color-bg) "
+			style={{ padding: window.innerWidth < 768 ? 16 : 24 }}
 		>
 			<div className="flex itens-center justify-between w-full">
-
-			{/* Back Button */}
-			<button
-				onClick={() => {
-					if (
-						view !== "login" &&
-						view !== "forgot-success" &&
-						view !== "change-password"
-					) {
-						setView("login");
-						setError("");
-						setSuccessMsg("");
-					} else {
-						navigate("/");
-					}
-				}}
-				className="btn btn-ghost  top-6 left-6 flex items-center gap-2 text-(--color-text-secondary) font-medium"
-			>
-				<ArrowLeft size={18} />{" "}
-				{view === "login" ? "Back" : "Back to Login"}
-			</button>
-
-
-			{/* theme changing button */}
-			<button
-				className="btn btn-ghost btn-sm"
-				onClick={toggle}
-				title="Toggle theme"
+				{/* Back Button */}
+				<button
+					onClick={() => {
+						if (
+							view !== "login" &&
+							view !== "forgot-success" &&
+							view !== "change-password"
+						) {
+							setView("login");
+							setError("");
+							setSuccessMsg("");
+						} else {
+							navigate("/");
+						}
+					}}
+					className="btn btn-ghost top-6 left-6 flex items-center gap-2 text-(--color-text-secondary) font-medium"
 				>
-				{isDark ? <Sun size={20} /> : <Moon size={20} />}
-			</button>
+					<ArrowLeft size={18} />{" "}
+					{view === "login" ? "Back" : "Back to Login"}
+				</button>
+
+				{/* theme changing button */}
+				<button
+					className="btn btn-ghost btn-sm"
+					onClick={toggle}
+					title="Toggle theme"
+				>
+					{isDark ? <Sun size={20} /> : <Moon size={20} />}
+				</button>
 			</div>
 
-			<div
-				className="animate-fade-in h-[90dvh] flex flex-col items-center justify-center w-full"
-				style={{ maxWidth: 400 }}
-			>
+            {/* main */}
+			<div className="animate-fade-in h-[90dvh] flex flex-col items-center justify-center w-full max-w-100">
 				{/* Brand */}
-				<div style={{ textAlign: "center", marginBottom: 40 }}>
-					<div
-						style={{
-							width: 48,
-							height: 48,
-							borderRadius: 14,
-							// background: 'linear-gradient(135deg, var(--color-primary), #a78bfa)',
-							display: "inline-flex",
-							alignItems: "center",
-							justifyContent: "center",
-							marginBottom: 16,
-						}}
-						className="overflow-hidden"
-					>
+				<div className="flex flex-col items-center mb-10">
+					<div className="w-12 h-12 rounded-2xl inline-flex items-center justify-center mb-4 overflow-hidden">
 						<img
 							src="/icon.ico"
 							alt="FlowDesk logo"
 							className="rounded-xl scale-125"
 						/>
-						{/* <Zap size={24} color="white" /> */}
 					</div>
-					<h1
-						style={{
-							fontSize: "1.5rem",
-							fontWeight: 700,
-							letterSpacing: "-0.02em",
-						}}
-					>
-						FlowDesk
-					</h1>
-					<p
-						style={{
-							color: "var(--color-text-secondary)",
-							fontSize: "0.875rem",
-							marginTop: 4,
-						}}
-					>
+					<h1 className="text-2xl font-bold ">FlowDesk - Sign In</h1>
+					<p className="text-(--color-text-secondary) text-[0.875rem] mt-1">
 						{view === "login" && "Sign in to your workspace"}
 						{view === "forgot-email" && "Reset your password"}
 						{view === "forgot-otp" && "Verify your email"}
@@ -199,30 +163,16 @@ const LoginPage: React.FC = () => {
 				<div className="card w-full" style={{ padding: 32 }}>
 					{error && (
 						<div
-							style={{
-								padding: "10px 14px",
-								borderRadius: 8,
-								background: "var(--color-danger-light)",
-								color: "var(--color-danger)",
-								fontSize: "0.8125rem",
-								fontWeight: 500,
-								marginBottom: 20,
-							}}
+							className="py-2.5 px-3.5 rounded-lg bg-(--color-danger-light) font-medium mb-5"
+							style={{ fontSize: "0.8125rem" }}
 						>
 							{error}
 						</div>
 					)}
 					{successMsg && (
 						<div
-							style={{
-								padding: "10px 14px",
-								borderRadius: 8,
-								background: "var(--color-success-light)",
-								color: "var(--color-success)",
-								fontSize: "0.8125rem",
-								fontWeight: 500,
-								marginBottom: 20,
-							}}
+							className="py-2.5 px-3.5 rounded-lg bg-(--color-success-light) text-(--color-success) font-medium mb-5"
+							style={{ fontSize: "0.8125rem" }}
 						>
 							{successMsg}
 						</div>
@@ -232,21 +182,12 @@ const LoginPage: React.FC = () => {
 					{view === "login" && (
 						<form
 							onSubmit={handleLoginSubmit}
-							style={{
-								display: "flex",
-								flexDirection: "column",
-								gap: 20,
-							}}
+							className="flex flex-col gap-5"
 						>
 							<div>
 								<label
-									style={{
-										display: "block",
-										fontSize: "0.8125rem",
-										fontWeight: 500,
-										marginBottom: 6,
-										color: "var(--color-text-secondary)",
-									}}
+									className="block font-medium mb-1.5 text-(--color-text-secondary)"
+									style={{ fontSize: "0.8125rem" }}
 								>
 									Email address
 								</label>
@@ -262,33 +203,14 @@ const LoginPage: React.FC = () => {
 							</div>
 
 							<div>
-								<div
-									style={{
-										display: "flex",
-										justifyContent: "space-between",
-										alignItems: "center",
-										marginBottom: 6,
-									}}
-								>
-									<label
-										style={{
-											fontSize: "0.8125rem",
-											fontWeight: 500,
-											color: "var(--color-text-secondary)",
-										}}
-									>
+								<div className="flex justify-between items-center mb-1.5 text-(--color-text-secondary) font-medium">
+									<label style={{ fontSize: "0.8125rem" }} >
 										Password
 									</label>
 									<button
 										type="button"
-										style={{
-											fontSize: "0.75rem",
-											color: "var(--color-primary)",
-											background: "none",
-											border: "none",
-											cursor: "pointer",
-											fontWeight: 500,
-										}}
+										className="text-(--color-primary) border-none bg-none cursor-pointer font-medium"
+										style={{ fontSize: "0.75rem" }}
 										onClick={() => {
 											setView("forgot-email");
 											setError("");
@@ -300,29 +222,19 @@ const LoginPage: React.FC = () => {
 								<div style={{ position: "relative" }}>
 									<input
 										type={showPw ? "text" : "password"}
-										className="input"
+										className="input pr-10"
 										value={password}
 										onChange={(e) =>
 											setPassword(e.target.value)
 										}
 										placeholder="Enter your password"
 										required
-										style={{ paddingRight: 40 }}
+										// style={{ paddingRight: 40 }}
 									/>
 									<button
 										type="button"
 										onClick={() => setShowPw(!showPw)}
-										style={{
-											position: "absolute",
-											right: 8,
-											top: "50%",
-											transform: "translateY(-50%)",
-											background: "none",
-											border: "none",
-											cursor: "pointer",
-											padding: 4,
-											color: "var(--color-text-tertiary)",
-										}}
+										className="absolute right-2 top-[50%] translate-y-[-50%] bg-none border-none cursor-pointer p-1 text-(--color-text-tertiary)"
 									>
 										{showPw ? (
 											<EyeOff size={16} />
@@ -335,14 +247,9 @@ const LoginPage: React.FC = () => {
 
 							<button
 								type="submit"
-								className="btn btn-primary"
+								className="btn btn-primary w-full py-2.5 px-4 mt-1"
 								disabled={isLoading}
-								style={{
-									width: "100%",
-									padding: "10px 16px",
-									fontSize: "0.875rem",
-									marginTop: 4,
-								}}
+								style={{ fontSize: "0.875rem" }}
 							>
 								{isLoading ? "Signing in..." : "Sign in"}
 							</button>
@@ -353,18 +260,13 @@ const LoginPage: React.FC = () => {
 					{view === "forgot-email" && (
 						<form
 							onSubmit={handleForgotEmailSubmit}
-							style={{
-								display: "flex",
-								flexDirection: "column",
-								gap: 20,
-							}}
+							className="flex flex-col gap-5"
 						>
 							<p
+								className="text-(--color-text-secondary) m-0"
 								style={{
 									fontSize: "0.875rem",
-									color: "var(--color-text-secondary)",
 									lineHeight: 1.5,
-									margin: 0,
 								}}
 							>
 								Enter the email address associated with your
@@ -373,12 +275,9 @@ const LoginPage: React.FC = () => {
 							</p>
 							<div>
 								<label
+									className="block font-medium mb-1.5 text-(--color-text-secondary)"
 									style={{
-										display: "block",
 										fontSize: "0.8125rem",
-										fontWeight: 500,
-										marginBottom: 6,
-										color: "var(--color-text-secondary)",
 									}}
 								>
 									Email address
@@ -396,14 +295,8 @@ const LoginPage: React.FC = () => {
 
 							<button
 								type="submit"
-								className="btn btn-primary"
-								disabled={isLoading || !email}
-								style={{
-									width: "100%",
-									padding: "10px 16px",
-									fontSize: "0.875rem",
-									marginTop: 4,
-								}}
+								className="btn btn-primary w-full py-2.5 px-4 mt-1"
+								disabled={isLoading || !email.includes("@")}
 							>
 								{isLoading
 									? "Sending..."
@@ -416,38 +309,43 @@ const LoginPage: React.FC = () => {
 					{view === "forgot-otp" && (
 						<form
 							onSubmit={handleForgotOtpSubmit}
+							className="flex flex-col gap-5"
+						>
+						<p
+							className="text-(--color-text-secondary) m-0"
 							style={{
-								display: "flex",
-								flexDirection: "column",
-								gap: 20,
+								fontSize: "0.875rem",
+								lineHeight: 1.5,
 							}}
 						>
-							<p
-								style={{
-									fontSize: "0.875rem",
-									color: "var(--color-text-secondary)",
-									lineHeight: 1.5,
-									margin: 0,
+							We've sent a 6-digit code to{" "}
+							<strong>{email}</strong>.{" "}
+							<button
+								type="button"
+								className="text-(--color-primary) border-none bg-none cursor-pointer font-medium p-0"
+								style={{ fontSize: "0.875rem" }}
+								onClick={() => {
+									setOtp("");
+									setError("");
+									setSuccessMsg("");
+									setView("forgot-email");
 								}}
 							>
-								We've sent a 6-digit code to{" "}
-								<strong>{email}</strong>. Please enter it below.
-							</p>
+								Change email
+							</button>
+						</p>
 							<div>
 								<label
+									className="block font-medium mb-1.5 text-(--color-text-secondary)"
 									style={{
-										display: "block",
 										fontSize: "0.8125rem",
-										fontWeight: 500,
-										marginBottom: 6,
-										color: "var(--color-text-secondary)",
 									}}
 								>
 									6-Digit Code
 								</label>
 								<input
 									type="text"
-									className="input"
+									className="input text-center font-semibold"
 									value={otp}
 									onChange={(e) =>
 										setOtp(
@@ -461,22 +359,17 @@ const LoginPage: React.FC = () => {
 									autoFocus
 									style={{
 										letterSpacing: "8px",
-										textAlign: "center",
 										fontSize: "1.25rem",
-										fontWeight: 600,
 									}}
 								/>
 							</div>
 
 							<button
 								type="submit"
-								className="btn btn-primary"
+								className="btn btn-primary w-full py-2.5 px-4 mt-1"
 								disabled={isLoading || otp.length !== 6}
 								style={{
-									width: "100%",
-									padding: "10px 16px",
 									fontSize: "0.875rem",
-									marginTop: 4,
 								}}
 							>
 								{isLoading ? "Verifying..." : "Verify Code"}
@@ -486,71 +379,36 @@ const LoginPage: React.FC = () => {
 
 					{/* FORGOT PASSWORD - SUCCESS VIEW */}
 					{view === "forgot-success" && (
-						<div
-							style={{
-								display: "flex",
-								flexDirection: "column",
-								gap: 20,
-								alignItems: "center",
-							}}
-						>
-							<div style={{ color: "var(--color-success)" }}>
+						<div className="flex flex-col gap-5 items-center" >
+							<div className="text-(--color-success)">
 								<CheckCircle size={48} />
 							</div>
-							<h2
-								style={{
-									fontSize: "1.25rem",
-									fontWeight: 600,
-									margin: 0,
-								}}
-							>
+							<h2 className="font-medium m-0 text-2xl" >
 								Verification Successful!
 							</h2>
 							<p
-								style={{
-									fontSize: "0.875rem",
-									color: "var(--color-text-secondary)",
-									textAlign: "center",
-									marginBottom: 10,
-								}}
+								className="text-(--color-text-secondary) text-center m-2.5"
+								style={{ fontSize: "0.875rem" }}
 							>
 								You are safely authenticated. Would you like to
 								set a new password or continue directly to your
 								dashboard?
 							</p>
 
-							<div
-								style={{
-									display: "flex",
-									flexDirection: "column",
-									gap: 12,
-									width: "100%",
-								}}
-							>
+							<div className="flex flex-col gap-3 w-full" >
 								<button
 									onClick={() => navigate(getFirstAllowedRoute(useAuthStore.getState().user))}
-									className="btn btn-primary"
-									style={{
-										width: "100%",
-										padding: "10px 16px",
-										fontSize: "0.875rem",
-									}}
+									className="btn btn-primary w-full py-2.5 px-4"
+									style={{ fontSize: "0.875rem" }}
 								>
 									Continue to Dashboard
 								</button>
 								<button
 									onClick={() => setView("change-password")}
-									className="btn btn-outline"
-									style={{
-										width: "100%",
-										padding: "10px 16px",
-										fontSize: "0.875rem",
-										background: "transparent",
-										border: "1px solid var(--color-border)",
-										color: "var(--color-text-primary)",
-									}}
+									className="btn btn-outline w-full py-2.5 px-4 bg-transparent border border-(--color-border) text-(--color-text-primary)"
+									style={{ fontSize: "0.875rem" }}
 								>
-									Change Password Now
+									Update Password
 								</button>
 							</div>
 						</div>
@@ -560,38 +418,28 @@ const LoginPage: React.FC = () => {
 					{view === "change-password" && (
 						<form
 							onSubmit={handleChangePasswordSubmit}
-							style={{
-								display: "flex",
-								flexDirection: "column",
-								gap: 20,
-							}}
+							className="flex flex-col gap-5"
 						>
 							<p
+								className="text-(--color-text-secondary) m-0"
 								style={{
 									fontSize: "0.875rem",
-									color: "var(--color-text-secondary)",
 									lineHeight: 1.5,
-									margin: 0,
 								}}
 							>
 								Please create a new password for your account.
 							</p>
 							<div>
 								<label
-									style={{
-										display: "block",
-										fontSize: "0.8125rem",
-										fontWeight: 500,
-										marginBottom: 6,
-										color: "var(--color-text-secondary)",
-									}}
+									className="block font-medium mb-1.5 text-(--color-text-secondary)"
+									style={{ fontSize: "0.8125rem" }}
 								>
 									New Password
 								</label>
-								<div style={{ position: "relative" }}>
+								<div className="relative">
 									<input
 										type={showPw ? "text" : "password"}
-										className="input"
+										className="input pr-10"
 										value={newPassword}
 										onChange={(e) =>
 											setNewPassword(e.target.value)
@@ -600,22 +448,11 @@ const LoginPage: React.FC = () => {
 										required
 										minLength={6}
 										autoFocus
-										style={{ paddingRight: 40 }}
 									/>
 									<button
 										type="button"
 										onClick={() => setShowPw(!showPw)}
-										style={{
-											position: "absolute",
-											right: 8,
-											top: "50%",
-											transform: "translateY(-50%)",
-											background: "none",
-											border: "none",
-											cursor: "pointer",
-											padding: 4,
-											color: "var(--color-text-tertiary)",
-										}}
+										className="absolute right-2 top-[50%] translate-y-[-50%] bg-none border-none cursor-pointer p-1 text-(--color-text-tertiary)"
 									>
 										{showPw ? (
 											<EyeOff size={16} />
@@ -628,13 +465,10 @@ const LoginPage: React.FC = () => {
 
 							<button
 								type="submit"
-								className="btn btn-primary"
+								className="btn btn-primary w-full py-2.5 px-4 mt-1"
 								disabled={isLoading || newPassword.length < 6}
 								style={{
-									width: "100%",
-									padding: "10px 16px",
 									fontSize: "0.875rem",
-									marginTop: 4,
 								}}
 							>
 								{isLoading
@@ -645,21 +479,13 @@ const LoginPage: React.FC = () => {
 					)}
 				</div>
 				<div
-					style={{
-						textAlign: "center",
-						marginTop: 20,
-						fontSize: "0.8125rem",
-						color: "var(--color-text-secondary)",
-					}}
+					className="text-center mt-5 text-(--color-text-secondary)"
+					style={{ fontSize: "0.8125rem" }}
 				>
 					New to FlowDesk?{" "}
 					<Link
 						to="/register"
-						style={{
-							color: "var(--color-primary)",
-							fontWeight: 500,
-							textDecoration: "none",
-						}}
+						className="text-(--color-primary) font-medium decoration-0"
 					>
 						Register here
 					</Link>

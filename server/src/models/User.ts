@@ -18,7 +18,7 @@ export interface IUser extends Document {
     avatar?: string;
     isActive: boolean;
     lastLogin?: Date;
-    resetPasswordOtp?: string;
+    resetPasswordOtpHash?: string;
     resetPasswordExpires?: Date;
     googleRefreshToken?: string;
     pushSubscriptions?: {
@@ -59,7 +59,7 @@ const userSchema = new Schema<IUser>(
             },
         ],
         lastLogin: { type: Date },
-        resetPasswordOtp: { type: String },
+        resetPasswordOtpHash: { type: String },
         resetPasswordExpires: { type: Date },
         googleRefreshToken : { type: String, default: null},
         permissions: {

@@ -20,6 +20,14 @@ const generateToken = (userId: string, tenantId?: string): string => {
 	} as jwt.SignOptions);
 };
 
+// HMAC-SHA256 keyed with the server secret — deterministic so lookups by
+// hash work, and safe against DB-dump brute force since the key stays server-side.
+const hashOtp = (otp: string): string =>
+	crypto
+		.createHmac("sha256", process.env.JWT_SECRET!)
+		.update(otp)
+		.digest("hex");
+
 export const register = async (
 	req: AuthRequest,
 	res: Response,
@@ -60,7 +68,7 @@ export const register = async (
 			await RegistrationOtp.deleteOne({ email });
 		}
 
-		const otp = Math.floor(100000 + Math.random() * 900000).toString();
+		const otp = crypto.randomInt(0, 1000000).toString().padStart(6, "0");
 		const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
 		const salt = await bcrypt.genSalt(12);
 		const hashedPassword = await bcrypt.hash(password, salt);
@@ -70,11 +78,11 @@ export const register = async (
 			slug,
 			name,
 			email,
-			password: hashedPassword,
+			passwordHash: hashedPassword,
 			website: website || "",
 			phone: phone || "",
 			industry: industry || "",
-			otp,
+			otpHash: hashOtp(otp),
 			otpExpires,
 		});
 
@@ -123,8 +131,8 @@ export const resendRegistrationOtp = async (
 			return;
 		}
 
-		const otp = Math.floor(100000 + Math.random() * 900000).toString();
-		regData.otp = otp;
+		const otp = crypto.randomInt(0, 1000000).toString().padStart(6, "0");
+		regData.otpHash = hashOtp(otp);
 		regData.otpExpires = new Date(Date.now() + 15 * 60 * 1000);
 		await regData.save();
 
@@ -161,7 +169,7 @@ export const verifyRegistrationOtp = async (
 
 		const regData = await RegistrationOtp.findOne({
 			email,
-			otp,
+			otpHash: hashOtp(otp),
 			otpExpires: { $gt: new Date() },
 		});
 
@@ -265,7 +273,7 @@ const user = await User.create({
     tenantId: tenant._id,
 });
 // Overwrite with the real hashed password (updateOne bypasses pre-save hook)
-await User.updateOne({ _id: user._id }, { $set: { password: regData.password } });
+await User.updateOne({ _id: user._id }, { $set: { password: regData.passwordHash } });
 
 // Backfill ownerId now that we have the user
 tenant.ownerId = user._id;
@@ -628,6 +636,15 @@ export const changePassword = async (
 			return;
 		}
 
+		const isSamePassword = await user.comparePassword(newPassword);
+		if (isSamePassword) {
+			res.status(400).json({
+				message:
+					"New password must be different from your current password",
+			});
+			return;
+		}
+
 		user.password = newPassword;
 		await user.save(); // Trigger bcryptjs hash via save hook
 
@@ -656,8 +673,8 @@ export const forgotPassword = async (
 			return;
 		}
 
-		const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
-		user.resetPasswordOtp = otp;
+		const otp = crypto.randomInt(0, 1000000).toString().padStart(6, "0"); // 6-digit OTP
+		user.resetPasswordOtpHash = hashOtp(otp);
 		user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
 
 		// Since we are not updating password, save hook might skip, but it is safe.
@@ -670,7 +687,7 @@ export const forgotPassword = async (
 
 		res.status(200).json({
 			message:
-				"If that email exists in our system, we have sent a password reset OTP to it.",
+				"An OTP has been sent to your email. It is valid for 15 minutes.",
 		});
 	} catch (error: any) {
 		res.status(500).json({
@@ -694,7 +711,7 @@ export const verifyForgotPasswordOtp = async (
 
 		const user = await User.findOne({
 			email,
-			resetPasswordOtp: otp,
+			resetPasswordOtpHash: hashOtp(otp),
 			resetPasswordExpires: { $gt: new Date() },
 		});
 
@@ -704,7 +721,7 @@ export const verifyForgotPasswordOtp = async (
 		}
 
 		// Clear OTP to prevent reuse
-		user.resetPasswordOtp = undefined;
+		user.resetPasswordOtpHash = undefined;
 		user.resetPasswordExpires = undefined;
 		user.lastLogin = new Date(); // Update last login since they are receiving a session token
 		await user.save();

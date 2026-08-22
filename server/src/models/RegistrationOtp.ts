@@ -5,11 +5,11 @@ export interface IRegistrationOtp extends Document {
     slug: string;
     name: string;
     email: string;
-    password: string;
+    passwordHash: string;
     website?: string;
     phone?: string;
     industry?: string;
-    otp: string;
+    otpHash: string;
     otpExpires: Date;
     createdAt: Date;
 }
@@ -20,11 +20,11 @@ const registrationOtpSchema = new Schema<IRegistrationOtp>(
         slug: { type: String, required: true },
         name: { type: String, required: true },
         email: { type: String, required: true, lowercase: true },
-        password: { type: String, required: true },
+        passwordHash: { type: String, required: true },
         website: { type: String, default: '' },
         phone: { type: String, default: '' },
         industry: { type: String, default: '' },
-        otp: { type: String, required: true },
+        otpHash: { type: String, required: true },
         otpExpires: { type: Date, required: true },
     },
     { timestamps: true }
