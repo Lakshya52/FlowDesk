@@ -19,7 +19,30 @@ interface ReleaseData {
   downloads: OsDownloads[]
 }
 
-const GITHUB_API = "https://api.github.com/repos/Lakshya52/FlowDesk/releases?per_page=10"
+const GITHUB_REPO = "Lakshya52/FlowDesk"
+
+// Fetch every published release by paginating through the GitHub API
+// (unauthenticated limit is 60 req/h per IP — surfaced clearly below).
+async function fetchAllReleases(): Promise<Record<string, unknown>[]> {
+  const all: Record<string, unknown>[] = []
+  for (let page = 1; page <= 20; page++) {
+    const res = await fetch(
+      `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=100&page=${page}`
+    )
+    if (!res.ok) {
+      if (res.status === 403) {
+        throw new Error(
+          "GitHub API rate limit exceeded — please try again in about an hour"
+        )
+      }
+      throw new Error(`GitHub API responded with ${res.status}`)
+    }
+    const batch = (await res.json()) as Record<string, unknown>[]
+    all.push(...batch)
+    if (batch.length < 100) break
+  }
+  return all
+}
 
 // const WindowsIcon: ComponentType<{ size?: number; className?: string }> = ({ size = 20, className }) => (
 //   <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -103,6 +126,28 @@ function buildDownloads(assets: { name: string; browser_download_url: string }[]
 
 function parseVersion(tag: string): string {
   return tag.replace(/^v/, "")
+}
+
+// Numeric semver comparison so "Latest" is the HIGHEST version, not just
+// whichever release GitHub happened to create last.
+function compareVersions(a: string, b: string): number {
+  const core = (v: string) =>
+    v
+      .replace(/^v/i, "")
+      .split(/[-+]/)[0]
+      .split(".")
+      .map((n) => parseInt(n, 10) || 0)
+  const pa = core(a)
+  const pb = core(b)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] ?? 0
+    const nb = pb[i] ?? 0
+    if (na !== nb) return na - nb
+  }
+  // Same numeric core: a full release outranks a pre-release (e.g. -beta)
+  const preA = /-\w/.test(a) ? 1 : 0
+  const preB = /-\w/.test(b) ? 1 : 0
+  return preB - preA
 }
 
 function formatDate(dateStr: string): string {
@@ -209,23 +254,28 @@ export default function Releases() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(GITHUB_API)
-      if (!res.ok) throw new Error(`GitHub API responded with ${res.status}`)
-      const data = await res.json() as Record<string, unknown>[]
+    const data = await fetchAllReleases()
 
-      const parsed: ReleaseData[] = data
-        .filter((r) => !r.draft)
-        .map((r, idx) => {
-          const tag = r.tag_name as string
-          const version = parseVersion(tag)
-          const assets = (r.assets as { name: string; browser_download_url: string }[]) || []
-          return {
-            version,
-            isLatest: idx === 0,
-            published: r.published_at as string,
-            downloads: buildDownloads(assets, version),
-          }
-        })
+    const parsed: ReleaseData[] = data
+      .filter((r) => !r.draft)
+      .map((r) => {
+        const tag = r.tag_name as string
+        const version = parseVersion(tag)
+        const assets = (r.assets as { name: string; browser_download_url: string }[]) || []
+        return {
+          version,
+          isLatest: false, // assigned after sorting below
+          published: r.published_at as string,
+          downloads: buildDownloads(assets, version),
+        }
+      })
+      // Deduplicate (same version can appear once per draft/publish cycle)
+      .filter(
+        (r, idx, arr) => arr.findIndex((x) => x.version === r.version) === idx
+      )
+      .sort((a, b) => compareVersions(b.version, a.version))
+
+    if (parsed.length > 0) parsed[0].isLatest = true
 
       setReleases(parsed)
       if (parsed.length > 0) setOpenVersion(parsed[0].version)

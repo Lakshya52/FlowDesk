@@ -25,9 +25,29 @@ import api from "./api";
 /* Small utils                                                         */
 /* ------------------------------------------------------------------ */
 
+/** Last failure reason — surfaced by toasts and e2eeDiagnostics(). */
+let lastError = "";
+
+export function getLastError(): string {
+    return lastError;
+}
+
+function fail(reason: string): string {
+    lastError = reason;
+    console.error("[E2EE]", reason);
+    return reason;
+}
+
 const subtle = () => {
+    if (typeof window === "undefined" || !window.isSecureContext) {
+        throw new Error(
+            "Page is not a secure context — WebCrypto requires HTTPS. E2EE cannot run."
+        );
+    }
     if (typeof crypto === "undefined" || !crypto.subtle) {
-        throw new Error("WebCrypto unavailable — HTTPS (or localhost) required");
+        throw new Error(
+            "WebCrypto unavailable in this browser. E2EE cannot run."
+        );
     }
     return crypto.subtle;
 };
@@ -262,8 +282,8 @@ export async function initE2EE(): Promise<Identity | null> {
                 privateKey,
                 publicKeyJson: JSON.stringify(stored.publicKeyJwk),
             };
-        } catch (err) {
-            console.error("[E2EE] init failed:", err);
+        } catch (err: any) {
+            fail(`init failed: ${err?.message ?? err}`);
             return null;
         }
     })();
@@ -406,19 +426,39 @@ export async function ensureConversationKeys(
 ): Promise<boolean> {
     if (convKeys.has(conversationId)) return true;
     const id = await getIdentity();
-    if (!id) return false;
+    if (!id) {
+        fail(
+            "Identity unavailable — WebCrypto/HTTPS problem. " +
+            "E2EE requires the app to be served over HTTPS."
+        );
+        return false;
+    }
 
     // Registration may have failed earlier in this session (offline blip,
     // race on first login) — retry before doing anything key-related.
     if (storedIdentityRef && !deviceRegistered) {
         try { await ensureRegistered(storedIdentityRef); } catch { /* keep going */ }
     }
+    if (!deviceRegistered) {
+        fail("Device key could not be registered — PUT /auth/devices keeps failing");
+    }
 
     let wraps: KeyWrap[] = [];
     try {
         const { data } = await api.get(`/conversations/${conversationId}/keys`);
         wraps = data.wraps ?? [];
-    } catch {
+    } catch (err: any) {
+        const status = err?.response?.status;
+        if (status === 404 || status === 400) {
+            fail(
+                `GET /conversations/:id/keys returned ${status} — the SERVER running in this ` +
+                "environment is outdated and does not have the E2EE endpoints. Deploy the backend."
+            );
+        } else if (status === 401 || status === 403) {
+            fail(`GET /conversations/:id/keys returned ${status} — auth problem`);
+        } else {
+            fail(`GET /conversations/:id/keys failed (${status ?? "network error"})`);
+        }
         return false;
     }
 
@@ -428,6 +468,7 @@ export async function ensureConversationKeys(
         const raw = await unwrapWithIdentity(w);
         if (raw && raw.length === 32) {
             convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
+            lastError = "";
             // Heal EVERYONE missing wraps (late-registered devices, new
             // participants), not just our own other devices.
             void healMissingWraps(conversationId, raw, participantIds, wraps);
@@ -435,30 +476,39 @@ export async function ensureConversationKeys(
         }
     }
 
-    // 2) No usable wraps at all → mint a fresh key and distribute it
-    const currentDevices = await fetchDevices(participantIds);
-    const allDeviceIds = new Set(
-        Object.values(currentDevices).flatMap((ds) => ds.map((d) => d.deviceId))
-    );
-    const hasLiveWrap = wraps.some((w) => allDeviceIds.has(w.deviceId));
-
-    if ((wraps.length === 0 || !hasLiveWrap) && participantIds.length > 0) {
-        // Either first visitor, or every stored wrap points at a device that
-        // no longer exists (lost browser profile etc.) — self-repair by
-        // minting a new key. Old messages encrypted under a truly lost key
-        // stay unreadable, but the chat becomes usable again.
-        const raw = randomBytes(32);
-        convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
-        // Publishing wraps involves several ECDH ops + an HTTP roundtrip —
-        // do NOT block the caller (send path) on it.
-        void distributeToAll(conversationId, raw, participantIds);
-        return true;
+    if (participantIds.length === 0) {
+        fail("No participants known for this conversation — cannot obtain or mint a key");
+        return false;
     }
 
-    // 3) Live wraps exist but none for this device — another device holds the
-    //    key and will heal us next time it opens this conversation.
-    console.warn("[E2EE] no usable key wrap for this device in", conversationId);
-    return false;
+    // 2) Grace window: another session may be publishing our wrap right now
+    await new Promise((r) => setTimeout(r, 600));
+    try {
+        const { data } = await api.get(`/conversations/${conversationId}/keys`);
+        for (const w of ((data.wraps ?? []) as KeyWrap[]).filter(
+            (x) => x.deviceId === id.deviceId
+        )) {
+            const raw = await unwrapWithIdentity(w);
+            if (raw && raw.length === 32) {
+                convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
+                lastError = "";
+                void healMissingWraps(conversationId, raw, participantIds, wraps);
+                return true;
+            }
+        }
+    } catch { /* fall through to unilateral recovery */ }
+
+    // 3) Unilateral recovery. The stored wraps may point at dead devices
+    //    (cleared profiles, reinstalls) that nobody can ever unwrap — waiting
+    //    forever helps no one. Mint a FRESH key and append wraps for every
+    //    currently-registered device. Holders of an older key keep reading
+    //    history under it and converge onto this key the next time they open
+    //    the chat (unwrap accepts any entry addressed to them).
+    const raw = randomBytes(32);
+    convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
+    lastError = "";
+    void distributeToAll(conversationId, raw, participantIds);
+    return true;
 }
 
 /**
@@ -703,4 +753,52 @@ export async function getConversationSafetyNumber(
         new TextEncoder().encode([...participantPublicKeys].sort().join("|"))
     );
     return fingerprintHex(toHex(digest));
+}
+
+/* ------------------------------------------------------------------ */
+/* Diagnostics                                                         */
+/* ------------------------------------------------------------------ */
+
+/** One-shot health report for the E2EE subsystem (browser console aid). */
+export async function e2eeDiagnostics() {
+    const secure = typeof window !== "undefined" ? window.isSecureContext : false;
+    const subtleOk =
+        secure && typeof crypto !== "undefined" && !!crypto.subtle;
+    const id = subtleOk ? await initE2EE().catch(() => null) : null;
+    let deviceCheck: string = "skipped";
+    if (id) {
+        try {
+            const { data } = await api.get("/auth/keys");
+            const me = data.users?.[0];
+            const found = (me?.devices ?? []).some(
+                (d: any) => d.deviceId === id.deviceId
+            );
+            deviceCheck = found
+                ? "registered"
+                : "NOT registered on server";
+        } catch (err: any) {
+            deviceCheck = `GET /auth/keys failed (${err?.response?.status ?? err?.message})`;
+        }
+    }
+    return {
+        isSecureContext: secure,
+        webCryptoAvailable: subtleOk,
+        identityLoaded: !!id,
+        deviceId: id?.deviceId ?? null,
+        deviceRegistration: deviceCheck,
+        conversationsWithKeys: convKeys.size,
+        lastError: getLastError(),
+        hint:
+            !subtleOk
+                ? "Serve the app over HTTPS � crypto.subtle is unavailable otherwise."
+                : !id
+                    ? "Identity bootstrap failed � check IndexedDB availability."
+                    : deviceCheck.includes("failed")
+                        ? "Backend endpoints missing? Deploy the updated server."
+                        : "Looks OK client-side; check server logs.",
+    };
+}
+
+if (typeof window !== "undefined") {
+    (window as any).__e2eeDiagnostics = e2eeDiagnostics;
 }

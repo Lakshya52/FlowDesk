@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "../store/authStore";
 import { useChatStore, MessageSnippet, UserSnippet } from "../store/chatStore";
 import api from "../lib/api";
@@ -10,6 +10,7 @@ import {
     encryptFileForConversation,
     decryptAttachmentToBuffer,
     getDecryptedAttachmentUrl,
+    getLastError,
 } from "../lib/crypto";
 import { io, Socket } from "socket.io-client";
 import Avatar from "../components/common/Avatar";
@@ -40,7 +41,7 @@ import {
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
-// Cache for instant image previews — capped to prevent memory leaks
+// Cache for instant image previews â€” capped to prevent memory leaks
 const MAX_PREVIEW_CACHE_SIZE = 50;
 const localPreviewCache = new Map<string, string>();
 
@@ -57,7 +58,7 @@ function addToPreviewCache(key: string, url: string) {
   localPreviewCache.set(key, url);
 }
 
-// Inline delete confirmation component — replaces window.confirm()
+// Inline delete confirmation component â€” replaces window.confirm()
 function DeleteConfirm({
   label,
   onConfirm,
@@ -200,20 +201,20 @@ export default function ChatsPage() {
   const [decryptedAttUrls, setDecryptedAttUrls] = useState<Record<string, string>>({});
   const decryptedAttUrlsRef = useRef<Record<string, string>>({});
 
-  // Single persistent socket ref — never recreated on chat switch
+  // Single persistent socket ref â€” never recreated on chat switch
   const socketRef = useRef<Socket | null>(null);
   const currentConvRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<any>(null);
 
-  // ─── Socket: create ONCE on mount, clean up on unmount ───────────────────
+  // â”€â”€â”€ Socket: create ONCE on mount, clean up on unmount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     // E2EE identity: create/load device keypair and publish the public half
     void initE2EE();
 
     const socket = io(SOCKET_URL, {
-      // Function form re-reads the (refreshed) token on every reconnect —
+      // Function form re-reads the (refreshed) token on every reconnect â€”
       // the server rejects unauthenticated sockets since the E2EE rollout.
       auth: (cb) => cb({ token: localStorage.getItem("flowdesk_token") }),
     });
@@ -232,7 +233,7 @@ export default function ChatsPage() {
       if (message.iv && !message.isDeleted && activeCid) {
         let plain = await decryptContent(activeCid, message.content, message.iv);
         if (plain.startsWith("\u{1F512}")) {
-          // Key wasn't ready yet (e.g. healing just landed) — fetch it once
+          // Key wasn't ready yet (e.g. healing just landed) â€” fetch it once
           // and retry rather than leaving a stuck placeholder.
           const conv = useChatStore
             .getState()
@@ -327,7 +328,7 @@ export default function ChatsPage() {
           messagesCacheRef.current[editedMessage.conversation] || []
         ).map((m) => (m._id === editedMessage._id ? editedMessage : m));
       }
-      // Sync sidebar last message snippet only — no full refetch
+      // Sync sidebar last message snippet only â€” no full refetch
       useChatStore.getState().fetchConversations();
     });
 
@@ -367,7 +368,7 @@ export default function ChatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?._id]);
 
-  // ─── Join/leave conversation rooms when active chat changes ──────────────
+  // â”€â”€â”€ Join/leave conversation rooms when active chat changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
@@ -384,7 +385,7 @@ export default function ChatsPage() {
     }
   }, [activeConversationId]);
 
-  // ─── Fetch users lazily on search ─────────────────────────────────────────
+  // â”€â”€â”€ Fetch users lazily on search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!searchQuery.trim() || users.length > 0) return;
     const fetchUsers = async () => {
@@ -398,7 +399,7 @@ export default function ChatsPage() {
     fetchUsers();
   }, [searchQuery, users.length]);
 
-  // ─── Fetch messages for active conversation ───────────────────────────────
+  // â”€â”€â”€ Fetch messages for active conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (
       activeConversationId &&
@@ -478,20 +479,20 @@ export default function ChatsPage() {
     setPendingDeleteMsgId(null);
   }, [activeConversationId, user?._id]);
 
-  // ─── Scroll to bottom on new messages ────────────────────────────────────
+  // â”€â”€â”€ Scroll to bottom on new messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typingUsers]);
 
-  // ─── Sync messages to cache ref ───────────────────────────────────────────
+  // â”€â”€â”€ Sync messages to cache ref â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (activeConversationId) {
       messagesCacheRef.current[activeConversationId] = messages;
     }
   }, [messages, activeConversationId]);
 
-  // ─── E2EE: decrypt encrypted attachments to blob URLs ────────────────────
-  // Plaintext bytes never hit disk — decrypted blobs live in memory only.
+  // â”€â”€â”€ E2EE: decrypt encrypted attachments to blob URLs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Plaintext bytes never hit disk â€” decrypted blobs live in memory only.
   useEffect(() => {
     if (!activeConversationId) return;
     let cancelled = false;
@@ -531,7 +532,7 @@ export default function ChatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, activeConversationId]);
 
-  // ─── Fetch all users for forward dialog ─────────────────────────────
+  // â”€â”€â”€ Fetch all users for forward dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!forwardingMessage) return;
 
@@ -547,7 +548,7 @@ export default function ChatsPage() {
     fetchUsersForForward();
   }, [forwardingMessage]);
 
-  // ─── Input & Typing ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Input & Typing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setMessageInput(val);
@@ -565,7 +566,7 @@ export default function ChatsPage() {
       }, 2000);
     }
 
-    // Mentions — support names with spaces via lookahead
+    // Mentions â€” support names with spaces via lookahead
     const cursorIdx = e.target.selectionStart ?? val.length;
     const textBeforeCursor = val.substring(0, cursorIdx);
     // Match @word or @word word up to cursor
@@ -588,10 +589,10 @@ export default function ChatsPage() {
     setShowMentions(false);
   };
 
-  // ─── Send Message ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Send Message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    // FIX: require actual text content — a bare reply with no text should not send
+    // FIX: require actual text content â€” a bare reply with no text should not send
     if (!messageInput.trim()) return;
     if (!activeConversationId) return;
 
@@ -613,7 +614,7 @@ export default function ChatsPage() {
           currentConv.participants.map((p: any) => p._id),
         );
         if (!ok) {
-          toast.error("Encryption keys not ready — message not sent");
+          toast.error(`Encryption key not ready — ${getLastError() || "unknown reason"}`);
           return;
         }
       }
@@ -622,7 +623,7 @@ export default function ChatsPage() {
       };
       const enc = await encryptContent(activeConversationId, messageInput.trim());
       if (!enc) {
-        toast.error("Encryption keys not ready — message not sent");
+        toast.error(`Encryption key not ready — ${getLastError() || "unknown reason"}`);
         return;
       }
       payload = enc;
@@ -665,7 +666,7 @@ export default function ChatsPage() {
     }
   };
 
-  // ─── File Upload ──────────────────────────────────────────────────────────
+  // â”€â”€â”€ File Upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !activeConversationId) return;
@@ -712,7 +713,7 @@ export default function ChatsPage() {
           currentConv.participants.map((p: any) => p._id),
         );
         if (!ok) {
-          toast.error("Encryption keys not ready — upload cancelled");
+          toast.error(`Encryption key not ready — ${getLastError() || "unknown reason"}`);
           return;
         }
       }
@@ -802,7 +803,7 @@ export default function ChatsPage() {
     }
   };
 
-  // ─── Reactions ────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Reactions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleReactToMessage = async (messageId: string, emoji: string) => {
     try {
       await api.post(`/conversations/messages/${messageId}/react`, { emoji });
@@ -812,7 +813,7 @@ export default function ChatsPage() {
     }
   };
 
-  // ─── Delete Message (inline confirm) ─────────────────────────────────────
+  // â”€â”€â”€ Delete Message (inline confirm) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleDeleteMessage = async (messageId: string) => {
     try {
       await api.delete(`/conversations/messages/${messageId}`);
@@ -834,7 +835,7 @@ export default function ChatsPage() {
     }
   };
 
-  // ─── Edit Message ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Edit Message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleEditMessage = async (messageId: string) => {
     if (!editMessageInput.trim()) return;
     if (!activeConversationId) return;
@@ -842,7 +843,7 @@ export default function ChatsPage() {
       // E2EE: edits are re-encrypted under the conversation key
       const enc = await encryptContent(activeConversationId, editMessageInput.trim());
       if (!enc) {
-        toast.error("Encryption keys not ready");
+        toast.error(`Encryption key not ready — ${getLastError() || "unknown reason"}`);
         return;
       }
       const { data } = await api.put(`/conversations/messages/${messageId}`, {
@@ -863,7 +864,7 @@ export default function ChatsPage() {
     }
   };
 
-  // ─── Delete Conversation (inline confirm) ─────────────────────────────────
+  // â”€â”€â”€ Delete Conversation (inline confirm) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleDeleteConversation = async () => {
     if (!activeConversationId) return;
     try {
@@ -875,7 +876,7 @@ export default function ChatsPage() {
     }
   };
 
-  // ─── Forward Message ──────────────────────────────────────────────────────
+  // â”€â”€â”€ Forward Message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // const handleForwardMessage = async (targetConversationId: string) => {
   //     if (!forwardingMessage) return;
   //     try {
@@ -914,7 +915,7 @@ export default function ChatsPage() {
 
       if (!finalConversationId || finalConversationId === sourceConvId) return;
 
-      // ── E2EE forward: decrypt locally, re-encrypt under the TARGET key.
+      // â”€â”€ E2EE forward: decrypt locally, re-encrypt under the TARGET key.
       // The server never sees plaintext and never shares attachment ids
       // between conversations (the old IDOR-prone path is gone).
       const targetConv =
@@ -924,11 +925,11 @@ export default function ChatsPage() {
         (forwardingMessage ? [] : []);
       const ok = await ensureConversationKeys(finalConversationId, participants as string[]);
       if (!ok) {
-        toast.error("Encryption keys not ready for the target chat");
+        toast.error(`Encryption key not ready — ${getLastError() || "unknown reason"}`);
         return;
       }
 
-      // Plain text of the source message ("iv" absent ⇒ legacy plaintext)
+      // Plain text of the source message ("iv" absent â‡’ legacy plaintext)
       let plainText = forwardingMessage.content ?? "";
       if (forwardingMessage.iv) {
         plainText = await decryptContent(
@@ -988,7 +989,7 @@ export default function ChatsPage() {
     }
   };
 
-  // ─── Start Direct Chat ────────────────────────────────────────────────────
+  // â”€â”€â”€ Start Direct Chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleStartDirectChat = async (targetUserId: string) => {
     try {
       const { data } = await api.post("/conversations", {
@@ -1005,7 +1006,7 @@ export default function ChatsPage() {
     }
   };
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const matchesNameStart = (name: string, query: string) => {
     if (!query) return true;
     const lq = query.toLowerCase().trim();
@@ -1033,8 +1034,8 @@ export default function ChatsPage() {
       })
     : [];
 
-  // ─── Forward modal search ───────────────────────────────────────────
-  // ─── E2EE: decrypt sidebar previews (upgrades as conversation keys arrive) ─
+  // â”€â”€â”€ Forward modal search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€â”€ E2EE: decrypt sidebar previews (upgrades as conversation keys arrive) â”€
   const snippetSignature = filteredConversations
     .map((c) => `${c._id}:${(c.lastMessage as any)?.createdAt || ""}`)
     .join("|");
@@ -1089,7 +1090,7 @@ export default function ChatsPage() {
     });
   };
 
-  // FIX: Correctly determine read status — check if someone OTHER than sender has read it
+  // FIX: Correctly determine read status â€” check if someone OTHER than sender has read it
   // const isMessageRead = useCallback((msg: MessageSnippet): boolean => {
   //     if (!msg.readBy || msg.readBy.length === 0) return false;
   //     return msg.readBy.some((r) => {
@@ -1134,9 +1135,9 @@ export default function ChatsPage() {
     });
   };
 
-  const emojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+  const emojis = ["ðŸ‘", "â¤ï¸", "ðŸ˜‚", "ðŸ˜®", "ðŸ˜¢", "ðŸ™"];
 
-  // Global keyframe styles — defined once at top level
+  // Global keyframe styles â€” defined once at top level
   const globalStyles = `
         @keyframes chatsPageSpinner {
             to { transform: rotate(360deg); }
@@ -1169,7 +1170,7 @@ export default function ChatsPage() {
           position: "relative",
         }}
       >
-        {/* LEFT PANEL: Chats List — collapsible */}
+        {/* LEFT PANEL: Chats List â€” collapsible */}
         <div
           style={{
             width: sidebarCollapsed ? 0 : (isMobile ? '100%' : 340),
@@ -1218,7 +1219,7 @@ export default function ChatsPage() {
                   size={22}
                 />
                 Chat
-                {/* E2EE badge — content is encrypted client-side */}
+                {/* E2EE badge â€” content is encrypted client-side */}
                 <span
                   title="Messages in this chat are end-to-end encrypted"
                   style={{
@@ -1230,7 +1231,7 @@ export default function ChatsPage() {
                     fontWeight: 600,
                   }}
                 >
-                  🔒 End-to-end encrypted
+                  ðŸ”’ End-to-end encrypted
                 </span>
               </h2>
               {/* Collapse sidebar button */}
@@ -1447,7 +1448,7 @@ export default function ChatsPage() {
                                       : `${latestMsg.sender.name}: `}
                                     {snippetTexts[c._id] ??
                                       (latestMsg.iv && !latestMsg.isDeleted
-                                        ? "🔒 Encrypted message"
+                                        ? "ðŸ”’ Encrypted message"
                                         : latestMsg.content || "Sent an attachment")}
                                   </>
                                 ) : (
@@ -1601,7 +1602,7 @@ export default function ChatsPage() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  {/* Back / Expand sidebar button — visible when collapsed or always on mobile */}
+                  {/* Back / Expand sidebar button â€” visible when collapsed or always on mobile */}
                   {(sidebarCollapsed || isMobile) && (
                     <button
                       onClick={() => setSidebarCollapsed(false)}
@@ -1670,13 +1671,13 @@ export default function ChatsPage() {
                           "Offline"
                         )
                       ) : (
-                        `Group · ${activeConv.participants?.length || 0} participants`
+                        `Group Â· ${activeConv.participants?.length || 0} participants`
                       )}
                     </p>
                   </div>
                 </div>
 
-                {/* Delete Chat — inline confirm */}
+                {/* Delete Chat â€” inline confirm */}
                 <div style={{ position: "relative" }}>
                   {pendingDeleteConv ? (
                     <DeleteConfirm
@@ -1845,7 +1846,7 @@ export default function ChatsPage() {
                             </div>
                           )}
 
-                          {/* Action Icons — my messages (left side) */}
+                          {/* Action Icons â€” my messages (left side) */}
                           {isMe && (
                             <div
                               style={{
@@ -2093,7 +2094,7 @@ export default function ChatsPage() {
                           <div
                             style={{ position: "relative", maxWidth: "70%" }}
                           >
-                            {/* Sender name — group chats, received messages only */}
+                            {/* Sender name â€” group chats, received messages only */}
                             {!isMe && isGroup && (
                               <p
                                 style={{
@@ -2335,7 +2336,7 @@ export default function ChatsPage() {
                                                       opacity: 0.8,
                                                     }}
                                                   >
-                                                    🔓 Decrypting…
+                                                    ðŸ”“ Decryptingâ€¦
                                                   </div>
                                                 ) : (
                                                   <>
@@ -2436,7 +2437,7 @@ export default function ChatsPage() {
                                                   }}
                                                 >
                                                   {isEncrypted && !fileUrl
-                                                    ? "Decrypting…"
+                                                    ? "Decryptingâ€¦"
                                                     : (
                                                       att.fileSize / 1024
                                                     ).toFixed(1) + " KB"}
@@ -2619,7 +2620,7 @@ export default function ChatsPage() {
                             )}
                           </div>
 
-                          {/* Action Icons — received messages (right side), now includes Reply */}
+                          {/* Action Icons â€” received messages (right side), now includes Reply */}
                           {!isMe && (
                             <div
                               style={{
@@ -3134,7 +3135,7 @@ export default function ChatsPage() {
                       )}
                     </button>
 
-                    {/* Emoji picker — higher zIndex than reaction picker */}
+                    {/* Emoji picker â€” higher zIndex than reaction picker */}
                     {showComposerEmoji && (
                       <div
                         style={{
@@ -3155,42 +3156,42 @@ export default function ChatsPage() {
                         }}
                       >
                         {[
-                          "😀",
-                          "😃",
-                          "😄",
-                          "😁",
-                          "😆",
-                          "😅",
-                          "😂",
-                          "🤣",
-                          "😊",
-                          "😇",
-                          "🙂",
-                          "🙃",
-                          "😉",
-                          "😌",
-                          "😍",
-                          "🥰",
-                          "😘",
-                          "😗",
-                          "😙",
-                          "😚",
-                          "😋",
-                          "😛",
-                          "😝",
-                          "😜",
-                          "🤪",
-                          "🤨",
-                          "🧐",
-                          "🤓",
-                          "😎",
-                          "🥸",
-                          "🥳",
-                          "😏",
-                          "😒",
-                          "😞",
-                          "😔",
-                          "😟",
+                          "ðŸ˜€",
+                          "ðŸ˜ƒ",
+                          "ðŸ˜„",
+                          "ðŸ˜",
+                          "ðŸ˜†",
+                          "ðŸ˜…",
+                          "ðŸ˜‚",
+                          "ðŸ¤£",
+                          "ðŸ˜Š",
+                          "ðŸ˜‡",
+                          "ðŸ™‚",
+                          "ðŸ™ƒ",
+                          "ðŸ˜‰",
+                          "ðŸ˜Œ",
+                          "ðŸ˜",
+                          "ðŸ¥°",
+                          "ðŸ˜˜",
+                          "ðŸ˜—",
+                          "ðŸ˜™",
+                          "ðŸ˜š",
+                          "ðŸ˜‹",
+                          "ðŸ˜›",
+                          "ðŸ˜",
+                          "ðŸ˜œ",
+                          "ðŸ¤ª",
+                          "ðŸ¤¨",
+                          "ðŸ§",
+                          "ðŸ¤“",
+                          "ðŸ˜Ž",
+                          "ðŸ¥¸",
+                          "ðŸ¥³",
+                          "ðŸ˜",
+                          "ðŸ˜’",
+                          "ðŸ˜ž",
+                          "ðŸ˜”",
+                          "ðŸ˜Ÿ",
                         ].map((e) => (
                           <button
                             key={e}
