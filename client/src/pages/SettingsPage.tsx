@@ -483,7 +483,7 @@ const updateUser = async (e: React.FormEvent) => {
                                 <label style={{ fontSize: '0.8125rem', fontWeight: 500, marginBottom: 8, display: 'block', color: 'var(--color-text-secondary)' }}>
                                     Module Access
                                 </label>
-                                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 8 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 8 }}>
 
                                     {ALL_PERMISSION_ITEMS.map(item => {
                                         const isChecked = newUser.permissions.allowedTabs.includes(item.to);

@@ -19,6 +19,7 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
+  Info,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -67,6 +68,7 @@ const AssignmentsPage: React.FC = () => {
     "all" | "ongoing" | "completed" | "blueprints"
   >("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [showProjectInfo, setShowProjectInfo] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -595,35 +597,40 @@ const AssignmentsPage: React.FC = () => {
   );
 
   return (
-    <div style={{ maxWidth: 1200 }} className="flex flex-col gap-3">
+    <div  className="flex flex-col gap-3">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
         <div>
-          <h1
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Projects
-          </h1>
-          <p
-            style={{
-              fontSize: "0.875rem",
-              color: "var(--color-text-secondary)",
-              marginTop: 2,
-            }}
-          >
-            {filteredAssignments.length} Project
-            {filteredAssignments.length !== 1 ? "s" : ""}
-            {isAdmin &&
-              filterMode !== "All" &&
-              ` (filtered from ${assignments.length})`}
-          </p>
+          <div className="flex items-center justify-start gap-2">
+
+            <h1
+              style={{
+                fontSize: "1.5rem",
+                fontWeight: 700,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Projects
+            </h1>
+            <p
+              // className="mb-2"
+              style={{
+                fontSize: "0.875rem",
+                color: "var(--color-text-secondary)",
+                marginTop: 2,
+              }}
+            >
+              {filteredAssignments.length} Project
+              {filteredAssignments.length !== 1 ? "s" : ""}
+              {isAdmin &&
+                filterMode !== "All" &&
+                ` (filtered from ${assignments.length})`}
+            </p>
+          </div>
+          
         </div>
         {canCreate && (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex items-center justify-center" style={{ display: "flex", gap: 8 }}>
             <button
               className="btn btn-secondary"
               onClick={() => setShowImportModal(true)}
@@ -636,9 +643,16 @@ const AssignmentsPage: React.FC = () => {
             >
               <Plus size={16} /> New Project
             </button>
+            <Info className="cursor-pointer" size={20}  onMouseEnter={()=>setShowProjectInfo(true)} onMouseLeave={()=>setShowProjectInfo(false)} />
           </div>
         )}
       </div>
+        {
+          showProjectInfo &&
+          <span className="text-sm z-10 top-20 left-[60%] right-[32px] absolute p-4 rounded-2xl border border-(--color-border) bg-(--color-surface)">
+            Projects are containers for organizing related work in one place. Each project can be linked to a client/company, staffed with teams (managers and members), and structured into boards and tasks. All tasks, deadlines, files, and discussions tied to that work live under its project, so everyone assigned knows exactly what needs to be done, by whom, and when.
+          </span>
+        }
 
       {/* Tabs */}
       <div

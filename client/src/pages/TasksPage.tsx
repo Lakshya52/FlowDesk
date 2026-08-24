@@ -28,6 +28,9 @@ const TasksPage: React.FC = () => {
   const navigate = useNavigate();
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [assignSearch, setAssignSearch] = useState("");
+  const [assignOpen, setAssignOpen] = useState(false);
+  const assignRef = useRef<HTMLDivElement>(null);
   const [createForm, setCreateForm] = useState({
     title: "",
     description: "",
@@ -154,6 +157,15 @@ const TasksPage: React.FC = () => {
     },
   });
   const users = usersData || [];
+
+  useEffect(() => {
+    if (!assignOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (assignRef.current && !assignRef.current.contains(e.target as Node)) setAssignOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [assignOpen]);
 
   const { data: assignmentsData } = useQuery({
     queryKey: ["assignments"],
@@ -604,6 +616,7 @@ const TasksPage: React.FC = () => {
   return (
     <div className="flex flex-col justify-between items-start gap-3 mb-6">
       {/* Header */}
+      
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-2">
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -635,32 +648,32 @@ const TasksPage: React.FC = () => {
         >
           <Plus size={16} /> Create Task
         </button> */}
-      </div>
-
-      {/* Board Selector */}
-      <div className="w-full sm:w-auto" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <div style={{ minWidth: 250 }}>
-          <select
-            className="select"
-            value={activeBoardId || "__all__"}
-            onChange={(e) => {
-              if (e.target.value === "__all__") {
-                navigate("/tasks");
-              } else {
-                navigate(`/tasks/${e.target.value}`);
-              }
-            }}
-            style={{ width: "100%" }}
-          >
-            <option value="__all__">All Tasks (no board)</option>
-            {allBoards.map((b: any) => (
-              <option key={b._id} value={b._id}>
-                {b.title}
-              </option>
-            ))}
-          </select>
+        {/* Board Selector */}
+        <div className="w-full sm:w-auto" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ minWidth: 250 }}>
+            <select
+              className="select"
+              value={activeBoardId || "__all__"}
+              onChange={(e) => {
+                if (e.target.value === "__all__") {
+                  navigate("/tasks");
+                } else {
+                  navigate(`/tasks/${e.target.value}`);
+                }
+              }}
+              style={{ width: "100%" }}
+            >
+              <option value="__all__">All Tasks (no board)</option>
+              {allBoards.map((b: any) => (
+                <option key={b._id} value={b._id}>
+                  {b.title}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
+
 
       {/* Tabs */}
       <div
@@ -1048,9 +1061,9 @@ const TasksPage: React.FC = () => {
       {/* Create Task Modal */}
       <Modal
         isOpen={showCreateModal}
-        onClose={() => { setShowCreateModal(false); setCreateColumnStatus(""); }}
+        onClose={() => { setShowCreateModal(false); setCreateColumnStatus(""); setAssignOpen(false); setAssignSearch(""); }}
       >
-        <div className="card animate-fade-in" style={{ maxWidth: 500, width: "100%", padding: 0, overflow: "hidden", borderRadius: 16 }}>
+        <div className="card animate-fade-in" style={{ minWidth: 500, width: "100%", padding: 0, overflow: "hidden", borderRadius: 16 }}>
           <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-surface)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {/* <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--color-primary-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1113,18 +1126,69 @@ const TasksPage: React.FC = () => {
               <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
                 Assign To <span style={{ color: "var(--color-danger)" }}>*</span>
               </label>
-              <select className="select" value={createForm.assignedTo} onChange={(e) => setCreateForm({ ...createForm, assignedTo: e.target.value })} style={{ width: "100%" }}>
-                {createForm.assignment == "" ? (
-                  <>
-                    <option value="">Select a user</option>
-                    {users.map((u: any) => (
-                      <option key={u._id} value={u._id}>{u.name}</option>
-                    ))}
-                  </>
-                ) : (
+              {createForm.assignment == "" ? (
+                <div ref={assignRef} style={{ position: "relative" }}>
+                  <div style={{ position: "relative" }}>
+                    <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)", pointerEvents: "none" }} />
+                    <input
+                      type="text"
+                      className="select"
+                      placeholder="Select a user"
+                      autoComplete="off"
+                      value={
+                        assignOpen ? assignSearch : users.find((u: any) => u._id === createForm.assignedTo)?.name + " (" + users.find((u: any) => u._id === createForm.assignedTo)?.email +")"  || ""}
+                      onFocus={() => { setAssignOpen(true); setAssignSearch(""); }}
+                      onChange={(e) => setAssignSearch(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Escape") setAssignOpen(false); }}
+                      style={{ width: "100%", paddingLeft: 28, paddingRight: 28, cursor: "text" }}
+                    />
+                    {/* <ChevronRight size={14} style={{ position: "absolute", right: 9, top: "50%", transform: `translateY(-50%) rotate(${assignOpen ? 90 : 0}deg)`, transition: "transform 0.15s", color: "var(--color-text-tertiary)", pointerEvents: "none" }} /> */}
+                  </div>
+                  {assignOpen && (
+                    <div
+                      className="card"
+
+                      style={{padding: "10px", position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50, overflow: "hidden", borderRadius: 10, boxShadow: "var(--color-shadow, 0 8px 24px rgba(0,0,0,0.15))" }}
+                    >
+                      {users.filter((u: any) => u.name?.toLowerCase().includes(assignSearch.toLowerCase())).length === 0 && (
+                        <div style={{ padding: "10px 12px", fontSize: "0.78rem", color: "var(--color-text-tertiary)" }}>No users found</div>
+                      )}
+                      <div style={{ maxHeight: 180, overflowY: "auto" }}>
+                        {users
+                          .filter((u: any) => u.name?.toLowerCase().includes(assignSearch.toLowerCase()))
+                          .map((u: any) => (
+                            <div
+                              key={u._id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => { setCreateForm({ ...createForm, assignedTo: u._id }); setAssignOpen(false); setAssignSearch(""); }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                padding: "7px 10px",
+                                cursor: "pointer",
+                                fontSize: "0.82rem",
+                                background: u._id === createForm.assignedTo ? "var(--color-primary-light)" : "transparent",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-surface-hover)")}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = u._id === createForm.assignedTo ? "var(--color-primary-light)" : "transparent")}
+                            >
+                              <Avatar src={u.avatar} name={u.name} size={20} />
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {u.name} { u.name === user?.name ? " (You)" : "" }
+                              </span>
+                              {u._id === createForm.assignedTo && <Check size={13} style={{ marginLeft: "auto", flexShrink: 0, color: "var(--color-primary)" }} />}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <select className="select" value={createForm.assignedTo} onChange={(e) => setCreateForm({ ...createForm, assignedTo: e.target.value })} style={{ width: "100%" }}>
                   <option key={user?._id} value={user?._id}>{user?.name}</option>
-                )}
-              </select>
+                </select>
+              )}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>

@@ -292,6 +292,9 @@ const BoardsPage: React.FC = () => {
                     <Plus size={16} /> Create Board
                 </button>
             </div>
+            <span className="text-sm ">
+                Sprint Boards are Kanban-style workspaces that break a project into columns (e.g., To Do, In Progress, Done). Add as many columns as your workflow needs, rename them anytime, and rearrange them by dragging. Move task cards across columns as work progresses, giving the team a clear visual picture of what's planned, active, and completed during the sprint.
+            </span>
 
             {pendingRequests.length > 0 && (
                 <div style={{ background: "var(--color-surface-hover)", borderRadius: 12, padding: 16 }}>

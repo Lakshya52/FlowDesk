@@ -83,8 +83,8 @@ export const navItems: NavItem[] = [
 		label: "Productivity",
 		subItems: [
 			{ to: "/assignments", label: "Projects" },
-			{ to: "/tasks", label: "Kanban View" },
 			{ to: "/boards", label: "Sprint Boards" },
+			{ to: "/tasks", label: "Kanban View" },
 		],
 	},
 	{ to: "/teams", icon: Users, label: "Our Teams" },
