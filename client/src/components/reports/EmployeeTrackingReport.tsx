@@ -1,226 +1,176 @@
-import * as React from 'react';
-import { useEffect, useState } from 'react';
 import {
     ResponsiveContainer, AreaChart, Area, BarChart, Bar,
-    XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip
+    XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, Legend
 } from 'recharts';
-import api from '../../lib/api';
 import {
     Users, TrendingUp, Target, Zap,
-    // Activity,
-    Info, Calendar
+    CalendarClock, AlertTriangle
 } from 'lucide-react';
+import useReportQuery from '../../hooks/useReportQuery';
+import { ReportError, ReportEmpty, StatCard, MiniBar, chartTooltipStyle, axisTick } from './ReportStates';
+import Avatar from '../common/Avatar';
 
 interface EmployeeTrackingReportProps {
     filters: any;
     onDrilldown: (title: string, data: any[]) => void;
 }
 
-const EmployeeTrackingReport = ({ filters, onDrilldown }: EmployeeTrackingReportProps): React.JSX.Element | null => {
-    const [data, setData] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
+const EmployeeTrackingReport = ({ filters, onDrilldown }: EmployeeTrackingReportProps) => {
+    const { data, isLoading, isError, refetch } = useReportQuery('/reports/employee-tracking', filters);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const { data: reportData } = await api.get('/reports/employee-tracking', { params: filters });
-                setData(reportData.data);
-            } catch (err) {
-                console.error('Failed to fetch employee tracking report', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [filters]);
+    if (isLoading) return <TrackingSkeleton />;
+    if (isError) return <ReportError onRetry={() => refetch()} />;
+    if (!data || !data.employeeStats?.length) {
+        return <ReportEmpty subtitle="Adjust your filters to see metrics for different personnel or time periods." />;
+    }
 
-    if (loading) return (
-        <div className="space-y-8 animate-pulse">
-            {/* Stats Grid Skeleton */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" style={{ marginBottom: "20px" }}>
-                {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="card p-6 border-border/40">
-                        <div className="flex items-start justify-between">
-                            <div className="w-12 h-12 rounded-xl bg-surface-hover"></div>
-                            <div className="w-20 h-3 bg-surface-hover rounded-full"></div>
-                        </div>
-                        <div className="mt-4 w-16 h-8 bg-surface-hover rounded-lg"></div>
-                    </div>
-                ))}
+    const s = data.overallStats || {};
+    const stats = [
+        { label: 'Completion Rate', value: `${s.completionRate ?? 0}%`, sub: `${s.completedTasks ?? 0} of ${s.totalTasks ?? 0} tasks done`, icon: <Target size={22} />, color: 'var(--color-success)' },
+        { label: 'Overdue Tasks', value: s.overdueTasks ?? 0, sub: 'past due & unfinished', icon: <AlertTriangle size={22} />, color: 'var(--color-danger)' },
+        { label: 'Avg Completion', value: `${s.avgCompletionDays ?? 0}d`, sub: 'from creation to done', icon: <CalendarClock size={22} />, color: 'var(--color-info)' },
+        { label: 'Active People', value: s.totalEmployees ?? 0, sub: 'with assigned tasks', icon: <Users size={22} />, color: 'var(--color-primary)' },
+        { label: 'Total Tasks', value: s.totalTasks ?? 0, sub: 'in selected period', icon: <Zap size={22} />, color: 'var(--color-warning)' },
+    ];
+
+    const employeeChart = data.employeeStats.slice(0, 12);
+
+    return (
+        <div className="space-y-6 pb-10">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                {stats.map((stat, i) => <StatCard key={i} {...stat} />)}
             </div>
 
-            {/* Chart Skeleton */}
-            <div className="grid grid-cols-1 gap-6" style={{ marginBottom: "20px" }}>
-                <div className="card p-8 border-border/40 bg-surface/50 h-112.5">
-                    <div className="flex justify-between mb-8">
-                        <div className="space-y-3">
-                            <div className="w-48 h-6 bg-surface-hover rounded-lg"></div>
-                            <div className="w-64 h-4 bg-surface-hover rounded-lg opacity-60"></div>
-                        </div>
-                        <div className="w-24 h-9 bg-surface-hover rounded-lg"></div>
+            {/* Daily Trend */}
+            <div className="card p-8 border-border/60 bg-surface/50">
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h3 className="text-lg font-bold tracking-tight text-text flex items-center gap-2">
+                            <TrendingUp size={20} className="text-primary" />
+                            Created vs Completed
+                        </h3>
+                        <p className="text-sm text-text-secondary mt-1">Daily task flow across the selected period.</p>
                     </div>
-                    <div className="w-full h-75 bg-surface-hover rounded-2xl opacity-40"></div>
+                    <button onClick={() => onDrilldown('Task Flow', data.dailyTrends || [])} className="btn btn-secondary btn-sm rounded-lg">
+                        View Data
+                    </button>
+                </div>
+                <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data.dailyTrends || []}>
+                            <defs>
+                                <linearGradient id="gradCreated" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                                </linearGradient>
+                                <linearGradient id="gradCompleted" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="var(--color-success)" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="var(--color-success)" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.5} />
+                            <XAxis dataKey="_id" axisLine={false} tickLine={false} tick={axisTick}
+                                tickFormatter={(val) => new Date(val + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={axisTick} allowDecimals={false} />
+                            <ReTooltip contentStyle={chartTooltipStyle}
+                                formatter={((value: any, name: string): [any, string] => [value, name === 'created' ? 'Created' : 'Completed']) as any} />
+                            <Legend formatter={(v: string) => <span style={{ fontSize: 12, fontWeight: 600 }}>{v === 'created' ? 'Created' : 'Completed'}</span>} />
+                            <Area type="monotone" dataKey="completed" stroke="var(--color-success)" strokeWidth={2.5} fill="url(#gradCompleted)" />
+                            <Area type="monotone" dataKey="created" stroke="var(--color-primary)" strokeWidth={2.5} fill="url(#gradCreated)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
                 </div>
             </div>
 
-            {/* Comparison Skeleton */}
-            <div className="card p-10 border-border/40 bg-surface/50 h-125">
-                <div className="w-64 h-7 bg-surface-hover rounded-lg mb-4"></div>
-                <div className="w-96 h-4 bg-surface-hover rounded-lg mb-12 opacity-60"></div>
-                <div className="w-full h-80 bg-surface-hover rounded-2xl opacity-40"></div>
-            </div>
-        </div>
-    );
-
-    if (!data) return (
-        <div className="card p-20 flex flex-col items-center justify-center text-center opacity-60">
-            <Info size={48} className="text-text-tertiary mb-4" />
-            <h3 className="text-lg font-bold">No data found</h3>
-            <p className="text-sm text-text-secondary max-w-sm mt-2">Adjust your filters to see metrics for different personnel or time periods.</p>
-        </div>
-    );
-
-    const stats = [
-        { label: 'Active Employees', value: data.overallStats?.totalEmployees || 0, icon: <Users size={22} />, color: 'var(--color-primary)' },
-        { label: 'Assignments Touched', value: data.overallStats?.totalAssignments || 0, icon: <Target size={22} />, color: 'var(--color-info)' },
-        { label: 'Tasks Handled', value: data.overallStats?.totalTasks || 0, icon: <Zap size={22} />, color: 'var(--color-success)' },
-        { label: 'Avg Active Days', value: data.overallStats?.avgActiveDays || 0, icon: <Calendar size={22} />, color: 'var(--color-warning)' },
-    ];
-
-    return (
-        <div className="space-y-8 pb-10">
-            {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" style={{ marginBottom: "20px" }}>
-                {stats.map((stat, i) => (
-                    <div key={i} className="card p-6 flex flex-col justify-between hover:shadow-lg transition-all group border-border/60">
-                        <div className="flex items-start justify-between">
-                            <div className="p-3 rounded-xl bg-surface-hover group-hover:bg-primary-light transition-colors duration-300" style={{ color: stat.color }}>
-                                {stat.icon}
-                            </div>
-                            <span className="text-[11px] font-bold text-text-tertiary uppercase tracking-wider mt-1">{stat.label}</span>
-                        </div>
-                        <div className="mt-4">
-                            <h3 className="text-3xl font-bold text-text tracking-tight">{stat.value}</h3>
-                        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Completed vs Open per person */}
+                <div className="card p-8 bg-surface/50 border-border/60">
+                    <div className="mb-8">
+                        <h3 className="text-lg font-bold tracking-tight text-text">Delivery per Person</h3>
+                        <p className="text-sm text-text-secondary mt-1">Completed vs still-open tasks (top 12).</p>
                     </div>
-                ))}
-            </div>
-
-            <div className="grid grid-cols-1 gap-6" style={{ marginBottom: "20px" }}>
-                {/* Daily Trend */}
-                <div className="card p-8 border-border/60 bg-surface/50">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h3 className="text-lg font-bold tracking-tight text-text flex items-center gap-2">
-                                <TrendingUp size={20} className="text-primary" />
-                                Action Velocity Trend
-                            </h3>
-                            <p className="text-sm text-text-secondary mt-1">Timeline of tasks handled across the organization.</p>
-                        </div>
-                        <button
-                            onClick={() => onDrilldown('Action Velocity', data.dailyTrends || [])}
-                            className="btn btn-secondary btn-sm rounded-lg"
-                        >
-                            View Data
-                        </button>
-                    </div>
-                    <div className="h-87.5">
+                    <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={data.dailyTrends || []}>
-                                <defs>
-                                    <linearGradient id="colorTasks" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.4} />
-                                        <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.5} />
-                                <XAxis
-                                    dataKey="_id"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-tertiary)' }}
-                                    tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                    dy={10}
-                                />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-tertiary)' }} />
-                                <ReTooltip
-                                    contentStyle={{
-                                        backgroundColor: 'var(--color-surface)',
-                                        borderRadius: '12px',
-                                        border: '1px solid var(--color-border)',
-                                        boxShadow: 'var(--shadow-xl)',
-                                        padding: '12px',
-                                        fontSize: '13px'
-                                    }}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="tasksHandled"
-                                    name="Tasks Handled"
-                                    stroke="var(--color-primary)"
-                                    strokeWidth={3}
-                                    fill="url(#colorTasks)"
-                                />
-                            </AreaChart>
+                            <BarChart data={employeeChart} layout="vertical" margin={{ left: 10, right: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" opacity={0.4} />
+                                <XAxis type="number" axisLine={false} tickLine={false} tick={axisTick} allowDecimals={false} />
+                                <YAxis type="category" dataKey="name" width={90} axisLine={false} tickLine={false}
+                                    tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-secondary)' }}
+                                    tickFormatter={(val: string) => val.length > 12 ? val.substring(0, 11) + '…' : val} />
+                                <ReTooltip cursor={{ fill: 'var(--color-primary)', opacity: 0.05 }} contentStyle={chartTooltipStyle} />
+                                <Legend formatter={(v: string) => <span style={{ fontSize: 12, fontWeight: 600 }}>{v === 'completedCount' ? 'Completed' : 'Open'}</span>} />
+                                <Bar dataKey="openCount" name="openCount" stackId="a" fill="var(--color-surface-hover)" radius={[0, 0, 0, 0]} barSize={16} />
+                                <Bar dataKey="completedCount" name="completedCount" stackId="a" fill="var(--color-success)" radius={[0, 4, 4, 0]} barSize={16} />
+                            </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
-            </div>
 
-            {/* Performance Overview Chart */}
-            <div className="card p-10 bg-surface/50 border-border/60">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-                    <div>
-                        <h3 className="text-xl font-bold tracking-tight text-text">Personnel Impact Analysis</h3>
-                        <p className="text-sm text-text-secondary mt-2">Correlating total assignments touched against volume of tasks handled.</p>
+                {/* Leaderboard */}
+                <div className="card p-8 bg-surface/50 border-border/60 flex flex-col">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 className="text-lg font-bold tracking-tight text-text">People Snapshot</h3>
+                            <p className="text-sm text-text-secondary mt-1">Sorted by overdue load.</p>
+                        </div>
+                        <button onClick={() => onDrilldown('Employee Performance', data.employeeStats || [])} className="btn btn-secondary btn-sm rounded-lg">
+                            View All
+                        </button>
                     </div>
-                </div>
-                <div className="h-100">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data.employeeStats || []} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.4} />
-                            <XAxis
-                                dataKey="name"
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-tertiary)' }}
-                                tickFormatter={(val) => val.length > 15 ? val.substring(0, 15) + '...' : val}
-                                dy={15}
-                            />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-tertiary)' }} />
-                            <ReTooltip
-                                cursor={{ fill: 'var(--color-primary)', opacity: 0.05 }}
-                                contentStyle={{
-                                    backgroundColor: 'var(--color-surface)',
-                                    borderRadius: '12px',
-                                    border: '1px solid var(--color-border)',
-                                    boxShadow: 'var(--shadow-lg)',
-                                    padding: '16px',
-                                    fontSize: '13px'
-                                }}
-                            />
-                            <Bar
-                                dataKey="taskCount"
-                                name="Tasks Handled"
-                                fill="var(--color-primary)"
-                                radius={[8, 8, 0, 0]}
-                                barSize={40}
-                            />
-                            <Bar
-                                dataKey="assignmentCount"
-                                name="Assignments Touched"
-                                fill="var(--color-info)"
-                                radius={[8, 8, 0, 0]}
-                                barSize={20}
-                                opacity={0.3}
-                            />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                        {data.employeeStats.map((e: any) => (
+                            <div key={e._id} className="flex items-center gap-4 p-3 rounded-xl border border-transparent hover:border-border hover:bg-surface transition-all cursor-pointer"
+                                onClick={() => onDrilldown(`${e.name} — Details`, [e])}>
+                                <Avatar src={e.avatar} name={e.name} size={36} />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className="text-sm font-bold text-text truncate">{e.name}</span>
+                                        {e.overdueCount > 0 && (
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-danger/10 text-danger shrink-0">
+                                                {e.overdueCount} overdue
+                                            </span>
+                                        )}
+                                    </div>
+                                    <MiniBar pct={e.completionRate} color={e.completionRate >= 70 ? 'var(--color-success)' : e.completionRate >= 40 ? 'var(--color-warning)' : 'var(--color-danger)'} />
+                                    <div className="flex items-center justify-between mt-1">
+                                        <span className="text-[11px] text-text-tertiary font-medium">{e.completedCount}/{e.assignedCount} done</span>
+                                        <span className="text-[11px] font-bold text-text-secondary">{e.completionRate}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
+
+const TrackingSkeleton = () => (
+    <div className="space-y-8 animate-pulse pb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+            {[...Array(5)].map((_, i) => (
+                <div key={i} className="card p-6 border-border/40 h-32">
+                    <div className="w-12 h-12 rounded-xl bg-surface-hover"></div>
+                    <div className="mt-4 w-20 h-7 bg-surface-hover rounded-lg"></div>
+                </div>
+            ))}
+        </div>
+        <div className="card p-8 border-border/40 bg-surface/50 h-96">
+            <div className="w-48 h-6 bg-surface-hover rounded-lg mb-8"></div>
+            <div className="w-full h-64 bg-surface-hover rounded-2xl opacity-40"></div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[1, 2].map(i => (
+                <div key={i} className="card p-8 border-border/40 bg-surface/50 h-96">
+                    <div className="w-40 h-6 bg-surface-hover rounded-lg mb-8"></div>
+                    <div className="w-full h-64 bg-surface-hover rounded-2xl opacity-40"></div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
 
 export default EmployeeTrackingReport;

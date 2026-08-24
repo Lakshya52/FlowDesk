@@ -107,6 +107,7 @@ export const navItems: NavItem[] = [
 			{ to: "/reports/employee", label: "Tracking" },
 			{ to: "/reports/workload", label: "Workload" },
 			{ to: "/reports/activity", label: "User Activity" },
+			{ to: "/reports/project-health", label: "Project Health" },
 		],
 	},
 	{ break: true },

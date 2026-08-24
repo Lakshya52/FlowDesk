@@ -1,169 +1,98 @@
 import * as React from 'react';
-import { useEffect, useState } from 'react';
-import { 
-    ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
-    CartesianGrid, Tooltip as ReTooltip, Cell 
+import {
+    ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
+    CartesianGrid, Tooltip as ReTooltip, Cell, ReferenceLine
 } from 'recharts';
-import api from '../../lib/api';
-import { AlertTriangle, Users, Calendar, BarChart3, Info } from 'lucide-react';
+import { AlertTriangle, Users, CalendarClock, BarChart3, Gauge, Flame } from 'lucide-react';
+import useReportQuery from '../../hooks/useReportQuery';
+import { ReportError, ReportEmpty, StatCard, MiniBar, chartTooltipStyle, axisTick } from './ReportStates';
+import Avatar from '../common/Avatar';
 
 interface WorkloadReportProps {
     filters: any;
     onDrilldown: (title: string, data: any[]) => void;
 }
 
-const WorkloadReport = ({ filters, onDrilldown }: WorkloadReportProps): React.JSX.Element | null => {
-    const [data, setData] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+/** Heatmap color scale driven by CSS vars so it adapts to dark mode. */
+const heatColor = (intensity: number) => {
+    if (intensity <= 0.02) return 'var(--color-surface-hover)';
+    if (intensity <= 0.25) return 'color-mix(in srgb, var(--color-primary) 25%, transparent)';
+    if (intensity <= 0.5) return 'color-mix(in srgb, var(--color-primary) 50%, transparent)';
+    if (intensity <= 0.75) return 'color-mix(in srgb, var(--color-primary) 75%, transparent)';
+    return 'var(--color-primary)';
+};
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const { data: reportData } = await api.get('/reports/workload', { params: filters });
-                setData(reportData.data);
-            } catch (err) {
-                console.error('Failed to fetch workload report', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [filters]);
+const WorkloadReport = ({ filters, onDrilldown }: WorkloadReportProps) => {
+    const [hoveredDay, setHoveredDay] = React.useState<number | null>(null);
+    const { data, isLoading, isError, refetch } = useReportQuery('/reports/workload', filters);
 
-    if (loading) return (
-        <div className="space-y-8 animate-pulse">
-            {/* Main Distribution Chart Skeleton */}
-            <div style={{ marginBottom: "20px" }} className="card p-8 border-border/40 bg-surface/50 h-125">
-                <div className="flex justify-between mb-12">
-                    <div className="space-y-3">
-                        <div className="w-56 h-7 bg-surface-hover rounded-lg"></div>
-                        <div className="w-72 h-4 bg-surface-hover rounded-lg opacity-60"></div>
-                    </div>
-                </div>
-                <div className="w-full h-80 bg-surface-hover rounded-2xl opacity-40"></div>
-            </div>
+    const dist = data?.workloadDistribution || [];
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Intensity Heatmap Skeleton */}
-                <div className="card p-8 border-border/40 bg-surface/50 h-100">
-                    <div className="w-48 h-6 bg-surface-hover rounded-lg mb-10"></div>
-                    <div className="grid grid-cols-7 gap-3">
-                        {[...Array(28)].map((_, i) => (
-                            <div key={i} className="h-12 bg-surface-hover rounded-lg border border-border opacity-60"></div>
-                        ))}
-                    </div>
-                </div>
+    if (isLoading) return <WorkloadSkeleton />;
+    if (isError) return <ReportError onRetry={() => refetch()} />;
+    if (!data || !dist.length) {
+        return <ReportEmpty subtitle="No open tasks found for the selected scope. Adjust your filters to compare team load." />;
+    }
 
-                {/* Capacity Alerts Skeleton */}
-                <div className="card p-8 border-border/40 bg-surface/50 h-100 border-l-4 border-l-border">
-                    <div className="flex gap-3 mb-10">
-                        <div className="w-10 h-10 rounded-lg bg-surface-hover"></div>
-                        <div className="space-y-2">
-                             <div className="w-32 h-6 bg-surface-hover rounded-lg"></div>
-                             <div className="w-48 h-4 bg-surface-hover rounded-lg opacity-60"></div>
-                        </div>
-                    </div>
-                    <div className="space-y-4">
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="h-20 bg-surface-hover/40 rounded-xl border border-border opacity-50"></div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+    const summary = data.summary || {};
+    const hoursPerWeek = data.hoursPerWeek || 40;
+    const heat = data.heatmapSeries || [];
 
-    if (!data) return (
-        <div className="card p-20 flex flex-col items-center justify-center text-center opacity-60">
-            <Info size={48} className="text-text-tertiary mb-4" />
-            <h3 className="text-lg font-bold">No data found</h3>
-            <p className="text-sm text-text-secondary max-w-sm mt-2">Adjust your filters to see metrics for different teams or time periods.</p>
-        </div>
-    );
+    // Build week-rows for the heatmap (7 columns, starting weekday of first day)
+    const startDow = heat.length ? new Date(heat[0]._id + 'T00:00:00Z').getUTCDay() : 0;
+    const paddedCells: (null | any)[] = [...Array(startDow).fill(null), ...heat];
+    const maxHeatTasks = Math.max(...heat.map((h: any) => h.tasks), 1);
 
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const last28Dates = Array.from({ length: 28 }, (_, i) => {
-        const d = new Date(today);
-        d.setDate(d.getDate() - (27 - i));
-        return d;
-    });
-
-    const maxTasks = data?.heatmapRaw?.reduce((max: number, current: any) => Math.max(max, current.tasks), 1) || 1;
-
-    const heatmapDays = last28Dates.map((date, i) => {
-        const dateStr = date.toISOString().split('T')[0];
-        const dayData = (data?.heatmapRaw || []).find((h: any) => h._id === dateStr);
-        const tasks = dayData ? dayData.tasks : 0;
-        return {
-            date: dateStr,
-            day: i + 1,
-            tasks,
-            intensity: tasks / maxTasks
-        };
-    });
-
-    const startingDayOfWeek = last28Dates[0].getDay(); // 0 is Sun, 1 is Mon
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weekHeaders = Array.from({length: 7}, (_, i) => dayNames[(startingDayOfWeek + i) % 7]);
-
-    const COLORS = ['#f8fafc', '#eff6ff', '#dbeafe', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6'];
+    const stats = [
+        { label: 'Open Tasks', value: summary.totalOpenTasks ?? 0, sub: 'not yet completed', icon: <BarChart3 size={22} />, color: 'var(--color-info)' },
+        { label: 'Estimated Hours', value: `${summary.totalEstimatedHours ?? 0}h`, sub: 'queued across the team', icon: <Gauge size={22} />, color: 'var(--color-primary)' },
+        { label: 'Over Capacity', value: summary.overloadedMembers ?? 0, sub: `above ${hoursPerWeek}h / week`, icon: <AlertTriangle size={22} />, color: 'var(--color-danger)' },
+        { label: 'Stale Tasks', value: summary.staleTotal ?? 0, sub: 'untouched for 7+ days', icon: <CalendarClock size={22} />, color: 'var(--color-warning)' },
+        { label: 'People Loaded', value: data.totalMembers ?? dist.length, sub: 'with active work', icon: <Users size={22} />, color: 'var(--color-success)' },
+    ];
 
     return (
-        <div className="space-y-8 pb-10">
-            {/* Workload Distribution */}
-            <div style={{
-                marginBottom:"20px"
-            }} className="card p-8 border-border/60 bg-surface/50">
-                <div className="flex items-center justify-between mb-12">
+        <div className="space-y-6 pb-10">
+            {/* Stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                {stats.map((stat, i) => <StatCard key={i} {...stat} />)}
+            </div>
+
+            {/* Estimated-hours load chart */}
+            <div className="card p-8 border-border/60 bg-surface/50">
+                <div className="flex items-center justify-between mb-8">
                     <div>
                         <h3 className="text-lg font-bold tracking-tight text-text flex items-center gap-2">
-                            <Users size={20} className="text-primary" />
-                            Team Load Balancing
+                            <Gauge size={20} className="text-primary" />
+                            Estimated Load per Person
                         </h3>
-                        <p className="text-sm text-text-secondary mt-1">Comparing task volumes per team member.</p>
+                        <p className="text-sm text-text-secondary mt-1">Summed time estimates of open tasks. Red line = weekly capacity ({hoursPerWeek}h).</p>
                     </div>
-                    <button 
-                        onClick={() => onDrilldown('Workload Distribution', data.workloadDistribution || [])}
-                        className="btn btn-secondary btn-sm rounded-lg"
-                    >
+                    <button onClick={() => onDrilldown('Workload Distribution', dist)} className="btn btn-secondary btn-sm rounded-lg">
                         View Details
                     </button>
                 </div>
-
-                <div className="h-100">
+                <div className="h-96">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data.workloadDistribution || []} margin={{ left: 20, right: 30, top: 0, bottom: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.4} />
-                            <XAxis 
-                                dataKey="name" 
-                                tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-tertiary)' }}
-                                axisLine={false}
-                                tickLine={false}
-                                dy={10}
-                            />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-tertiary)' }} />
-                            <ReTooltip 
-                                cursor={{fill: 'var(--color-primary)', opacity: 0.05}}
-                                contentStyle={{ 
-                                    backgroundColor: 'var(--color-surface)', 
-                                    borderRadius: '12px', 
-                                    border: '1px solid var(--color-border)',
-                                    boxShadow: 'var(--shadow-xl)',
-                                    fontSize: '13px'
-                                }}
-                            />
-                            <Bar 
-                                dataKey="taskCount" 
-                                radius={[8, 8, 0, 0]} 
-                                barSize={40}
-                                fill="var(--color-primary)"
-                                name="Active Tasks"
-                            >
-                                {(data.workloadDistribution || []).map((entry: any, index: number) => (
-                                    <Cell key={`cell-${index}`} fill={entry.taskCount > 8 ? 'var(--color-danger)' : 'var(--color-primary)'} />
+                        <BarChart data={dist} layout="vertical" margin={{ left: 10, right: 30 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" opacity={0.4} />
+                            <XAxis type="number" axisLine={false} tickLine={false} tick={axisTick} unit="h" />
+                            <YAxis type="category" dataKey="name" width={100} axisLine={false} tickLine={false}
+                                tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-secondary)' }}
+                                tickFormatter={(val: string) => val.length > 12 ? val.substring(0, 11) + '…' : val} />
+                            <ReTooltip cursor={{ fill: 'var(--color-primary)', opacity: 0.05 }} contentStyle={chartTooltipStyle}
+                                formatter={((value: any, name: string): [any, string] => {
+                                    if (name === 'estimatedHours') return [`${value}h`, 'Estimated'];
+                                    return [value, name === 'urgentHighCount' ? 'Urgent/High' : String(name)];
+                                }) as any} />
+                            <ReferenceLine x={hoursPerWeek} stroke="var(--color-danger)" strokeDasharray="5 4"
+                                label={{ value: `Capacity ${hoursPerWeek}h`, position: 'top', fontSize: 11, fontWeight: 700, fill: 'var(--color-danger)' }} />
+                            <Bar dataKey="estimatedHours" radius={[0, 6, 6, 0]} barSize={18}
+                                onClick={(entry: any) => entry?.payload && onDrilldown(`${entry.payload.name} — Tasks`, [entry.payload])}>
+                                {dist.map((entry: any, index: number) => (
+                                    <Cell key={`cell-${index}`}
+                                        fill={entry.capacityPct > 150 ? 'var(--color-danger)' : entry.capacityPct > 90 ? 'var(--color-warning)' : 'var(--color-primary)'}
+                                        cursor="pointer" />
                                 ))}
                             </Bar>
                         </BarChart>
@@ -171,85 +100,87 @@ const WorkloadReport = ({ filters, onDrilldown }: WorkloadReportProps): React.JS
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Intensity Matrix */}
-                <div className="card p-8 border-border/60 bg-surface/50 overflow-hidden relative group">
-                    <div className="absolute -top-10 -right-10 p-10 opacity-[0.03] text-primary group-hover:scale-110 transition-transform duration-700">
-                        <Calendar size={180} />
-                    </div>
-                    <div className="flex items-center justify-between mb-10 relative z-10">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Heatmap */}
+                <div className="card p-8 border-border/60 bg-surface/50 relative overflow-hidden group">
+                    <div className="flex items-center justify-between mb-8 relative z-10">
                         <div>
                             <h3 className="text-lg font-bold tracking-tight text-text flex items-center gap-2">
-                                <BarChart3 size={20} className="text-info" />
+                                <Flame size={20} className="text-warning" />
                                 Activity Intensity
                             </h3>
-                            <p className="text-sm text-text-secondary mt-1">Temporal task concentration matrix.</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                             {COLORS.map((c, i) => (
-                                 <div key={i} className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c }}></div>
-                             ))}
+                            <p className="text-sm text-text-secondary mt-1">Task updates per day in the selected window.</p>
                         </div>
                     </div>
-                    
-                    <div className="grid grid-cols-7 gap-2 relative z-10">
-                        {weekHeaders.map(day => (
+                    <div className="grid grid-cols-7 gap-x-2 gap-y-2 relative z-10">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                             <div key={day} className="text-[10px] font-bold text-text-tertiary text-center mb-1 uppercase tracking-widest">{day}</div>
                         ))}
-                        {heatmapDays.map((d, i) => (
-                            <div 
+                        {paddedCells.map((d, i) => d === null ? (
+                            <div key={`pad-${i}`} />
+                        ) : (
+                            <div
                                 key={i}
                                 onMouseEnter={() => setHoveredDay(i)}
                                 onMouseLeave={() => setHoveredDay(null)}
-                                className={`h-12 rounded-lg cursor-pointer transition-all duration-300 ${
-                                    hoveredDay === i ? 'scale-110 z-10 shadow-lg ring-2 ring-primary/40' : 'scale-100'
+                                onClick={() => onDrilldown(`Activity — ${d._id}`, [d])}
+                                className={`h-11 rounded-lg cursor-pointer transition-all duration-200 ${
+                                    hoveredDay === i ? 'scale-110 z-10 shadow-lg ring-2 ring-primary/40' : ''
                                 }`}
-                                style={{ 
-                                    backgroundColor: COLORS[Math.min(Math.floor(d.intensity * COLORS.length), COLORS.length - 1)],
-                                    border: '1px solid var(--color-border)'
+                                style={{
+                                    backgroundColor: heatColor(d.tasks / maxHeatTasks),
+                                    border: '1px solid var(--color-border)',
                                 }}
-                                title={`${d.date}: ${d.tasks} focused checkpoints`}
+                                title={`${new Date(d._id + 'T00:00:00').toLocaleDateString()}: ${d.tasks} task updates`}
                             />
                         ))}
                     </div>
+                    <div className="flex items-center justify-end gap-1.5 mt-6 relative z-10">
+                        <span className="text-[10px] font-bold text-text-tertiary uppercase tracking-wider mr-1">Less</span>
+                        {[0.02, 0.25, 0.5, 0.75, 1].map(v => (
+                            <div key={v} className="w-2.5 h-2.5 rounded-sm border border-border" style={{ backgroundColor: heatColor(v) }}></div>
+                        ))}
+                        <span className="text-[10px] font-bold text-text-tertiary uppercase tracking-wider ml-1">More</span>
+                    </div>
                 </div>
 
-                {/* Overload Alert Matrix */}
-                <div className="card p-8 border-l-4 border-l-danger border-border/60 bg-surface/50">
-                    <div className="flex items-center gap-3 mb-10">
+                {/* Capacity alerts */}
+                <div className="card p-8 border-l-4 border-l-danger border-border/60 bg-surface/50 flex flex-col max-h-[26rem]">
+                    <div className="flex items-center gap-3 mb-6">
                         <AlertTriangle className="text-danger" size={24} />
                         <div>
                             <h3 className="text-lg font-bold tracking-tight text-danger">Capacity Alerts</h3>
-                            <p className="text-sm text-text-secondary mt-1">Personnel exceeding standard task ratios.</p>
+                            <p className="text-sm text-text-secondary mt-1">Members above weekly capacity or carrying urgent work.</p>
                         </div>
                     </div>
-
-                    <div className="space-y-4">
-                        {(data.workloadDistribution || []).filter((e: any) => e.taskCount > 8).slice(0, 4).map((emp: any, i: number) => (
-                            <div key={i} className="flex items-center justify-between p-4 bg-surface/60 hover:bg-surface rounded-xl border border-border shadow-sm transition-all group cursor-pointer">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center font-bold text-danger text-sm border border-danger/20 group-hover:scale-110 transition-transform">
-                                        {emp.name.charAt(0)}
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                        {dist.filter((e: any) => e.capacityPct > 90 || e.staleCount > 0).slice(0, 8).map((emp: any, i: number) => {
+                            const over = emp.capacityPct > 90;
+                            return (
+                                <div key={i} className="flex items-center justify-between p-4 bg-surface/60 hover:bg-surface rounded-xl border border-border shadow-sm transition-all cursor-pointer"
+                                    onClick={() => onDrilldown(`${emp.name} — Load`, [emp])}>
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <Avatar src={emp.avatar} name={emp.name} size={40} />
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-bold text-text truncate">{emp.name}</p>
+                                            <p className={`text-xs font-medium ${over ? 'text-danger' : 'text-text-tertiary'}`}>
+                                                {over ? 'Over capacity' : 'Has stale tasks'} · {emp.urgentHighCount} urgent/high
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-text">{emp.name}</p>
-                                        <p className="text-xs text-text-tertiary">Critical Utilization</p>
+                                    <div className="text-right shrink-0 ml-3 w-28">
+                                        <p className={`text-sm font-bold ${over ? 'text-danger' : 'text-warning'}`}>{emp.estimatedHours}h · {emp.capacityPct}%</p>
+                                        <MiniBar pct={Math.max(emp.capacityPct / 2, 8)} color={over ? 'var(--color-danger)' : 'var(--color-warning)'} />
                                     </div>
                                 </div>
-                                <div className="text-right flex flex-col items-end">
-                                    <p className="text-base font-bold text-danger">{emp.taskCount} Tasks</p>
-                                    <div className="w-24 h-1.5 bg-surface-hover rounded-full overflow-hidden mt-1.5 border border-border">
-                                        <div className="w-full h-full bg-danger rounded-full shadow-sm"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                        {(!data.workloadDistribution || data.workloadDistribution.filter((e: any) => e.taskCount > 8).length === 0) && (
-                            <div className="py-12 text-center text-text-tertiary flex flex-col items-center gap-4">
+                            );
+                        })}
+                        {dist.filter((e: any) => e.capacityPct > 90 || e.staleCount > 0).length === 0 && (
+                            <div className="py-14 text-center text-text-tertiary flex flex-col items-center gap-4">
                                 <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center text-success">
-                                    <CheckCircle size={24} />
+                                    <Users size={24} />
                                 </div>
-                                <p className="text-sm font-medium">All personnel are within capacity limits.</p>
+                                <p className="text-sm font-medium">Everyone is within capacity limits.</p>
                             </div>
                         )}
                     </div>
@@ -259,11 +190,33 @@ const WorkloadReport = ({ filters, onDrilldown }: WorkloadReportProps): React.JS
     );
 };
 
-const CheckCircle = ({ size }: { size: number }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
+const WorkloadSkeleton = () => (
+    <div className="space-y-8 animate-pulse pb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+            {[...Array(5)].map((_, i) => (
+                <div key={i} className="card p-6 border-border/40 h-32">
+                    <div className="w-12 h-12 rounded-xl bg-surface-hover"></div>
+                    <div className="mt-4 w-20 h-7 bg-surface-hover rounded-lg"></div>
+                </div>
+            ))}
+        </div>
+        <div className="card p-8 border-border/40 bg-surface/50 h-[26rem]">
+            <div className="w-56 h-7 bg-surface-hover rounded-lg mb-10"></div>
+            <div className="w-full h-64 bg-surface-hover rounded-2xl opacity-40"></div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {[1, 2].map(i => (
+                <div key={i} className="card p-8 border-border/40 bg-surface/50 h-80">
+                    <div className="w-48 h-6 bg-surface-hover rounded-lg mb-10"></div>
+                    <div className="grid grid-cols-7 gap-3">
+                        {[...Array(28)].map((_, j) => (
+                            <div key={j} className="h-11 bg-surface-hover rounded-lg opacity-60"></div>
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
 );
 
 export default WorkloadReport;

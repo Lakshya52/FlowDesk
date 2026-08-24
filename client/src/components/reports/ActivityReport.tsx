@@ -1,321 +1,255 @@
-import * as React from 'react';
-import { useEffect, useState } from 'react';
-import { 
-    ResponsiveContainer, PieChart, Pie, Cell, Tooltip as ReTooltip, 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+import {
+    ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell,
+    Tooltip as ReTooltip, XAxis, YAxis, CartesianGrid
 } from 'recharts';
-import api from '../../lib/api';
-import { Activity, Box, History, Send, Archive, MessageSquare, Info, Layers, CheckCircle } from 'lucide-react';
+import { Activity, History, Trophy, Layers, Users, FolderKanban } from 'lucide-react';
+import useReportQuery from '../../hooks/useReportQuery';
+import { ReportError, ReportEmpty, chartTooltipStyle, axisTick, MiniBar } from './ReportStates';
+import Avatar from '../common/Avatar';
 
 interface ActivityReportProps {
     filters: any;
     onDrilldown: (title: string, data: any[]) => void;
 }
 
-const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JSX.Element | null => {
-    const [data, setData] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
+const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const { data: reportData } = await api.get('/reports/activity', { params: filters });
-                setData(reportData.data);
-            } catch (err) {
-                console.error('Failed to fetch activity report', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [filters]);
+const getActionLabel = (action: string) =>
+    action ? action.charAt(0).toUpperCase() + action.slice(1) : 'Other';
 
-    if (loading) return (
-        <div className="space-y-8 animate-pulse pb-10">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5" style={{ marginBottom:"20px" }}>
-                {/* Distribution Skeleton */}
-                <div className="card p-8 flex flex-col items-center border-border/40 bg-surface/50 h-125">
-                    <div className="w-full mb-8">
-                        <div className="w-40 h-6 bg-surface-hover rounded-lg mb-2"></div>
-                        <div className="w-32 h-3 bg-surface-hover rounded-full opacity-50"></div>
-                    </div>
-                    <div className="w-48 h-48 rounded-full border-16 border-surface-hover opacity-40"></div>
-                    <div className="mt-8 grid grid-cols-2 gap-2 w-full">
-                        {[1, 2, 3, 4].map(i => <div key={i} className="h-10 bg-surface-hover rounded-lg"></div>)}
-                    </div>
-                </div>
+const formatLastActive = (lastActive: string | null) =>
+    lastActive
+        ? new Date(lastActive).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : 'Never';
 
-                {/* Bar Chart Skeleton */}
-                <div className="lg:col-span-2 card p-8 border-border/40 bg-surface/50 h-125">
-                    <div className="flex justify-between mb-10">
-                        <div className="space-y-3">
-                            <div className="w-48 h-7 bg-surface-hover rounded-lg"></div>
-                            <div className="w-64 h-4 bg-surface-hover rounded-lg opacity-60"></div>
-                        </div>
-                    </div>
-                    <div className="w-full h-80 bg-surface-hover rounded-2xl opacity-30"></div>
-                </div>
-            </div>
+const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps) => {
+    const { data, isLoading, isError, refetch } = useReportQuery('/reports/activity', filters);
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {/* List Skeleton */}
-                <div className="card p-8 border-border/40 bg-surface/50 h-150">
-                    <div className="flex gap-4 mb-8">
-                        <div className="w-10 h-10 rounded-xl bg-surface-hover"></div>
-                        <div className="space-y-2">
-                            <div className="w-32 h-6 bg-surface-hover rounded-lg"></div>
-                            <div className="w-24 h-3 bg-surface-hover rounded-full opacity-50"></div>
-                        </div>
-                    </div>
-                    <div className="space-y-3">
-                        {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-surface-hover/30 rounded-xl border border-border"></div>)}
-                    </div>
-                </div>
+    if (isLoading) return <ActivitySkeleton />;
+    if (isError) return <ReportError onRetry={() => refetch()} />;
+    if (!data || !data.totalActivities) {
+        return <ReportEmpty subtitle="No logged activity for the selected scope and time range." />;
+    }
 
-                {/* Timeline Skeleton */}
-                <div className="lg:col-span-2 card p-8 border-border/40 bg-surface/50 h-150">
-                    <div className="w-48 h-7 bg-surface-hover rounded-lg mb-10"></div>
-                    <div className="space-y-8">
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="flex gap-6">
-                                <div className="w-10 h-10 rounded-xl bg-surface-hover shrink-0"></div>
-                                <div className="flex-1 space-y-3">
-                                    <div className="flex justify-between">
-                                        <div className="w-24 h-4 bg-surface-hover rounded-full"></div>
-                                        <div className="w-16 h-3 bg-surface-hover rounded-full opacity-50"></div>
-                                    </div>
-                                    <div className="w-full h-16 bg-surface-hover/40 rounded-xl"></div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+    const dist = data.activityDistribution || [];
+    const contributors = data.topContributors || [];
+    const projects = data.activeProjects || [];
+    const members = data.memberActivity || [];
+    const maxContrib = Math.max(...contributors.map((c: any) => c.count), 1);
+    const maxProject = Math.max(...projects.map((p: any) => p.count), 1);
+    const threshold = data.inactivityThresholdDays || 7;
+    const nActive = members.filter((m: any) => m.status === 'active').length;
+    const nInactive = members.filter((m: any) => m.status === 'inactive').length;
+    const nNever = members.filter((m: any) => m.status === 'never').length;
 
-    if (!data) return (
-        <div className="card p-20 flex flex-col items-center justify-center text-center opacity-60">
-            <Info size={48} className="text-text-tertiary mb-4" />
-            <h3 className="text-lg font-bold">No data found</h3>
-            <p className="text-sm text-text-secondary max-w-sm mt-2">Adjust your filters to see activity logs for different metrics.</p>
-        </div>
-    );
-
-    const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-
-    const getIcon = (action: string) => {
-        const a = action.toLowerCase();
-        if (a.includes('create')) return <Send size={18} className="text-success" />;
-        if (a.includes('update')) return <Activity size={18} className="text-primary" />;
-        if (a.includes('upload') || a.includes('file')) return <Archive size={18} className="text-info" />;
-        if (a.includes('comment')) return <MessageSquare size={18} className="text-warning" />;
-        return <Activity size={18} className="text-text-tertiary" />;
+    const STATUS_META: Record<string, string> = {
+        active: 'bg-success/10 text-success',
+        inactive: 'bg-warning/10 text-warning',
+        never: 'bg-danger/10 text-danger',
+    };
+    const statusChip = (m: any) => {
+        if (m.status === 'never') return 'Never active';
+        if (m.daysInactive === 0) return 'Today';
+        return `${m.daysInactive}d ago`;
     };
 
     return (
-        <div className="space-y-8 pb-10">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5" style={{
-                marginBottom:"20px"
-            }}>
-                {/* Activity Mix */}
-                <div className="card p-8 flex flex-col items-center border-border/60 bg-surface/50 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-6 opacity-[0.03] text-primary group-hover:scale-110 transition-transform duration-700">
-                        <Layers size={120} />
+        <div className="space-y-6 pb-10">
+            {/* Actions over time */}
+            <div className="card p-8 border-border/60 bg-surface/50">
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h3 className="text-lg font-bold tracking-tight text-text flex items-center gap-2">
+                            <Activity size={20} className="text-primary" />
+                            Actions Over Time
+                        </h3>
+                        <p className="text-sm text-text-secondary mt-1">
+                            {data.totalActivities.toLocaleString()} total actions in the selected period.
+                        </p>
                     </div>
-                    <div className="w-full mb-8 relative z-10">
-                        <h3 className="text-lg font-bold tracking-tight text-text">Activity Dynamic</h3>
-                        <p className="text-xs text-text-tertiary mt-1 uppercase tracking-widest font-bold">Action distribution mix</p>
-                    </div>
-                    <div className="h-70 w-full relative z-10 flex items-center justify-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={data.activityDistribution || []}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={70}
-                                    outerRadius={100}
-                                    paddingAngle={5}
-                                    dataKey="count"
-                                    nameKey="_id"
-                                    stroke="none"
-                                >
-                                    {(data.activityDistribution || []).map((_: any, index: number) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]}
-                                        //  cornerRadius={4}
-                                          />
-                                    ))}
-                                </Pie>
-                                <ReTooltip 
-                                     contentStyle={{ 
-                                        backgroundColor: 'var(--color-surface)', 
-                                        borderRadius: '12px', 
-                                        border: '1px solid var(--color-border)',
-                                        boxShadow: 'var(--shadow-xl)',
-                                        padding: '12px',
-                                        fontSize: '13px'
-                                    }}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mb-1">
-                            <span className="text-4xl font-bold text-text tracking-tighter">{data.totalActivities || 0}</span>
-                            <span className="text-[10px] text-text-tertiary font-bold uppercase tracking-widest">Total Logs</span>
-                        </div>
-                    </div>
-                    <div className="mt-8 grid grid-cols-2 gap-2 w-full relative z-10">
-                        {(data.activityDistribution || []).map((item: any, i: number) => (
-                            <div key={i} className="flex items-center gap-2.5 px-3 py-2 bg-surface-hover/40 rounded-lg border border-transparent transition-all hover:bg-surface-hover">
-                                <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                                <span className="text-[11px] font-bold text-text-secondary truncate uppercase tracking-wider">{item._id}</span>
-                            </div>
-                        ))}
-                    </div>
+                    <button onClick={() => onDrilldown('Actions Over Time', data.actionsOverTime || [])} className="btn btn-secondary btn-sm rounded-lg">
+                        View Data
+                    </button>
                 </div>
-
-                {/* Project Activity Volume */}
-                <div className="lg:col-span-2 card p-8 border-border/60 bg-surface/50 group relative overflow-hidden">
-                    <div className="absolute bottom-0 right-0 p-10 opacity-[0.03] text-primary group-hover:scale-110 transition-transform duration-700">
-                        <Box size={200} />
-                    </div>
-                    <div className="flex items-center justify-between mb-10 relative z-10">
-                        <div>
-                            <h3 className="text-lg font-bold tracking-tight text-text">Workspace Intensity</h3>
-                            <p className="text-sm text-text-secondary mt-1">Activity volume per project node.</p>
-                        </div>
-                        <button 
-                            onClick={() => onDrilldown('Project Activity Intensity', data.fileCountPerProject || [])}
-                            className="btn btn-secondary btn-sm rounded-lg"
-                        >
-                            Sync History
-                        </button>
-                    </div>
-                    <div className="h-87.5 relative z-10">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={data.fileCountPerProject || []} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.4} />
-                                <XAxis 
-                                    dataKey="title" 
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-tertiary)' }}
-                                    tickFormatter={(val) => val.length > 14 ? val.substring(0, 14) + '...' : val}
-                                    dy={15}
-                                />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 600, fill: 'var(--color-text-tertiary)' }} />
-                                <ReTooltip 
-                                    cursor={{fill: 'var(--color-primary)', opacity: 0.05}}
-                                    contentStyle={{ 
-                                        backgroundColor: 'var(--color-surface)', 
-                                        borderRadius: '12px', 
-                                        border: '1px solid var(--color-border)',
-                                        boxShadow: 'var(--shadow-xl)',
-                                        padding: '16px',
-                                        fontSize: '13px'
-                                    }}
-                                />
-                                <Bar 
-                                    dataKey="fileCount" 
-                                    fill="var(--color-primary)" 
-                                    radius={[8, 8, 0, 0]} 
-                                    barSize={40} 
-                                    name="Artifacts Logged"
-                                />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
+                <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data.actionsOverTime || []}>
+                            <defs>
+                                <linearGradient id="gradActions" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.35} />
+                                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" opacity={0.5} />
+                            <XAxis dataKey="_id" axisLine={false} tickLine={false} tick={axisTick}
+                                tickFormatter={(val) => new Date(val + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={axisTick} allowDecimals={false} />
+                            <ReTooltip contentStyle={chartTooltipStyle} formatter={(v: any) => [v, 'Actions']} />
+                            <Area type="monotone" dataKey="count" stroke="var(--color-primary)" strokeWidth={2.5} fill="url(#gradActions)" name="actions" />
+                        </AreaChart>
+                    </ResponsiveContainer>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {/* Resource List */}
-                <div className="card p-8 border-border/60 bg-surface/50 group h-fit max-h-150 flex flex-col">
-                    <div className="flex items-center gap-4 mb-8">
-                        <div className="p-2.5 bg-primary/10 text-primary rounded-xl border border-primary/20">
-                            <Archive size={20} />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-bold tracking-tight text-text">Repository Vault</h3>
-                            <p className="text-xs text-text-tertiary mt-0.5 font-bold uppercase tracking-wider">Asset telemetry</p>
+                {/* Action mix donut */}
+                <div className="card p-8 border-border/60 bg-surface/50 relative overflow-hidden group">
+                    <div className="w-full mb-6 relative z-10">
+                        <h3 className="text-lg font-bold tracking-tight text-text">Action Mix</h3>
+                        <p className="text-xs text-text-tertiary mt-1 uppercase tracking-widest font-bold">What's happening</p>
+                    </div>
+                    <div className="h-64 w-full relative z-10 flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={dist.map((d: any) => ({ ...d, label: getActionLabel(d._id) }))}
+                                    cx="50%" cy="50%" innerRadius={62} outerRadius={92}
+                                    paddingAngle={4} dataKey="count" nameKey="label" stroke="none"
+                                >
+                                    {dist.map((_: any, index: number) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <ReTooltip contentStyle={chartTooltipStyle} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-3xl font-bold text-text tracking-tighter">{data.totalActivities}</span>
+                            <span className="text-[10px] text-text-tertiary font-bold uppercase tracking-widest">Actions</span>
                         </div>
                     </div>
-                    <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                        {(data.fileCountPerProject || []).slice(0, 10).map((proj: any, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between p-4 bg-surface/60 hover:bg-surface rounded-xl border border-transparent hover:border-border transition-all group/item cursor-pointer shadow-sm" onClick={() => onDrilldown(`Assets: ${proj.title}`, [proj])}>
-                                <div className="flex items-center gap-4">
-                                    <div className="p-2 bg-surface text-text-tertiary rounded-lg border border-border group-hover/item:bg-primary/10 group-hover/item:text-primary group-hover/item:border-primary/20 transition-all">
-                                        <Box size={16} />
-                                    </div>
-                                    <span className="text-sm font-semibold text-text truncate max-w-30">{proj.title}</span>
-                                </div>
-                                <div className="text-right">
-                                    <span className="text-base font-bold text-primary">{proj.fileCount}</span>
-                                    <span className="text-[10px] font-bold text-text-tertiary ml-1.5 uppercase tracking-widest">FILES</span>
-                                </div>
+                    <div className="mt-6 grid grid-cols-2 gap-2 w-full relative z-10">
+                        {dist.map((item: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-surface-hover/40 rounded-lg transition-all hover:bg-surface-hover cursor-pointer"
+                                onClick={() => onDrilldown(`Action: ${getActionLabel(item._id)}`, [item])}>
+                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                                <span className="text-[11px] font-bold text-text-secondary truncate">{getActionLabel(item._id)}</span>
+                                <span className="text-[11px] font-bold text-text-tertiary ml-auto">{item.count}</span>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* Activity Timeline */}
-                <div className="lg:col-span-2 card p-8 border-border/60 bg-surface/50 h-150 flex flex-col">
-                    <div style={{
-                        marginBottom: "20px"
-                    }} className="flex items-center justify-between mb-10">
+                {/* Top contributors */}
+                <div className="card p-8 border-border/60 bg-surface/50 flex flex-col lg:col-span-2 max-h-[35rem] h-full">
+                    <div className="flex items-center justify-between mb-6">
                         <div>
                             <h3 className="text-lg font-bold tracking-tight text-text flex items-center gap-2">
-                                <History size={20} className="text-primary" />
-                                Operational Log
+                                <Trophy size={20} className="text-warning" />
+                                Top Contributors
                             </h3>
-                            <p className="text-sm text-text-secondary mt-1">Real-time trace of organizational actions.</p>
+                            <p className="text-sm text-text-secondary mt-1">Most logged actions in the period.</p>
                         </div>
-                        {/* <button 
-                            onClick={() => onDrilldown('Recent Activity History', data.recentActivities || [])}
-                            className="btn btn-primary btn-sm rounded-lg"
-                        >
-                            History Node
-                        </button> */}
                     </div>
-
-                    <div className="space-y-6 flex flex-col gap-4 flex-1 overflow-y-auto pr-4 custom-scrollbar pl-2">
-                        {(data.recentActivities || []).slice(0, 10).map((act: any, i: number) => (
-                            <div key={i} className="flex gap-6 group/item relative">
-                                <div className="flex flex-col items-center relative z-10">
-                                    <div className="w-10 h-10 rounded-xl bg-surface border border-border flex items-center justify-center group-hover/item:border-primary/40 group-hover/item:bg-primary/5 transition-all shadow-sm">
-                                        {getIcon(act.action)}
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                        {contributors.map((c: any, i: number) => (
+                            <div key={i} className="flex items-center gap-4 p-3 rounded-xl border border-transparent hover:border-border hover:bg-surface transition-all cursor-pointer"
+                                onClick={() => onDrilldown(`${c.name} — Activity`, [c])}>
+                                <span className={`w-6 text-center text-xs font-black ${i === 0 ? 'text-warning' : 'text-text-tertiary'}`}>{i + 1}</span>
+                                <Avatar src={c.avatar} name={c.name} size={36} />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-sm font-bold text-text truncate">{c.name}</span>
+                                        <span className="text-xs font-bold text-text-secondary shrink-0 ml-2">{c.count} actions</span>
                                     </div>
-                                    {i < Math.min(10, data.recentActivities?.length || 0) - 1 && (
-                                        <div className="w-0.5 flex-1 bg-border/40 my-2"></div>
-                                    )}
-                                </div>
-                                <div className="flex-1 pb-6 relative z-10">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                            act.action.includes('create') ? 'bg-success/10 text-success' : 
-                                            act.action.includes('update') ? 'bg-primary/10 text-primary' : 
-                                            act.action.includes('comment') ? 'bg-warning/10 text-warning' : 'bg-surface-hover text-text-tertiary'
-                                        }`}>
-                                            {act.action}
-                                        </span>
-                                        <span className="text-[10px] font-bold text-text-tertiary uppercase tracking-widest">
-                                            {new Date(act.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                    <div className="p-4 bg-surface/60 rounded-xl border border-transparent group-hover/item:border-border group-hover/item:bg-surface transition-all">
-                                        <p className="text-sm text-text-secondary">
-                                            <span className="font-bold text-text mr-1.5">{act.user?.name || 'Automated System'}</span> 
-                                            &nbsp;processed <span className="font-bold text-primary">{act.entityType}</span> transaction
-                                        </p>
-                                    </div>
+                                    <MiniBar pct={(c.count / maxContrib) * 100} color={COLORS[i % COLORS.length]} />
+                                    <p className="text-[11px] text-text-tertiary mt-1 font-medium">Last active {formatLastActive(c.lastActive)}</p>
                                 </div>
                             </div>
                         ))}
-                        {(!data.recentActivities || data.recentActivities.length === 0) && (
-                            <div className="py-20 text-center opacity-40">
-                                <CheckCircle size={40} className="mx-auto mb-4" />
-                                <p className="text-sm font-bold">No recent activity detected.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Most active projects */}
+                <div className="card p-8 border-border/60 bg-surface/50 flex flex-col max-h-[26rem]">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2.5 bg-primary/10 text-primary rounded-xl border border-primary/20">
+                            <FolderKanban size={18} />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold tracking-tight text-text">Most Active Projects</h3>
+                            <p className="text-xs text-text-tertiary mt-0.5 font-medium">All logged actions per project</p>
+                        </div>
+                    </div>
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                        {projects.map((proj: any, idx: number) => (
+                            <div key={idx}
+                                className="flex items-center justify-between gap-3 p-3.5 bg-surface/60 hover:bg-surface rounded-xl border border-transparent hover:border-border transition-all cursor-pointer"
+                                onClick={() => onDrilldown(`Project: ${proj.title}`, [proj])}>
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <Layers size={16} className="text-text-tertiary shrink-0" />
+                                    <span className="text-sm font-semibold text-text truncate max-w-52">{proj.title}</span>
+                                </div>
+                                <div className="shrink-0 w-32">
+                                    <MiniBar pct={(proj.count / maxProject) * 100} color="var(--color-primary)" />
+                                    <p className="text-[11px] text-text-tertiary mt-1 text-right font-bold">{proj.count} actions</p>
+                                </div>
+                            </div>
+                        ))}
+                        {!projects.length && (
+                            <p className="py-12 text-center text-sm text-text-tertiary">No project-linked activity found.</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Member activity — full roster with engagement status */}
+                <div className="card p-8 border-l-4 border-l-primary border-border/60 bg-surface/50 flex flex-col max-h-[34rem]">
+                    <div className="flex items-start justify-between gap-3 mb-5">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-primary/10 text-primary rounded-xl border border-primary/20">
+                                <Users size={18} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold tracking-tight text-text">Member Activity</h3>
+                                <p className="text-sm text-text-secondary mt-0.5">
+                                    Last work action per member · inactive after {threshold}+ days
+                                </p>
+                            </div>
+                        </div>
+                        {members.length > 0 && (
+                            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                                <span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-success/10 text-success">{nActive} active</span>
+                                <span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-warning/10 text-warning">{nInactive} inactive</span>
+                                <span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-danger/10 text-danger">{nNever} never</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="space-y-2.5 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                        {members.map((m: any, i: number) => (
+                            <div key={i} className="flex items-center justify-between gap-3 p-3.5 bg-surface/60 hover:bg-surface rounded-xl border border-border transition-all">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <Avatar src={m.avatar} name={m.name} size={34} />
+                                    <span className="text-sm font-bold text-text truncate">{m.name}</span>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${STATUS_META[m.status] || STATUS_META.never}`}>
+                                        {statusChip(m)}
+                                    </span>
+                                    {m.lastActive && (
+                                        <p className="text-[10px] font-semibold text-text-tertiary mt-1 whitespace-nowrap">
+                                            Last activity {new Date(m.lastActive).toLocaleString(undefined, {
+                                                month: 'short', day: 'numeric',
+                                                hour: '2-digit', minute: '2-digit',
+                                            })}
+                                        </p>
+                                    )}
+                                    {m.lastLogin && new Date(m.lastLogin) > new Date(m.lastActive || 0) && (
+                                        <p className="text-[10px] font-medium text-text-tertiary/70 whitespace-nowrap">
+                                            signed in {Math.floor((Date.now() - new Date(m.lastLogin).getTime()) / 86400000) === 0
+                                                ? 'today'
+                                                : `${Math.floor((Date.now() - new Date(m.lastLogin).getTime()) / 86400000)}d ago`}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {!members.length && (
+                            <div className="py-14 text-center text-text-tertiary flex flex-col items-center gap-3">
+                                <History size={28} className="opacity-40" />
+                                <p className="text-sm font-medium">No members found for this scope.</p>
                             </div>
                         )}
                     </div>
@@ -324,5 +258,24 @@ const ActivityReport = ({ filters, onDrilldown }: ActivityReportProps): React.JS
         </div>
     );
 };
+
+const ActivitySkeleton = () => (
+    <div className="space-y-8 animate-pulse pb-10">
+        <div className="card p-8 border-border/40 bg-surface/50 h-96">
+            <div className="w-48 h-7 bg-surface-hover rounded-lg mb-8"></div>
+            <div className="w-full h-64 bg-surface-hover rounded-2xl opacity-30"></div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="card p-8 border-border/40 bg-surface/50 h-96">
+                <div className="w-36 h-6 bg-surface-hover rounded-lg mb-8"></div>
+                <div className="w-48 h-48 mx-auto rounded-full bg-surface-hover opacity-40"></div>
+            </div>
+            <div className="lg:col-span-2 card p-8 border-border/40 bg-surface/50 h-96">
+                <div className="w-40 h-6 bg-surface-hover rounded-lg mb-8"></div>
+                {[...Array(4)].map((_, i) => <div key={i} className="h-14 bg-surface-hover/40 rounded-xl mb-3"></div>)}
+            </div>
+        </div>
+    </div>
+);
 
 export default ActivityReport;
