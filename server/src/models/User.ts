@@ -7,6 +7,14 @@ export enum UserRole {
     MEMBER = 'member',
 }
 
+export interface IUserDevice {
+    deviceId: string;
+    /** ECDH P-256 public key in JWK (JSON) form — safe to expose. */
+    publicKey: string;
+    platform: string;
+    createdAt: Date;
+}
+
 export interface IUser extends Document {
     name: string;
     // companyId: string;
@@ -18,6 +26,7 @@ export interface IUser extends Document {
     avatar?: string;
     isActive: boolean;
     lastLogin?: Date;
+    devices?: IUserDevice[];
     resetPasswordOtpHash?: string;
     resetPasswordExpires?: Date;
     googleRefreshToken?: string;
@@ -59,6 +68,15 @@ const userSchema = new Schema<IUser>(
             },
         ],
         lastLogin: { type: Date },
+    devices: [
+        {
+            deviceId: { type: String, required: true },
+            publicKey: { type: String, required: true },
+            platform: { type: String, default: 'unknown' },
+            createdAt: { type: Date, default: Date.now },
+            _id: false,
+        },
+    ],
         resetPasswordOtpHash: { type: String },
         resetPasswordExpires: { type: Date },
         googleRefreshToken : { type: String, default: null},

@@ -25,6 +25,9 @@ declare global {
       onNavigate: (callback: (link: string) => void) => void;
       onGoogleAuthSuccess: (callback: () => void) => void;
       removeGoogleAuthListener: () => void;
+      /** E2EE: OS-keychain-encrypted storage (Electron safeStorage). */
+      secureSave?: (key: string, value: string) => Promise<boolean>;
+      secureRead?: (key: string) => Promise<string | null>;
     };
   }
 }

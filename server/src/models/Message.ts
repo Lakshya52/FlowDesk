@@ -21,6 +21,8 @@ export interface IMessage extends Document {
     readBy: IMessageReadBy[];
     isDeleted?: boolean;
     isEdited?: boolean;
+    /** E2EE: base64 AES-GCM IV. Absent ⇒ legacy plaintext content. */
+    iv?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -42,6 +44,9 @@ const messageSchema = new Schema<IMessage>(
             type: String,
             default: '',
         },
+        // E2EE: base64 AES-GCM IV accompanying encrypted content.
+        // Absent ⇒ legacy plaintext row.
+        iv: { type: String },
         attachments: [
             {
                 type: Schema.Types.ObjectId,

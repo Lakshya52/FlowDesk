@@ -779,3 +779,73 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
         res.status(500).json({ message: error.message });
     }
 };
+/* ------------------------------------------------------------------ */
+/* E2EE device registry                                                */
+/* ------------------------------------------------------------------ */
+
+const MAX_DEVICES_PER_USER = 8;
+
+/** Register (or replace) this device's E2EE public key. Auth: current user only. */
+export const registerDevice = async (req: any, res: Response): Promise<void> => {
+    try {
+        const { deviceId, publicKey } = req.body || {};
+        if (!deviceId || typeof deviceId !== 'string' || !publicKey || typeof publicKey !== 'string') {
+            res.status(400).json({ message: 'deviceId and publicKey are required' });
+            return;
+        }
+        if (!publicKey.includes('"kty"') || !publicKey.includes('"crv"')) {
+            res.status(400).json({ message: 'publicKey must be an ECDH JWK string' });
+            return;
+        }
+        const platform = String(req.body?.platform || 'unknown').slice(0, 32);
+        const user = await User.findById(req.user!._id);
+        if (!user) { res.status(404).json({ message: 'User not found' }); return; }
+
+        user.devices = user.devices || [];
+        const existing = user.devices.find((d: any) => d.deviceId === deviceId);
+        if (existing) {
+            existing.publicKey = publicKey;
+            existing.platform = platform;
+            existing.createdAt = new Date();
+        } else {
+            user.devices.push({ deviceId, publicKey, platform, createdAt: new Date() } as any);
+            // Bound the list � drop the oldest devices beyond the cap
+            while (user.devices.length > MAX_DEVICES_PER_USER) user.devices.shift();
+        }
+        await user.save();
+        res.json({ devices: user.devices });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/**
+ * Fetch E2EE device keys for a set of users (tenant-scoped).
+ * Query: ?userIds=id1,id2,...  (defaults to caller)
+ */
+export const getUserEncryptionKeys = async (req: any, res: Response): Promise<void> => {
+    try {
+        const raw = String(req.query.userIds || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+        const ids = (raw.length ? raw : [String(req.user!._id)])
+            .filter((id: string) => /^[0-9a-f]{24}$/i.test(id))
+            .map((id: string) => new mongoose.Types.ObjectId(id));
+        const users = await User.find(
+            { _id: { $in: ids } },
+            'name devices'
+        ).lean();
+        res.json({
+            users: users.map((u: any) => ({
+                _id: u._id,
+                name: u.name,
+                devices: (u.devices || []).map((d: any) => ({
+                    deviceId: d.deviceId,
+                    publicKey: d.publicKey,
+                    platform: d.platform,
+                    createdAt: d.createdAt,
+                })),
+            })),
+        });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};

@@ -20,6 +20,9 @@ export interface AttachmentSnippet {
     filePath?: string;
     filename?: string;
     contentType?: string;
+    /** E2EE: present ⇒ bytes are ciphertext. */
+    encIv?: string;
+    encKey?: string;
 }
 
 export interface MessageSnippet {
@@ -27,6 +30,8 @@ export interface MessageSnippet {
     conversation: string;
     sender: UserSnippet;
     content: string;
+    /** E2EE: base64 AES-GCM IV — absent ⇒ legacy plaintext content. */
+    iv?: string;
     attachments: AttachmentSnippet[];
     parentMessage?: {
         _id: string;

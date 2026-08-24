@@ -5,6 +5,15 @@ export enum ConversationType {
     GROUP = 'group',
 }
 
+export interface IKeyWrap {
+    userId: mongoose.Types.ObjectId;
+    deviceId: string;
+    /** Ephemeral ECDH public key (JWK string) used to wrap the key for this device. */
+    epk: string;
+    /** base64(iv || AES-GCM(conversationKey)) under the ephemeral-derived KEK. */
+    ct: string;
+}
+
 export interface IConversation extends Document {
     type: ConversationType;
     name?: string;
@@ -13,6 +22,7 @@ export interface IConversation extends Document {
     createdBy?: mongoose.Types.ObjectId;
     admins?: mongoose.Types.ObjectId[];
     readBy?: mongoose.Types.ObjectId[];
+    keyWraps?: IKeyWrap[];
     createdAt: Date;
     updatedAt: Date;
 }
@@ -48,8 +58,17 @@ const conversationSchema = new Schema<IConversation>(
         },
         admins: [
             {
-                type: Schema.Types.ObjectId,
+                type: mongoose.Schema.Types.ObjectId,
                 ref: 'User',
+            },
+        ],
+        keyWraps: [
+            {
+                userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+                deviceId: { type: String, required: true },
+                epk: { type: String, required: true },
+                ct: { type: String, required: true },
+                _id: false,
             },
         ],
     },

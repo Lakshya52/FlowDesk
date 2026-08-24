@@ -10,6 +10,10 @@ export interface IAttachment extends Document {
     assignment?: mongoose.Types.ObjectId;
     task?: mongoose.Types.ObjectId;
     version: number;
+    /** E2EE: base64 AES-GCM IV of the encrypted file bytes. Absent ⇒ legacy plaintext file. */
+    encIv?: string;
+    /** E2EE: per-file AES key wrapped under the conversation key, base64(iv||ct). */
+    encKey?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -25,6 +29,8 @@ const attachmentSchema = new Schema<IAttachment>(
         assignment: { type: Schema.Types.ObjectId, ref: 'Assignment' },
         task: { type: Schema.Types.ObjectId, ref: 'Task' },
         version: { type: Number, default: 1 },
+        encIv: { type: String },
+        encKey: { type: String },
     },
     { timestamps: true }
 );

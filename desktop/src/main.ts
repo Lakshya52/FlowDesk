@@ -8,8 +8,10 @@ import {
   Tray,
   nativeImage,
   Notification,
+  safeStorage,
 } from "electron";
 import * as path from "path";
+import * as fs from "fs";
 import * as dotenv from "dotenv";
 import { autoUpdater } from "electron-updater";
 
@@ -124,6 +126,36 @@ function createMainWindow() {
   mainWindow.on("resize", repositionOverlay);
 
   ipcMain.on("reload-app", () => mainWindow?.reload());
+
+  // ─── E2EE secure storage (OS keychain via safeStorage) ───────────────────
+  // Stores small blobs (device private-key backups) encrypted with the OS
+  // credential vault (DPAPI on Windows / Keychain on macOS / libsecret).
+  const secureStoreDir = path.join(app.getPath("userData"), "e2ee-store");
+  const resolveSecurePath = (key: string) =>
+    path.join(secureStoreDir, `${key.replace(/[^a-zA-Z0-9_-]/g, "_")}.bin`);
+
+  ipcMain.handle("safe-storage-save", (_event, { key, value }: { key: string; value: string }) => {
+    try {
+      if (!safeStorage.isEncryptionAvailable()) return false;
+      fs.mkdirSync(secureStoreDir, { recursive: true });
+      fs.writeFileSync(resolveSecurePath(key), safeStorage.encryptString(value));
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle("safe-storage-read", (_event, { key }: { key: string }) => {
+    try {
+      const file = resolveSecurePath(key);
+      if (!fs.existsSync(file)) return null;
+      const buf = fs.readFileSync(file);
+      if (!safeStorage.isEncryptionAvailable()) return null;
+      return safeStorage.decryptString(buf);
+    } catch {
+      return null;
+    }
+  });
 
   // Handle show-notification request from renderer (delegation)
   ipcMain.on(

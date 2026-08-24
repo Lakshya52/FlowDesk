@@ -37,7 +37,7 @@ import LandingPageNew from "./pages/LandingPageNew";
 // import LandingPage from "./pages/LandingPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import Navbar from "./components/common/Navbar";
-import Footer from "./components/common/Footer";
+// import Footer from "./components/common/Footer";
 import Release from "./pages/Releases";
 import Documentation from "./pages/Documentation";
 import CrmPage from "./pages/CrmPage";
@@ -238,7 +238,7 @@ const AppInner: React.FC = () => {
   const location = useLocation();
   const { token, loadUser } = useAuthStore();
   const showNavbar = ["/", "/release", "/404"].includes(location.pathname);
-  const showFooter = ["/", "/release", "/login", "/register"].includes(location.pathname);
+  // const showFooter = ["/", "/release", "/login", "/register"].includes(location.pathname);
   // Re-sync user (and permissions) from the server on load, so permission
   // changes made by an admin are picked up without requiring re-login.
   React.useEffect(() => {

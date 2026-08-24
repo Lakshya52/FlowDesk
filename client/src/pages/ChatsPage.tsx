@@ -2,6 +2,15 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "../store/authStore";
 import { useChatStore, MessageSnippet, UserSnippet } from "../store/chatStore";
 import api from "../lib/api";
+import {
+    initE2EE,
+    ensureConversationKeys,
+    encryptContent,
+    decryptContent,
+    encryptFileForConversation,
+    decryptAttachmentToBuffer,
+    getDecryptedAttachmentUrl,
+} from "../lib/crypto";
 import { io, Socket } from "socket.io-client";
 import Avatar from "../components/common/Avatar";
 import FilePreviewModal from "../components/common/FilePreviewModal";
@@ -187,6 +196,10 @@ export default function ChatsPage() {
   // File Preview State
   const [previewFile, setPreviewFile] = useState<{ url: string, type: string, name: string } | null>(null);
 
+  // E2EE: decrypted (in-memory) attachment URLs, keyed by `${convId}:${attId}`
+  const [decryptedAttUrls, setDecryptedAttUrls] = useState<Record<string, string>>({});
+  const decryptedAttUrlsRef = useRef<Record<string, string>>({});
+
   // Single persistent socket ref — never recreated on chat switch
   const socketRef = useRef<Socket | null>(null);
   const currentConvRef = useRef<string | null>(null);
@@ -196,7 +209,14 @@ export default function ChatsPage() {
 
   // ─── Socket: create ONCE on mount, clean up on unmount ───────────────────
   useEffect(() => {
-    const socket = io(SOCKET_URL);
+    // E2EE identity: create/load device keypair and publish the public half
+    void initE2EE();
+
+    const socket = io(SOCKET_URL, {
+      // Function form re-reads the (refreshed) token on every reconnect —
+      // the server rejects unauthenticated sockets since the E2EE rollout.
+      auth: (cb) => cb({ token: localStorage.getItem("flowdesk_token") }),
+    });
     socketRef.current = socket;
 
     const joinUser = () => {
@@ -206,8 +226,29 @@ export default function ChatsPage() {
     if (socket.connected) joinUser();
     socket.on("connect", joinUser);
 
-    socket.on("new_chat_message", (message: MessageSnippet) => {
+    socket.on("new_chat_message", async (message: MessageSnippet) => {
       const activeCid = currentConvRef.current;
+      // E2EE: decrypt ciphertext payloads before they touch state
+      if (message.iv && !message.isDeleted && activeCid) {
+        let plain = await decryptContent(activeCid, message.content, message.iv);
+        if (plain.startsWith("\u{1F512}")) {
+          // Key wasn't ready yet (e.g. healing just landed) — fetch it once
+          // and retry rather than leaving a stuck placeholder.
+          const conv = useChatStore
+            .getState()
+            .conversations.find((c) => c._id === activeCid);
+          if (
+            conv &&
+            (await ensureConversationKeys(
+              activeCid,
+              conv.participants.map((p) => p._id),
+            ))
+          ) {
+            plain = await decryptContent(activeCid, message.content, message.iv);
+          }
+        }
+        message = { ...message, content: plain };
+      }
       if (message.conversation === activeCid) {
         setMessages((prev) => {
           if (prev.some((m) => m._id === message._id)) return prev;
@@ -381,7 +422,32 @@ export default function ChatsPage() {
         const { data } = await api.get(
           `/conversations/${activeConversationId}/messages`,
         );
-        const fetchedMsgs: MessageSnippet[] = data.messages || [];
+        let fetchedMsgs: MessageSnippet[] = data.messages || [];
+
+        // E2EE: obtain the conversation key, then decrypt ciphertext rows.
+        const conv = useChatStore
+          .getState()
+          .conversations.find((c) => c._id === activeConversationId);
+        if (conv) {
+          await ensureConversationKeys(
+            activeConversationId,
+            conv.participants.map((p) => p._id),
+          );
+          fetchedMsgs = await Promise.all(
+            fetchedMsgs.map(async (m) => {
+              if (!m.iv || m.isDeleted) return m;
+              return {
+                ...m,
+                content: await decryptContent(
+                  activeConversationId,
+                  m.content,
+                  m.iv,
+                ),
+              };
+            }),
+          );
+        }
+
         setMessages(fetchedMsgs);
         messagesCacheRef.current[activeConversationId] = fetchedMsgs;
         markAsRead(activeConversationId);
@@ -394,9 +460,6 @@ export default function ChatsPage() {
           });
         }
 
-        const conv = useChatStore
-          .getState()
-          .conversations.find((c) => c._id === activeConversationId);
         if (conv?.type === "direct" && user) {
           const other = conv.participants.find((p) => p._id !== user._id);
           setActiveChatUserId(other?._id ?? null);
@@ -425,6 +488,47 @@ export default function ChatsPage() {
     if (activeConversationId) {
       messagesCacheRef.current[activeConversationId] = messages;
     }
+  }, [messages, activeConversationId]);
+
+  // ─── E2EE: decrypt encrypted attachments to blob URLs ────────────────────
+  // Plaintext bytes never hit disk — decrypted blobs live in memory only.
+  useEffect(() => {
+    if (!activeConversationId) return;
+    let cancelled = false;
+    const run = async () => {
+      const tasks: Promise<void>[] = [];
+      for (const m of messages) {
+        for (const att of (m.attachments ?? []) as any[]) {
+          if (!att?._id || !att.encIv || !att.encKey) continue;
+          const key = `${activeConversationId}:${att._id}`;
+          if (decryptedAttUrlsRef.current[key]) continue;
+          const url = att.filePath
+            ? `${SOCKET_URL}${att.filePath}`
+            : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`;
+          tasks.push(
+            (async () => {
+              try {
+                const objUrl = await getDecryptedAttachmentUrl(
+                  activeConversationId,
+                  url,
+                  att.encIv,
+                  att.encKey,
+                  att.fileType || att.contentType || "application/octet-stream",
+                );
+                if (objUrl && !cancelled) {
+                  decryptedAttUrlsRef.current[key] = objUrl;
+                  setDecryptedAttUrls({ ...decryptedAttUrlsRef.current });
+                }
+              } catch { /* leave placeholder */ }
+            })(),
+          );
+        }
+      }
+      await Promise.all(tasks);
+    };
+    void run();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, activeConversationId]);
 
   // ─── Fetch all users for forward dialog ─────────────────────────────
@@ -502,8 +606,30 @@ export default function ChatsPage() {
     }
 
     try {
+      // E2EE: make sure we hold the conversation key, then encrypt the body
+      if (currentConv) {
+        const ok = await ensureConversationKeys(
+          activeConversationId,
+          currentConv.participants.map((p: any) => p._id),
+        );
+        if (!ok) {
+          toast.error("Encryption keys not ready — message not sent");
+          return;
+        }
+      }
+      let payload: { content: string; iv?: string } = {
+        content: messageInput.trim(),
+      };
+      const enc = await encryptContent(activeConversationId, messageInput.trim());
+      if (!enc) {
+        toast.error("Encryption keys not ready — message not sent");
+        return;
+      }
+      payload = enc;
+
       const formData = new FormData();
-      formData.append("content", messageInput.trim());
+      formData.append("content", payload.content);
+      if (payload.iv) formData.append("iv", payload.iv);
       if (replyingTo) formData.append("parentMessageId", replyingTo._id);
       if (matchingMentions.length > 0)
         formData.append("mentions", JSON.stringify(matchingMentions));
@@ -514,10 +640,15 @@ export default function ChatsPage() {
         { headers: { "Content-Type": "multipart/form-data" } },
       );
 
+      // Show the decrypted text locally (server echoes ciphertext back)
+      const localMsg: MessageSnippet = {
+        ...data.message,
+        content: messageInput.trim(),
+      };
       setMessages((prev) =>
         prev.some((m) => m._id === data.message._id)
           ? prev
-          : [...prev, data.message],
+          : [...prev, localMsg],
       );
       setMessageInput("");
       setReplyingTo(null);
@@ -571,12 +702,49 @@ export default function ChatsPage() {
     setIsUploadingFile(true);
 
     try {
+      // E2EE: hold the conversation key before encrypting uploads
+      const currentConv =
+        conversations.find((c) => c._id === activeConversationId) ||
+        tempActiveConv;
+      if (currentConv) {
+        const ok = await ensureConversationKeys(
+          activeConversationId,
+          currentConv.participants.map((p: any) => p._id),
+        );
+        if (!ok) {
+          toast.error("Encryption keys not ready — upload cancelled");
+          return;
+        }
+      }
+
       await Promise.all(
         filesToUpload.map(async (file, idx) => {
           const queueId = initialQueue[idx].id;
           const formData = new FormData();
           formData.append("content", "");
-          formData.append("file", file);
+
+          // Encrypt file bytes with a fresh random key wrapped under the
+          // conversation key; server stores opaque ciphertext + metadata.
+          const encrypted = await encryptFileForConversation(
+            activeConversationId,
+            file,
+          );
+          if (encrypted) {
+            formData.append(
+              "file",
+              new File([encrypted.data], file.name, { type: "application/octet-stream" }),
+            );
+            formData.append("encMeta", encrypted.encMeta);
+          } else {
+            toast.error(`Could not encrypt "${file.name}"`);
+            setUploadingQueue((prev) =>
+              prev.map((item) =>
+                item.id === queueId ? { ...item, status: "failed" } : item,
+              ),
+            );
+            return;
+          }
+
           if (replyingTo) formData.append("parentMessageId", replyingTo._id);
 
           try {
@@ -669,12 +837,24 @@ export default function ChatsPage() {
   // ─── Edit Message ─────────────────────────────────────────────────────────
   const handleEditMessage = async (messageId: string) => {
     if (!editMessageInput.trim()) return;
+    if (!activeConversationId) return;
     try {
+      // E2EE: edits are re-encrypted under the conversation key
+      const enc = await encryptContent(activeConversationId, editMessageInput.trim());
+      if (!enc) {
+        toast.error("Encryption keys not ready");
+        return;
+      }
       const { data } = await api.put(`/conversations/messages/${messageId}`, {
-        content: editMessageInput.trim(),
+        content: enc.content,
+        iv: enc.iv,
       });
       setMessages((prev) =>
-        prev.map((m) => (m._id === messageId ? data.message : m)),
+        prev.map((m) =>
+          m._id === messageId
+            ? { ...data.message, content: editMessageInput.trim() }
+            : m,
+        ),
       );
       setEditingMessageId(null);
       setEditMessageInput("");
@@ -715,6 +895,7 @@ export default function ChatsPage() {
     targetUserId?: string,
   ) => {
     if (!forwardingMessage) return;
+    const sourceConvId = forwardingMessage.conversation;
 
     try {
       let finalConversationId = targetConversationId;
@@ -731,25 +912,76 @@ export default function ChatsPage() {
         addConversation(convData.conversation);
       }
 
-      if (!finalConversationId) return;
+      if (!finalConversationId || finalConversationId === sourceConvId) return;
 
-      const { data } = await api.post(
-        `/conversations/messages/${forwardingMessage._id}/forward`,
-        {
-          targetConversationId: finalConversationId,
-        },
-      );
-
-      setForwardSuccessConvIds((prev) => [...prev, finalConversationId!]);
-
-      if (finalConversationId === activeConversationId) {
-        setMessages((prev) =>
-          prev.some((m) => m._id === data.message._id)
-            ? prev
-            : [...prev, data.message],
-        );
+      // ── E2EE forward: decrypt locally, re-encrypt under the TARGET key.
+      // The server never sees plaintext and never shares attachment ids
+      // between conversations (the old IDOR-prone path is gone).
+      const targetConv =
+        useChatStore.getState().conversations.find((c) => c._id === finalConversationId);
+      const participants =
+        targetConv?.participants.map((p) => p._id) ??
+        (forwardingMessage ? [] : []);
+      const ok = await ensureConversationKeys(finalConversationId, participants as string[]);
+      if (!ok) {
+        toast.error("Encryption keys not ready for the target chat");
+        return;
       }
 
+      // Plain text of the source message ("iv" absent ⇒ legacy plaintext)
+      let plainText = forwardingMessage.content ?? "";
+      if (forwardingMessage.iv) {
+        plainText = await decryptContent(
+          sourceConvId,
+          forwardingMessage.content,
+          forwardingMessage.iv,
+        );
+      }
+      if (plainText.includes("\u{1F512}")) plainText = ""; // don't forward lock placeholders
+
+      const formData = new FormData();
+      const enc = await encryptContent(finalConversationId, plainText.trim());
+      formData.append("content", enc?.content ?? "");
+      if (enc?.iv) formData.append("iv", enc.iv);
+
+      // Re-encrypt attachments for the target conversation
+      const attachments = (forwardingMessage.attachments ?? []) as any[];
+      for (const att of attachments) {
+        try {
+          const url = att.filePath
+            ? `${SOCKET_URL}${att.filePath}`
+            : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`;
+          const resp = await fetch(url, { credentials: "include" });
+          if (!resp.ok) continue;
+          const cipherBuf = await resp.arrayBuffer();
+          const plainBuf = await decryptAttachmentToBuffer(
+            sourceConvId,
+            cipherBuf,
+            att.encIv,
+            att.encKey,
+          );
+          const name = att.originalName || att.fileName || "file";
+          const type = att.fileType || att.contentType || "application/octet-stream";
+          const reEnc = await encryptFileForConversation(
+            finalConversationId,
+            new File([plainBuf], name, { type }),
+          );
+          if (!reEnc) continue;
+          formData.append("file", new File([reEnc.data], name, { type: "application/octet-stream" }));
+          formData.append("encMeta", reEnc.encMeta);
+        } catch (attErr) {
+          console.error("Failed to re-encrypt attachment during forward:", attErr);
+        }
+      }
+
+      await api.post(`/conversations/${finalConversationId}/messages`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (attachments.length && formData.getAll("file").length < attachments.length) {
+        toast("Some attachments could not be forwarded");
+      }
+
+      setForwardSuccessConvIds((prev) => [...prev, finalConversationId!]);
       fetchConversations();
     } catch (err) {
       console.error("Failed to forward message:", err);
@@ -802,9 +1034,37 @@ export default function ChatsPage() {
     : [];
 
   // ─── Forward modal search ───────────────────────────────────────────
-  // const filteredForwardConversations = conversations.filter((c) =>
-  //   matchesNameStart(c.name, forwardSearchQuery),
-  // );
+  // ─── E2EE: decrypt sidebar previews (upgrades as conversation keys arrive) ─
+  const snippetSignature = filteredConversations
+    .map((c) => `${c._id}:${(c.lastMessage as any)?.createdAt || ""}`)
+    .join("|");
+  const [snippetTexts, setSnippetTexts] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const out: Record<string, string> = {};
+      // Warm up keys for conversations whose preview is ciphertext.
+      // Sequential to avoid a burst of requests; results are cached, so
+      // this is one GET per not-yet-seen conversation, ever.
+      for (const c of filteredConversations) {
+        const lm: any = c.lastMessage;
+        if (!lm) continue;
+        if (!lm.iv || lm.isDeleted) {
+          out[c._id] = lm.content || "Sent an attachment";
+          continue;
+        }
+        await ensureConversationKeys(
+          c._id,
+          c.participants.map((p) => p._id),
+        );
+        out[c._id] = await decryptContent(c._id, lm.content ?? "", lm.iv);
+      }
+      if (!cancelled) setSnippetTexts(out);
+    };
+    void run();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snippetSignature]);
 
   const filteredForwardUsers = users.filter((u) => {
     if (u._id === user?._id) return false;
@@ -958,6 +1218,20 @@ export default function ChatsPage() {
                   size={22}
                 />
                 Chat
+                {/* E2EE badge — content is encrypted client-side */}
+                <span
+                  title="Messages in this chat are end-to-end encrypted"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 3,
+                    fontSize: "9px",
+                    color: "#10b981",
+                    fontWeight: 600,
+                  }}
+                >
+                  🔒 End-to-end encrypted
+                </span>
               </h2>
               {/* Collapse sidebar button */}
               <button
@@ -1171,7 +1445,10 @@ export default function ChatsPage() {
                                     {latestMsg.sender._id === user?._id
                                       ? "You: "
                                       : `${latestMsg.sender.name}: `}
-                                    {latestMsg.content || "Sent an attachment"}
+                                    {snippetTexts[c._id] ??
+                                      (latestMsg.iv && !latestMsg.isDeleted
+                                        ? "🔒 Encrypted message"
+                                        : latestMsg.content || "Sent an attachment")}
                                   </>
                                 ) : (
                                   "No messages yet"
@@ -1991,11 +2268,19 @@ export default function ChatsPage() {
                                           const cacheKey = `${att.originalName || att.fileName || att.filename}-${att.fileSize || 0}`;
                                           const localUrl =
                                             localPreviewCache.get(cacheKey);
+                                          const isEncrypted = !!(att as any).encIv && !!(att as any).encKey;
+                                          const decryptedUrl = isEncrypted
+                                            ? decryptedAttUrls[`${activeConversationId}:${(att as any)._id}`]
+                                            : undefined;
+                                          // Encrypted files render from memory blobs only;
+                                          // the raw server URL holds ciphertext, never show it.
                                           const fileUrl =
                                             localUrl ||
-                                            (att.filePath
-                                              ? `${SOCKET_URL}${att.filePath}`
-                                              : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`);
+                                            (isEncrypted
+                                              ? decryptedUrl || ""
+                                              : (att.filePath
+                                                ? `${SOCKET_URL}${att.filePath}`
+                                                : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`));
                                           const ext =
                                             (
                                               att.fileName ||
@@ -2033,40 +2318,63 @@ export default function ChatsPage() {
                                                   maxWidth: 220,
                                                 }}
                                               >
-                                                <img
-                                                  src={fileUrl}
-                                                  alt={att.originalName}
-                                                  style={{
-                                                    objectFit: "cover",
-                                                    maxHeight: 150,
-                                                    width: "100%",
-                                                    borderRadius: 8,
-                                                    display: "block",
-                                                  }}
-                                                />
-                                                <div
-                                                  onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      setPreviewFile({
-                                                          url: fileUrl,
-                                                          type: att.fileType || att.contentType || `image/${ext}`,
-                                                          name: att.originalName || att.fileName || att.filename || ''
-                                                      });
-                                                  }}
-                                                  style={{
-                                                    position: "absolute",
-                                                    inset: 0,
-                                                    background:
-                                                      "rgba(0,0,0,0.4)",
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    color: "white",
-                                                    cursor: "pointer",
-                                                  }}
-                                                >
-                                                  <Eye size={18} />
-                                                </div>
+                                                {isEncrypted && !fileUrl ? (
+                                                  <div
+                                                    style={{
+                                                      height: 100,
+                                                      width: 160,
+                                                      borderRadius: 8,
+                                                      background: isMe
+                                                        ? "rgba(255,255,255,0.15)"
+                                                        : "var(--color-bg)",
+                                                      display: "flex",
+                                                      alignItems: "center",
+                                                      justifyContent: "center",
+                                                      gap: 6,
+                                                      fontSize: 10,
+                                                      opacity: 0.8,
+                                                    }}
+                                                  >
+                                                    🔓 Decrypting…
+                                                  </div>
+                                                ) : (
+                                                  <>
+                                                    <img
+                                                      src={fileUrl}
+                                                      alt={att.originalName}
+                                                      style={{
+                                                        objectFit: "cover",
+                                                        maxHeight: 150,
+                                                        width: "100%",
+                                                        borderRadius: 8,
+                                                        display: "block",
+                                                      }}
+                                                    />
+                                                    <div
+                                                      onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setPreviewFile({
+                                                              url: fileUrl,
+                                                              type: att.fileType || att.contentType || `image/${ext}`,
+                                                              name: att.originalName || att.fileName || att.filename || ''
+                                                          });
+                                                      }}
+                                                      style={{
+                                                        position: "absolute",
+                                                        inset: 0,
+                                                        background:
+                                                          "rgba(0,0,0,0.4)",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        color: "white",
+                                                        cursor: "pointer",
+                                                      }}
+                                                    >
+                                                      <Eye size={18} />
+                                                    </div>
+                                                  </>
+                                                )}
                                               </div>
                                             );
                                           }
@@ -2075,6 +2383,7 @@ export default function ChatsPage() {
                                               key={att._id}
                                               onClick={(e) => {
                                                   e.stopPropagation();
+                                                  if (isEncrypted && !fileUrl) return; // still decrypting
                                                   setPreviewFile({
                                                       url: fileUrl,
                                                       type: att.fileType || att.contentType || '',
@@ -2126,18 +2435,39 @@ export default function ChatsPage() {
                                                     margin: 0,
                                                   }}
                                                 >
-                                                  {(
-                                                    att.fileSize / 1024
-                                                  ).toFixed(1)}{" "}
-                                                  KB
+                                                  {isEncrypted && !fileUrl
+                                                    ? "Decrypting…"
+                                                    : (
+                                                      att.fileSize / 1024
+                                                    ).toFixed(1) + " KB"}
                                                 </p>
                                               </div>
                                               <div
-                                                onClick={(e) => {
+                                                onClick={async (e) => {
                                                     e.stopPropagation();
-                                                    // Trigger download
+                                                    // Trigger download (encrypted files go through an in-memory blob)
+                                                    let href = fileUrl;
+                                                    if (isEncrypted && activeConversationId && !href) {
+                                                      try {
+                                                        const url2 = att.filePath
+                                                          ? `${SOCKET_URL}${att.filePath}`
+                                                          : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`;
+                                                        const objUrl = await getDecryptedAttachmentUrl(
+                                                          activeConversationId,
+                                                          url2,
+                                                          (att as any).encIv,
+                                                          (att as any).encKey,
+                                                          att.fileType || att.contentType || "application/octet-stream",
+                                                        );
+                                                        if (!objUrl) { toast.error("Could not decrypt file"); return; }
+                                                        href = objUrl;
+                                                      } catch {
+                                                        toast.error("Could not decrypt file");
+                                                        return;
+                                                      }
+                                                    }
                                                     const link = document.createElement('a');
-                                                    link.href = fileUrl;
+                                                    link.href = href;
                                                     link.download = att.originalName;
                                                     document.body.appendChild(link);
                                                     link.click();

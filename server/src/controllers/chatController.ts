@@ -126,6 +126,20 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
+        // Authorization: same rule as sendMessage — team member, creator, or admin
+        const AssignmentModel = (await import('../models/Assignment')).default;
+        const assignment = await AssignmentModel.findById(assignmentId);
+        if (!assignment) {
+            res.status(404).json({ message: 'Assignment not found' });
+            return;
+        }
+        const isInTeam = assignment.team?.some((id: any) => id.toString() === req.user!._id.toString());
+        const isCreator = assignment.createdBy.toString() === req.user!._id.toString();
+        if (req.user!.role !== 'admin' && !isInTeam && !isCreator) {
+            res.status(403).json({ message: 'Not authorized to view this assignment chat' });
+            return;
+        }
+
         const pageNum = parseInt(page as string, 10);
         const limitNum = parseInt(limit as string, 10);
         if (isNaN(pageNum) || isNaN(limitNum) || pageNum < 1 || limitNum < 1) {

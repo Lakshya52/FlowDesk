@@ -52,6 +52,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeGoogleAuthListener: () => {
     ipcRenderer.removeAllListeners('google-auth-success');
   },
+
+  // ----- E2EE secure storage (OS keychain via safeStorage) -----
+  // Used to back up the device's E2EE private key, OS-encrypted.
+  // Same-machine restore only by design (no cross-device sync of keys).
+  secureSave: (key: string, value: string) =>
+    ipcRenderer.invoke('safe-storage-save', { key, value }),
+  secureRead: (key: string) =>
+    ipcRenderer.invoke('safe-storage-read', { key }),
 });
 
 console.log('FlowDesk Preload Bridge Initialized');

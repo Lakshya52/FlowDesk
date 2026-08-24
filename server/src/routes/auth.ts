@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { register, login, getMe, getUsers, permanentDeleteUser, deleteUser, activateUser, updateUser, uploadAvatar, removeAvatar, changePassword, forgotPassword, verifyForgotPasswordOtp, verifyRegistrationOtp, resendRegistrationOtp, createUser, refreshToken } from '../controllers/authController';
+import { register, login, getMe, getUsers, permanentDeleteUser, deleteUser, activateUser, updateUser, uploadAvatar, removeAvatar, changePassword, forgotPassword, verifyForgotPasswordOtp, verifyRegistrationOtp, resendRegistrationOtp, createUser, refreshToken, registerDevice, getUserEncryptionKeys } from '../controllers/authController';
 import { authenticate, authorize } from '../middlewares/auth';
 import { upload } from '../middlewares/upload';
 
@@ -31,6 +31,10 @@ router.post('/refresh', authenticate, refreshToken);
 router.put('/change-password', authenticate, changePassword);
 router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/verify-forgot-password-otp', authLimiter, verifyForgotPasswordOtp);
+
+// E2EE device key registry
+router.put('/devices', authenticate, registerDevice);
+router.get('/keys', authenticate, getUserEncryptionKeys);
 
 // Temporary debug route to check SMTP connectivity
 // router.get('/debug-email', async (req, res) => {

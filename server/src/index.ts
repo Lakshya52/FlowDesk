@@ -287,7 +287,8 @@ app.use("/api/backup", backupRoutes);
 // Socket.io authentication middleware
 io.use(async (socket, next) => {
   try {
-    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    // Auth header only — tokens in query strings end up in access logs
+    const token = socket.handshake.auth?.token;
     if (!token) {
       return next(new Error("Authentication required"));
     }
@@ -296,21 +297,58 @@ io.use(async (socket, next) => {
       token as string,
       process.env.JWT_SECRET!,
     ) as { userId: string; tenantId: string };
+    // Load role + active state so room guards and presence are trustworthy
+    const User = (await import("./models/User")).default;
+    const user = await User.findById(decoded.userId).select("role isActive").lean();
+    if (!user || !(user as any).isActive) {
+      return next(new Error("User not found or inactive"));
+    }
     socket.data.userId = decoded.userId;
     socket.data.tenantId = decoded.tenantId;
+    socket.data.role = (user as any).role;
     next();
   } catch {
     next(new Error("Invalid token"));
   }
 });
 
+// ─── Membership-guarded room joins (async DB checks) ─────────────────────
+async function isConversationParticipant(conversationId: string, userId: string): Promise<boolean> {
+  if (!conversationId || !/^[0-9a-f]{24}$/i.test(String(conversationId))) return false;
+  try {
+    const Conversation = (await import("./models/Conversation")).default;
+    const conv = await Conversation.findById(conversationId).select("participants").lean();
+    return !!conv && (conv.participants as any[]).some((p) => p.toString() === String(userId));
+  } catch {
+    return false;
+  }
+}
+
+async function isAssignmentMember(assignmentId: string, userId: string, role: string): Promise<boolean> {
+  if (!assignmentId || !/^[0-9a-f]{24}$/i.test(String(assignmentId))) return false;
+  if (role === "admin") return true;
+  try {
+    const Assignment = (await import("./models/Assignment")).default;
+    const a = await Assignment.findById(assignmentId).select("team createdBy").lean();
+    if (!a) return false;
+    return (
+      (a.createdBy as any)?.toString() === String(userId) ||
+      ((a.team as any[]) || []).some((t) => t.toString() === String(userId))
+    );
+  } catch {
+    return false;
+  }
+}
+
 // Socket.io connection logic
 io.on("connection", (socket) => {
-  socket.on("join_assignment", (assignmentId) => {
+  socket.on("join_assignment", async (assignmentId) => {
+    if (!(await isAssignmentMember(assignmentId, socket.data.userId!, socket.data.role || "member"))) return;
     socket.join(`assignment_${assignmentId}`);
   });
 
-  socket.on("join_conversation", (conversationId) => {
+  socket.on("join_conversation", async (conversationId) => {
+    if (!(await isConversationParticipant(conversationId, socket.data.userId!))) return;
     socket.join(`conversation_${conversationId}`);
   });
 
@@ -327,7 +365,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("user_active_status", ({ userId, status }) => {
-    if (!userId) return;
+    // Presence spoofing guard: a socket may only set its own user's status
+    if (!userId || userId !== socket.data.userId) return;
     if (status === "online") {
       activeUsers.add(userId.toString());
       io.emit("user_status_change", { userId, status: "online" });
@@ -372,6 +411,10 @@ io.on("connection", (socket) => {
 
   socket.on("mark_messages_read", async ({ conversationId, readerId }) => {
     try {
+      // A socket may only mark its own user's reads, and only in conversations
+      // it actually belongs to
+      if (!readerId || readerId !== socket.data.userId) return;
+      if (!(await isConversationParticipant(conversationId, socket.data.userId!))) return;
       const Message = (await import("./models/Message")).default;
       const readAt = new Date();
       await Message.updateMany(

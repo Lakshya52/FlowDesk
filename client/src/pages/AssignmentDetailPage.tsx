@@ -264,9 +264,11 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         };
         fetchAll();
 
-        // Socket connection
+        // Socket connection — server rejects unauthenticated sockets
         const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
-        const socket = io(socketUrl);
+        const socket = io(socketUrl, {
+            auth: (cb) => cb({ token: localStorage.getItem('flowdesk_token') }),
+        });
         socketRef.current = socket;
 
         socket.on('connect', () => {

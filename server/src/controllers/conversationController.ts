@@ -269,7 +269,7 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
 export const sendMessage = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { id: conversationId } = req.params;
-        const { content, mentions, parentMessageId } = req.body;
+        const { content, mentions, parentMessageId, iv } = req.body;
         const senderId = req.user!._id;
 
         // Check if conversation exists and user is participant
@@ -294,6 +294,11 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
                 req.file.originalname,
                 req.file.mimetype
             );
+            // E2EE: client uploads ciphertext bytes + wrapped file key metadata
+            let encMeta: any = null;
+            if (req.body?.encMeta) {
+                try { encMeta = JSON.parse(req.body.encMeta); } catch { encMeta = null; }
+            }
             const attachment = await Attachment.create({
                 fileName: filename,
                 originalName: req.file.originalname,
@@ -301,6 +306,9 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
                 fileSize: req.file.size,
                 filePath: `/uploads/${filename}`,
                 uploadedBy: senderId,
+                ...(encMeta && typeof encMeta.encIv === 'string' && typeof encMeta.encKey === 'string'
+                    ? { encIv: String(encMeta.encIv), encKey: String(encMeta.encKey) }
+                    : {}),
             });
             attachmentIds.push(attachment._id.toString());
         }
@@ -310,6 +318,7 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
             conversation: conversationId,
             sender: senderId,
             content: content || '',
+            iv: iv || undefined, // E2EE: present ⇒ content is ciphertext
             attachments: attachmentIds,
             parentMessage: parentMessageId || undefined,
             mentions: mentions || [],
@@ -365,6 +374,18 @@ export const markConversationRead = async (req: AuthRequest, res: Response): Pro
     try {
         const { id } = req.params;
         const userId = req.user!._id;
+
+        // Authorization: only participants may mark a conversation read
+        const conversation = await Conversation.findById(id);
+        if (!conversation) {
+            res.status(404).json({ message: 'Conversation not found' });
+            return;
+        }
+        if (!conversation.participants.some(p => p.toString() === userId.toString())) {
+            res.status(403).json({ message: 'Not authorized' });
+            return;
+        }
+
         const readAt = new Date();
         // Mark all unread incoming messages as read
         await Message.updateMany(
@@ -575,6 +596,15 @@ export const forwardMessage = async (req: AuthRequest, res: Response): Promise<v
             return;
         }
 
+        // Authorization: the forwarder must also be a participant of the
+        // SOURCE conversation — otherwise this endpoint leaks arbitrary
+        // message content to anyone who knows an id (IDOR).
+        const sourceConversation = await Conversation.findById(originalMessage.conversation);
+        if (!sourceConversation || !sourceConversation.participants.some(p => p.toString() === senderId.toString())) {
+            res.status(403).json({ message: 'Not authorized to forward this message' });
+            return;
+        }
+
         // Check if target conversation exists and current user is a participant
         const targetConversation = await Conversation.findById(targetConversationId);
         if (!targetConversation) {
@@ -631,7 +661,7 @@ export const forwardMessage = async (req: AuthRequest, res: Response): Promise<v
 export const editMessage = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { messageId } = req.params;
-        const { content } = req.body;
+        const { content, iv } = req.body;
         const userId = req.user!._id;
 
         if (!content || !content.trim()) {
@@ -657,6 +687,7 @@ export const editMessage = async (req: AuthRequest, res: Response): Promise<void
 
         // Update message content
         message.content = content.trim();
+        message.iv = iv || undefined; // E2EE: replace ciphertext + IV together
         message.isEdited = true;
         await message.save();
 
@@ -682,6 +713,80 @@ export const editMessage = async (req: AuthRequest, res: Response): Promise<void
         }
 
         res.json({ message: populated });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ------------------------------------------------------------------ */
+/* E2EE conversation key distribution                                  */
+/* The server only ever stores wrapped keys it cannot unwrap.          */
+/* ------------------------------------------------------------------ */
+
+/** Get every key-wrap stored for this conversation (participant only). */
+export const getConversationKeys = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const userId = req.user!._id;
+        const conversation = await Conversation.findById(id).select('participants keyWraps');
+        if (!conversation) { res.status(404).json({ message: 'Conversation not found' }); return; }
+        if (!conversation.participants.some(p => p.toString() === userId.toString())) {
+            res.status(403).json({ message: 'Not authorized' });
+            return;
+        }
+        res.json({ wraps: conversation.keyWraps || [] });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/**
+ * Upsert key-wraps for this conversation.
+ * Body: { wraps: [{ userId, deviceId, epk, ct }] }
+ * Only a participant may publish wraps, and may only publish entries
+ * addressed to conversation participants (enforced server-side).
+ */
+export const putConversationKeys = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const userId = req.user!._id;
+        const wraps = Array.isArray(req.body?.wraps) ? req.body.wraps : [];
+        if (!wraps.length) { res.status(400).json({ message: 'wraps array is required' }); return; }
+
+        const conversation = await Conversation.findById(id);
+        if (!conversation) { res.status(404).json({ message: 'Conversation not found' }); return; }
+        if (!conversation.participants.some(p => p.toString() === userId.toString())) {
+            res.status(403).json({ message: 'Not authorized' });
+            return;
+        }
+
+        const participantIds = new Set(conversation.participants.map((p: any) => p.toString()));
+        const sanitized = wraps
+            .filter((w: any) =>
+                w && typeof w.deviceId === 'string' && typeof w.epk === 'string' &&
+                typeof w.ct === 'string' && w.userId && participantIds.has(String(w.userId)))
+            .slice(0, 200)
+            .map((w: any) => ({
+                userId: w.userId,
+                deviceId: String(w.deviceId).slice(0, 64),
+                epk: String(w.epk),
+                ct: String(w.ct),
+            }));
+
+        conversation.keyWraps = conversation.keyWraps || [];
+        for (const incoming of sanitized) {
+            const idx = conversation.keyWraps.findIndex(
+                (w: any) => String(w.userId) === String(incoming.userId) && w.deviceId === incoming.deviceId
+            );
+            if (idx > -1) conversation.keyWraps[idx] = incoming as any;
+            else conversation.keyWraps.push(incoming as any);
+        }
+        // Rotation replaces the whole set � allow explicit replace semantics
+        if (req.body?.replace === true) {
+            conversation.keyWraps = sanitized as any;
+        }
+        await conversation.save();
+        res.json({ wraps: conversation.keyWraps });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
