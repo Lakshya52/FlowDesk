@@ -297,6 +297,22 @@ function getFallbackResponse(message: string, path: string = "/"): string {
 // ─── POST / — Non-streaming RAG endpoint ────────────────────────────────────
 
 router.post("/", async (req, res) => {
+  // Cancel Ollama generation when the client disconnects
+  const ollamaAbort = new AbortController();
+  let clientGone = false;
+
+  const onClientClose = () => {
+    if (!res.writableEnded) {
+      clientGone = true;
+      ollamaAbort.abort();
+    }
+  };
+  res.on("close", onClientClose);
+
+  const cleanup = () => {
+    res.off("close", onClientClose);
+  };
+
   try {
     const { message, path = "/", context, history = [] } = req.body;
 
@@ -325,6 +341,7 @@ router.post("/", async (req, res) => {
     const response = await fetch(`${OLLAMA_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: ollamaAbort.signal,
       body: JSON.stringify({
         model: GENERATION_MODEL,
         stream: false,
@@ -360,6 +377,16 @@ router.post("/", async (req, res) => {
 
     res.json({ reply: finalReply });
   } catch (err) {
+    cleanup();
+
+    // Client disconnected / generation aborted — nothing to send
+    if (
+      clientGone ||
+      (err instanceof Error && err.name === "AbortError")
+    ) {
+      return;
+    }
+
     console.error("Buddy RAG Error:", err);
     res.json({ reply: getFallbackResponse(req.body?.message || "", req.body?.path || "/") });
   }
@@ -372,6 +399,25 @@ router.post("/stream", async (req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("Access-Control-Allow-Origin", "*");
+
+  // Cancel Ollama generation when the client disconnects (Stop button)
+  const ollamaAbort = new AbortController();
+  let clientGone = false;
+
+  const onClientClose = () => {
+    if (!res.writableEnded) {
+      clientGone = true;
+      ollamaAbort.abort();
+    }
+  };
+  res.on("close", onClientClose);
+
+  const cleanup = () => {
+    res.off("close", onClientClose);
+  };
+
+  const safeWrite = (payload: string): boolean =>
+    !clientGone && !res.destroyed && res.write(payload);
 
   try {
     const { message, path = "/", context, history = [] } = req.body;
@@ -407,6 +453,7 @@ router.post("/stream", async (req, res) => {
     const response = await fetch(`${OLLAMA_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: ollamaAbort.signal,
       body: JSON.stringify({
         model: GENERATION_MODEL,
         stream: true,
@@ -430,14 +477,17 @@ router.post("/stream", async (req, res) => {
 
     if (!response.ok || !response.body) {
       const fallback = getFallbackResponse(message, path);
-      res.write(`data: ${JSON.stringify({ content: fallback })}\n\n`);
-      res.write(`data: [DONE]\n\n`);
+      safeWrite(`data: ${JSON.stringify({ content: fallback })}\n\n`);
+      safeWrite(`data: [DONE]\n\n`);
+      cleanup();
       return res.end();
     }
 
     let buffer = "";
 
     response.body.on("data", (chunk: Buffer) => {
+      if (clientGone) return;
+
       buffer += chunk.toString("utf-8");
 
       const lines = buffer.split("\n");
@@ -450,10 +500,10 @@ router.post("/stream", async (req, res) => {
         try {
           const parsed = JSON.parse(trimmed);
           if (parsed.message?.content) {
-            res.write(`data: ${JSON.stringify({ content: parsed.message.content })}\n\n`);
+            safeWrite(`data: ${JSON.stringify({ content: parsed.message.content })}\n\n`);
           }
           if (parsed.done) {
-            res.write(`data: [DONE]\n\n`);
+            safeWrite(`data: [DONE]\n\n`);
           }
         } catch {
           // skip malformed chunks
@@ -462,7 +512,7 @@ router.post("/stream", async (req, res) => {
     });
 
     response.body.on("end", () => {
-      if (buffer.trim()) {
+      if (!clientGone && buffer.trim()) {
         try {
           const parsed = JSON.parse(buffer.trim());
           if (parsed.message?.content) {
@@ -471,23 +521,40 @@ router.post("/stream", async (req, res) => {
         } catch {
           // skip
         }
+        res.write(`data: [DONE]\n\n`);
       }
-      res.write(`data: [DONE]\n\n`);
-      res.end();
+      cleanup();
+      if (!res.destroyed) res.end();
     });
 
     response.body.on("error", () => {
+      // If we aborted because the client left, there is nobody to notify
+      if (clientGone) {
+        cleanup();
+        return;
+      }
       const fallback = getFallbackResponse(message, path);
-      res.write(`data: ${JSON.stringify({ content: fallback })}\n\n`);
-      res.write(`data: [DONE]\n\n`);
+      safeWrite(`data: ${JSON.stringify({ content: fallback })}\n\n`);
+      safeWrite(`data: [DONE]\n\n`);
+      cleanup();
       res.end();
     });
   } catch (err) {
+    cleanup();
+
+    // Client disconnected / generation aborted — nothing to send
+    if (
+      clientGone ||
+      (err instanceof Error && err.name === "AbortError")
+    ) {
+      return;
+    }
+
     console.error("Buddy RAG Stream Error:", err);
     const fallback = getFallbackResponse(req.body?.message || "", req.body?.path || "/");
-    res.write(`data: ${JSON.stringify({ content: fallback })}\n\n`);
-    res.write(`data: [DONE]\n\n`);
-    res.end();
+    safeWrite(`data: ${JSON.stringify({ content: fallback })}\n\n`);
+    safeWrite(`data: [DONE]\n\n`);
+    if (!res.destroyed) res.end();
   }
 });
 

@@ -229,6 +229,18 @@ app.get("/uploads/:filename/resize", async (req, res) => {
 
 // Ollama proxy endpoint
 app.post("/api/buddy/ollama", authenticate, async (req, res) => {
+  // Cancel Ollama generation when the client disconnects
+  const ollamaAbort = new AbortController();
+  let clientGone = false;
+
+  const onClientClose = () => {
+    if (!res.writableEnded) {
+      clientGone = true;
+      ollamaAbort.abort();
+    }
+  };
+  res.on("close", onClientClose);
+
   try {
     req.setTimeout(120000); // 2 minutes maggie
     res.setTimeout(120000);
@@ -236,6 +248,7 @@ app.post("/api/buddy/ollama", authenticate, async (req, res) => {
     const response = await fetch("http://127.0.0.1:11434/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: ollamaAbort.signal,
       body: JSON.stringify(req.body),
     });
 
@@ -249,12 +262,21 @@ app.post("/api/buddy/ollama", authenticate, async (req, res) => {
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done || clientGone || res.destroyed) break;
       res.write(value);
     }
-    res.end();
+    if (!clientGone && !res.destroyed) res.end();
   } catch (error) {
+    // Client disconnected / generation aborted — nothing to send
+    if (
+      clientGone ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      return;
+    }
     res.status(500).json({ error: "Failed to connect to Ollama" });
+  } finally {
+    res.off("close", onClientClose);
   }
 });
 
