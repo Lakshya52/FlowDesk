@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { ChevronDown, Download, Loader2, AlertCircle, RefreshCw, Calendar, Tag } from "lucide-react"
+import api from "../lib/api"
 
 interface DownloadLink {
   label: string
@@ -19,29 +20,14 @@ interface ReleaseData {
   downloads: OsDownloads[]
 }
 
-const GITHUB_REPO = "Lakshya52/FlowDesk"
+// Releases are proxied through our own backend (/api/releases) which caches
+// for 5 minutes — browsers must never call api.github.com directly, or the
+// whole office shares GitHub's 60 req/hour unauthenticated limit.
 
-// Fetch every published release by paginating through the GitHub API
-// (unauthenticated limit is 60 req/h per IP — surfaced clearly below).
+// code - first call the API.
 async function fetchAllReleases(): Promise<Record<string, unknown>[]> {
-  const all: Record<string, unknown>[] = []
-  for (let page = 1; page <= 20; page++) {
-    const res = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=100&page=${page}`
-    )
-    if (!res.ok) {
-      if (res.status === 403) {
-        throw new Error(
-          "GitHub API rate limit exceeded — please try again in about an hour"
-        )
-      }
-      throw new Error(`GitHub API responded with ${res.status}`)
-    }
-    const batch = (await res.json()) as Record<string, unknown>[]
-    all.push(...batch)
-    if (batch.length < 100) break
-  }
-  return all
+  const { data } = await api.get("/releases")
+  return (data.releases ?? []) as Record<string, unknown>[]
 }
 
 // const WindowsIcon: ComponentType<{ size?: number; className?: string }> = ({ size = 20, className }) => (
@@ -61,10 +47,12 @@ async function fetchAllReleases(): Promise<Record<string, unknown>[]> {
 //   </svg>
 // )
 
+// code - skipping other non-relevent files
 function skipAsset(name: string): boolean {
   return /latest\.yml|\.blockmap|builder-debug\.yml/i.test(name)
 }
 
+// code - file sorting and naming
 function categorizeAsset(name: string, version: string): { os: string; label: string } | null {
   const base = name.replace(new RegExp(`[-]?${version}`, "i"), "").toLowerCase()
 
@@ -99,6 +87,7 @@ function categorizeAsset(name: string, version: string): { os: string; label: st
   return null
 }
 
+// code - icons initlization 
 const osIcons: Record<string, string> = {
   macOS: "/AppleIcon.svg",
   Windows: "/WindowsIcon.svg",

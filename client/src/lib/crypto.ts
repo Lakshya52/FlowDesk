@@ -28,6 +28,16 @@ import api from "./api";
 /** Last failure reason — surfaced by toasts and e2eeDiagnostics(). */
 let lastError = "";
 
+/**
+ * UI hooks for notable E2EE lifecycle events.
+ * onKeyReset fires when this device minted a replacement key over existing
+ * wraps (dead-device recovery) — apps should surface it so users understand
+ * why some older bubbles show as locked.
+ */
+export const e2eeEvents: {
+    onKeyReset: ((conversationId: string) => void) | null;
+} = { onKeyReset: null };
+
 export function getLastError(): string {
     return lastError;
 }
@@ -390,7 +400,7 @@ export async function unwrapWithIdentity(wrap: KeyWrap): Promise<Uint8Array | nu
 }
 
 /* ------------------------------------------------------------------ */
-/* Conversation keys                                                   */
+/* Conversation keys                                                  */
 /* ------------------------------------------------------------------ */
 
 const convKeys = new Map<string, { raw: Uint8Array; key: CryptoKey }>();
@@ -481,29 +491,34 @@ export async function ensureConversationKeys(
         return false;
     }
 
-    // 2) Grace window: another session may be publishing our wrap right now
-    await new Promise((r) => setTimeout(r, 600));
-    try {
-        const { data } = await api.get(`/conversations/${conversationId}/keys`);
-        for (const w of ((data.wraps ?? []) as KeyWrap[]).filter(
-            (x) => x.deviceId === id.deviceId
-        )) {
-            const raw = await unwrapWithIdentity(w);
-            if (raw && raw.length === 32) {
-                convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
-                lastError = "";
-                void healMissingWraps(conversationId, raw, participantIds, wraps);
-                return true;
-            }
-        }
-    } catch { /* fall through to unilateral recovery */ }
+    const hadExistingWraps = wraps.length > 0;
 
-    // 3) Unilateral recovery. The stored wraps may point at dead devices
-    //    (cleared profiles, reinstalls) that nobody can ever unwrap — waiting
-    //    forever helps no one. Mint a FRESH key and append wraps for every
-    //    currently-registered device. Holders of an older key keep reading
-    //    history under it and converge onto this key the next time they open
-    //    the chat (unwrap accepts any entry addressed to them).
+    // 2) Grace window — only when someone else may hold the key (existing
+    //    wraps). A brand-new conversation skips straight to minting.
+    if (hadExistingWraps) {
+        await new Promise((r) => setTimeout(r, 600));
+        try {
+            const { data } = await api.get(`/conversations/${conversationId}/keys`);
+            for (const w of ((data.wraps ?? []) as KeyWrap[]).filter(
+                (x) => x.deviceId === id.deviceId
+            )) {
+                const raw = await unwrapWithIdentity(w);
+                if (raw && raw.length === 32) {
+                    convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
+                    lastError = "";
+                    void healMissingWraps(conversationId, raw, participantIds, wraps);
+                    return true;
+                }
+            }
+        } catch { /* fall through to unilateral recovery */ }
+    }
+
+    // 3) Mint a fresh key. For an empty conversation this is the normal first
+    //    visitor path; after existing wraps it is unilateral recovery (the
+    //    stored wraps may point at dead devices nobody can unwrap).
+    if (hadExistingWraps) {
+        try { e2eeEvents.onKeyReset?.(conversationId); } catch { /* UI hook optional */ }
+    }
     const raw = randomBytes(32);
     convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
     lastError = "";

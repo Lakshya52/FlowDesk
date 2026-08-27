@@ -51,6 +51,7 @@ import boardRoutes from "./routes/boards";
 import { startRecurringJob, stopRecurringJob } from "./services/recurringTaskService";
 import { startFieldVisitHeartbeat } from "./services/fieldVisitHeartbeatService";
 import backupRoutes from "./routes/backup";
+import releasesRoutes from "./routes/releases";
 import { startBackupScheduler, stopBackupScheduler } from "./services/backupScheduleService";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
 
@@ -283,6 +284,7 @@ app.use("/api/field-visits", fieldVisitRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/boards", boardRoutes);
 app.use("/api/backup", backupRoutes);
+app.use("/api/releases", releasesRoutes);
 
 // Socket.io authentication middleware
 io.use(async (socket, next) => {

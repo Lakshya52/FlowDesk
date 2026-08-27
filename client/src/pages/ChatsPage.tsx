@@ -989,7 +989,7 @@ export default function ChatsPage() {
     }
   };
 
-  // â”€â”€â”€ Start Direct Chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Start Direct Chat
   const handleStartDirectChat = async (targetUserId: string) => {
     try {
       const { data } = await api.post("/conversations", {
@@ -1006,7 +1006,7 @@ export default function ChatsPage() {
     }
   };
 
-  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Helpers
   const matchesNameStart = (name: string, query: string) => {
     if (!query) return true;
     const lq = query.toLowerCase().trim();
@@ -1034,8 +1034,8 @@ export default function ChatsPage() {
       })
     : [];
 
-  // â”€â”€â”€ Forward modal search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // â”€â”€â”€ E2EE: decrypt sidebar previews (upgrades as conversation keys arrive) â”€
+  // Forward modal search 
+  // E2EE: decrypt sidebar previews (upgrades as conversation keys arrive)
   const snippetSignature = filteredConversations
     .map((c) => `${c._id}:${(c.lastMessage as any)?.createdAt || ""}`)
     .join("|");
@@ -1135,9 +1135,15 @@ export default function ChatsPage() {
     });
   };
 
-  const emojis = ["ðŸ‘", "â¤ï¸", "ðŸ˜‚", "ðŸ˜®", "ðŸ˜¢", "ðŸ™"];
+  const emojis = [
+    "👍", "❤️", "😂", "😮", "😢", "🙏",
+    "🔥", "👏", "🎉", "😍", "🤣", "💯",
+    "😎", "🤩", "🥳", "🙌", "💪", "✨",
+    "😡", "🤔", "😱", "😭", "😉", "🥰",
+    "😇", "🤯", "😴", "🤗", "👀", "❤️‍🔥"
+  ];
 
-  // Global keyframe styles â€” defined once at top level
+  // Global keyframe styles  defined once at top level
   const globalStyles = `
         @keyframes chatsPageSpinner {
             to { transform: rotate(360deg); }
@@ -1170,8 +1176,9 @@ export default function ChatsPage() {
           position: "relative",
         }}
       >
-        {/* LEFT PANEL: Chats List â€” collapsible */}
+        {/* LEFT PANEL: Chats List collapsible */}
         <div
+
           style={{
             width: sidebarCollapsed ? 0 : (isMobile ? '100%' : 340),
             minWidth: sidebarCollapsed ? 0 : (isMobile ? '100%' : 340),
@@ -1187,32 +1194,11 @@ export default function ChatsPage() {
             ...(isMobile && !sidebarCollapsed ? { position: 'absolute' as any, inset: 0, zIndex: 20 } : {}),
           }}
         >
-          <div
-            style={{
-              padding: 16,
-              borderBottom: "1px solid var(--color-border)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
+          <div className="p-4 border-b border-(--color-border) flex flex-col gap-3">
+            <div className="flex items-center justify-between">
               <h2
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: 700,
-                  margin: 0,
-                  color: "var(--color-text)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
+                className="font-bold m-0 text-(--color-text) flex items-center gap-2"
+                style={{ fontSize: "1.25rem" }}
               >
                 <MessageSquare
                   style={{ color: "var(--color-primary)" }}
@@ -1231,7 +1217,7 @@ export default function ChatsPage() {
                     fontWeight: 600,
                   }}
                 >
-                  ðŸ”’ End-to-end encrypted
+                  End-to-end encrypted
                 </span>
               </h2>
               {/* Collapse sidebar button */}

@@ -687,7 +687,7 @@ export const forgotPassword = async (
 
 		res.status(200).json({
 			message:
-				"An OTP has been sent to your email. It is valid for 15 minutes.",
+				"If that email exists in our system, we have sent a password reset OTP to it.",
 		});
 	} catch (error: any) {
 		res.status(500).json({
