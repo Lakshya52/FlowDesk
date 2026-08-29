@@ -1976,7 +1976,7 @@ const CanvasPage: React.FC = () => {
 			{/* Top Tools */}
 			<div
 				ref={topToolsRef}
-				className="absolute z-[1000] flex w-max max-w-[94vw] flex-col items-center gap-1.5 rounded-full border border-border bg-surface p-2 shadow-lg"
+				className="absolute z-[1000] flex w-max max-w-[94vw] flex-row items-center gap-1.5 rounded-full border border-border bg-surface p-2 shadow-lg transition-all duration-300 ease-out"
 				style={{
 					top: isMobile ? 12 : 24,
 					left: "50%",
@@ -2021,6 +2021,16 @@ const CanvasPage: React.FC = () => {
           {/* Undo / Redo (single toolbar, live-wired to the active note editor) */}
           <ToolbarUndoRedo editor={editEditor} />
           
+					{/* Rich text formatting: shown while a note is being edited, positioned
+						between the undo/redo controls and the Add Note button */}
+					{activeEditId && editEditor && (
+						<div className="flex animate-slide-in items-center gap-1.5">
+							<div className="mx-1 h-6 w-px bg-border" />
+							<RichTextToolbar editor={editEditor} />
+							<div className="mx-1 h-6 w-px bg-border" />
+						</div>
+					)}
+
 					<button
 						onClick={addNote}
 						disabled={loading}
@@ -2037,13 +2047,6 @@ const CanvasPage: React.FC = () => {
 					</button>
 
 				</div>
-
-				{/* Rich text formatting (single toolbar: shown while a note is being edited) */}
-				{activeEditId && editEditor && (
-					<div className="w-full">
-						<RichTextToolbar editor={editEditor} />
-					</div>
-				)}
 			</div>
 
 			{/* Canvas Navigator */}

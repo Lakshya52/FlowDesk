@@ -16,6 +16,8 @@ import type { Section } from "../docs/content";
 import pages, { linkSlugs } from "../docs/content";
 import { useThemeStore } from "../store/themeStore";
 
+
+
 const navSections = [
 	{
 		title: "GETTING STARTED",
@@ -125,19 +127,19 @@ function Sidebar({
 
 				<div className="px-4 pt-4 pb-2 shrink-0">
 					<div className="relative">
-					<Search
-						size={14}
-						className="absolute left-3 top-1/2 -translate-y-1/2 text-[color-mix(in_srgb,var(--color-text)_30%,transparent)]"
-					/>
-					<input
-						ref={inputRef}
-						type="text"
-						placeholder="Search docs..."
-						value={searchQuery}
-						onChange={(e) => onSearchChange(e.target.value)}
-						className="w-full pl-9 pr-10 py-2 text-sm bg-[color-mix(in_srgb,var(--color-primary)_5%,transparent)] border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded-lg outline-none focus:border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] transition-colors font-manrope text-(--color-text)"
-					/>
-					<kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[color-mix(in_srgb,var(--color-text)_30%,transparent)] bg-(--color-surface) border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded px-1.5 py-0.5 font-mono">
+						<Search
+							size={14}
+							className="absolute left-3 top-1/2 -translate-y-1/2 text-[color-mix(in_srgb,var(--color-text)_30%,transparent)]"
+						/>
+						<input
+							ref={inputRef}
+							type="text"
+							placeholder="Search docs..."
+							value={searchQuery}
+							onChange={(e) => onSearchChange(e.target.value)}
+							className="w-full pl-9 pr-10 py-2 text-sm bg-[color-mix(in_srgb,var(--color-primary)_5%,transparent)] border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded-lg outline-none focus:border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] transition-colors font-manrope text-(--color-text)"
+						/>
+						<kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[color-mix(in_srgb,var(--color-text)_30%,transparent)] bg-(--color-surface) border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] rounded px-1.5 py-0.5 font-mono">
 							{/* ⌘K */}
 							Ctrl + K
 						</kbd>
@@ -216,7 +218,84 @@ function Callout({ children }: { children: React.ReactNode }) {
 	);
 }
 
+function DocImage({
+	src,
+	alt,
+	caption,
+}: {
+	src: string;
+	alt: string;
+	caption: string;
+}) {
+	const [open, setOpen] = useState(false);
+
+	useEffect(() => {
+		if (!open) return;
+		const handler = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setOpen(false);
+		};
+		window.addEventListener("keydown", handler);
+		return () => window.removeEventListener("keydown", handler);
+	}, [open]);
+
+	return (
+		<>
+			<figure className="my-6">
+				<div
+					className="rounded-xl overflow-hidden border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_3%,transparent)] group cursor-zoom-in"
+					onClick={() => setOpen(true)}
+					title="Click to expand"
+				>
+					<img
+						src={src}
+						alt={alt}
+						className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+						loading="lazy"
+					/>
+				</div>
+				{caption && (
+					<figcaption className="text-center text-xs text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] mt-2 font-manrope">
+						{caption}
+					</figcaption>
+				)}
+			</figure>
+
+			{open && (
+				<div
+					className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
+					onClick={() => setOpen(false)}
+				>
+					<button
+						onClick={() => setOpen(false)}
+						className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors cursor-pointer"
+						aria-label="Close"
+					>
+						<X size={28} />
+					</button>
+					<div
+						className="max-w-5xl max-h-full flex flex-col items-center"
+						onClick={(e) => e.stopPropagation()}
+					>
+						<img
+							src={src}
+							alt={alt}
+							className="max-w-full max-h-[85dvh] object-contain rounded-lg shadow-2xl"
+						/>
+						{caption && (
+							<p className="text-center text-sm text-white/70 mt-3 font-manrope">
+								{caption}
+							</p>
+						)}
+					</div>
+				</div>
+			)}
+		</>
+	);
+}
+
 function renderSections(sections: Section[]) {
+
+
 	return sections.map((s, i) => {
 		switch (s.type) {
 			case "h2":
@@ -267,14 +346,20 @@ function renderSections(sections: Section[]) {
 				return (
 					<ul key={i} className="space-y-3 mb-4">
 						{items.map(([title, desc]) => {
-							const linkedTitle = title.replace(/<a>(.*?)<\/a>/g, (_, label) => {
-								const slug = linkSlugs[label];
-								return `<a href="/documentation/${slug}" class="text-[var(--color-primary)] hover:underline font-medium">${label}</a>`;
-							});
-							const linkedDesc = desc.replace(/<a>(.*?)<\/a>/g, (_, label) => {
-								const slug = linkSlugs[label];
-								return `<a href="/documentation/${slug}" class="text-[var(--color-primary)] hover:underline font-medium">${label}</a>`;
-							});
+							const linkedTitle = title.replace(
+								/<a>(.*?)<\/a>/g,
+								(_, label) => {
+									const slug = linkSlugs[label];
+									return `<a href="/documentation/${slug}" class="text-[var(--color-primary)] hover:underline font-medium">${label}</a>`;
+								},
+							);
+							const linkedDesc = desc.replace(
+								/<a>(.*?)<\/a>/g,
+								(_, label) => {
+									const slug = linkSlugs[label];
+									return `<a href="/documentation/${slug}" class="text-[var(--color-primary)] hover:underline font-medium">${label}</a>`;
+								},
+							);
 							return (
 								<li
 									key={title}
@@ -287,9 +372,15 @@ function renderSections(sections: Section[]) {
 									<span>
 										<strong
 											className="text-(--color-text) font-semibold"
-											dangerouslySetInnerHTML={{ __html: linkedTitle + ":" }}
+											dangerouslySetInnerHTML={{
+												__html: linkedTitle + ":",
+											}}
 										/>{" "}
-										<span dangerouslySetInnerHTML={{ __html: linkedDesc }} />
+										<span
+											dangerouslySetInnerHTML={{
+												__html: linkedDesc,
+											}}
+										/>
 									</span>
 								</li>
 							);
@@ -384,23 +475,18 @@ function renderSections(sections: Section[]) {
 				);
 			}
 			case "image": {
-				const { src, alt, caption } = s.content as { src: string; alt: string; caption: string };
+				const { src, alt, caption } = s.content as {
+					src: string;
+					alt: string;
+					caption: string;
+				};
 				return (
-					<figure key={i} className="my-6">
-						<div className="rounded-xl overflow-hidden border border-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_3%,transparent)]">
-							<img
-								src={src}
-								alt={alt}
-								className="w-full h-auto object-cover"
-								loading="lazy"
-							/>
-						</div>
-						{caption && (
-							<figcaption className="text-center text-xs text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] mt-2 font-manrope">
-								{caption}
-							</figcaption>
-						)}
-					</figure>
+					<DocImage
+						key={i}
+						src={src}
+						alt={alt}
+						caption={caption}
+					/>
 				);
 			}
 			default:
@@ -423,6 +509,8 @@ export default function Documentation() {
 	const contentRef = useRef<HTMLDivElement>(null);
 	const searchInputRef = useRef<HTMLInputElement | null>(null);
 	const tocRef = useRef<HTMLDivElement>(null);
+
+	
 
 	const page = pages[slug];
 
@@ -469,7 +557,9 @@ export default function Documentation() {
 
 	useEffect(() => {
 		if (!tocRef.current || !activeHeading) return;
-		const activeLink = tocRef.current.querySelector(`[data-toc-heading="${activeHeading}"]`) as HTMLElement | null;
+		const activeLink = tocRef.current.querySelector(
+			`[data-toc-heading="${activeHeading}"]`,
+		) as HTMLElement | null;
 		if (activeLink) {
 			activeLink.scrollIntoView({ behavior: "smooth", block: "nearest" });
 		}
@@ -500,8 +590,7 @@ export default function Documentation() {
 	}
 
 	return (
-		<div className="flex items-start justify-center" >
-
+		<div className="flex items-start justify-center">
 			<div className="min-h-screen flex flex-col w-full 2xl:w-[70dvw]">
 				<header className="h-14 border-b border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_80%,transparent)] backdrop-blur-xl flex items-center px-4 lg:px-6 shrink-0 sticky top-0 z-30">
 					<button
@@ -529,39 +618,47 @@ export default function Documentation() {
 							/>
 						</div>
 
-					<Link
-						to="/"
-						className="font-bold text-sm text-(--color-text) font-manrope"
-					>
-						FlowDesk
-					</Link>
-					<span className="text-[color-mix(in_srgb,var(--color-primary)_30%,transparent)] text-sm mx-1">/</span>
-					<span className="text-sm text-[color-mix(in_srgb,var(--color-text)_50%,transparent)] font-manrope">
-						Docs
-					</span>
-				</div>
-			<div className="ml-auto flex items-center gap-4 text-sm">
-				<button
-					onClick={toggle}
-					className="text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text) transition-colors cursor-pointer "
-					aria-label="Toggle theme"
-				>
-					{isDark ? <Sun size={20} /> : <Moon size={20} />}
-				</button>
-				<Link
-					to="https://github.com/Lakshya52/flowdesk/"
-					target="_blank"
-					className="text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text) transition-colors hidden sm:inline"
-				>
-					<GitHubIcon />
-				</Link>
-				<Link
-					to="/login"
-					className="bg-(--color-primary) text-(--color-surface) px-4 py-1.5 rounded-full text-sm font-bold hover:bg-(--color-primary-hover) transition-colors inline-block font-manrope"
-				>
-					Get&nbsp;Started
-				</Link>
-			</div>
+						<Link
+							to="/"
+							className="font-bold text-sm text-(--color-text) font-manrope"
+						>
+							FlowDesk
+						</Link>
+						<span className="text-[color-mix(in_srgb,var(--color-primary)_30%,transparent)] text-sm mx-1">
+							/
+						</span>
+						<span className="text-sm text-[color-mix(in_srgb,var(--color-text)_50%,transparent)] font-manrope">
+							Docs
+						</span>
+					</div>
+					<div className="ml-auto flex items-center gap-4 text-sm">
+						<Link
+							to="/release"
+							className="font-bold text-sm text-(--color-text) font-manrope"
+						>
+							Releases
+						</Link>
+						<button
+							onClick={toggle}
+							className="text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text) transition-colors cursor-pointer "
+							aria-label="Toggle theme"
+						>
+							{isDark ? <Sun size={20} /> : <Moon size={20} />}
+						</button>
+						<Link
+							to="https://github.com/Lakshya52/flowdesk/"
+							target="_blank"
+							className="text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text) transition-colors hidden sm:inline"
+						>
+							<GitHubIcon />
+						</Link>
+						<Link
+							to="/login"
+							className="bg-(--color-primary) text-(--color-surface) px-4 py-1.5 rounded-full text-sm font-bold hover:bg-(--color-primary-hover) transition-colors inline-block font-manrope"
+						>
+							Get&nbsp;Started
+						</Link>
+					</div>
 				</header>
 
 				<div className="flex flex-1 overflow-hidden">
@@ -574,116 +671,117 @@ export default function Documentation() {
 						inputRef={searchInputRef}
 					/>
 
-				<main
-					ref={contentRef}
-					className="flex-1 overflow-y-auto h-[calc(100vh-3.5rem)] scrollbar-thin scrollbar-thumb-[color-mix(in_srgb,var(--color-primary)_20%,transparent)] scrollbar-track-transparent"
-				>
-					<div className="max-w-2xl mx-auto px-6 lg:px-8 py-10">
-						<nav className="flex items-center gap-1 text-xs text-[color-mix(in_srgb,var(--color-text)_30%,transparent)] mb-6 font-manrope">
-							{page.breadcrumbs.map((crumb, i) => (
-								<span
-									key={i}
-									className="flex items-center gap-1"
-								>
-									{i > 0 && <ChevronRight size={12} />}
-									{crumb.slug ? (
-										<Link
-											to={`/documentation/${crumb.slug}`}
-											className="hover:text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] transition-colors"
-										>
-											{crumb.label}
-										</Link>
-									) : (
-										<span
-											className={
-												i ===
-												page.breadcrumbs.length - 1
-													? "text-[color-mix(in_srgb,var(--color-text)_50%,transparent)]"
-													: ""
-											}
-										>
-											{crumb.label}
-										</span>
-									)}
-								</span>
-							))}
-						</nav>
+					<main
+						ref={contentRef}
+						className="flex-1 overflow-y-auto h-[calc(100vh-3.5rem)] scrollbar-thin scrollbar-thumb-[color-mix(in_srgb,var(--color-primary)_20%,transparent)] scrollbar-track-transparent"
+					>
+						<div className="max-w-2xl mx-auto px-6 lg:px-8 py-10">
+							<nav className="flex items-center gap-1 text-xs text-[color-mix(in_srgb,var(--color-text)_30%,transparent)] mb-6 font-manrope">
+								{page.breadcrumbs.map((crumb, i) => (
+									<span
+										key={i}
+										className="flex items-center gap-1"
+									>
+										{i > 0 && <ChevronRight size={12} />}
+										{crumb.slug ? (
+											<Link
+												to={`/documentation/${crumb.slug}`}
+												className="hover:text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] transition-colors"
+											>
+												{crumb.label}
+											</Link>
+										) : (
+											<span
+												className={
+													i ===
+													page.breadcrumbs.length - 1
+														? "text-[color-mix(in_srgb,var(--color-text)_50%,transparent)]"
+														: ""
+												}
+											>
+												{crumb.label}
+											</span>
+										)}
+									</span>
+								))}
+							</nav>
 
-						<h1 className="text-3xl font-bold text-(--color-text) mb-2 font-manrope">
-							{page.title}
-						</h1>
-						<p className="text-[color-mix(in_srgb,var(--color-text)_50%,transparent)] text-sm mb-2 font-manrope">
-							{page.description}
-						</p>
-						<div className="flex items-center gap-2 text-xs text-[color-mix(in_srgb,var(--color-text)_30%,transparent)] mb-8 font-manrope">
-							<span>Last updated: {page.lastUpdated}</span>
-							<span>·</span>
-							<span>{page.readingTime}</span>
+							<h1 className="text-3xl font-bold text-(--color-text) mb-2 font-manrope">
+								{page.title}
+							</h1>
+							<p className="text-[color-mix(in_srgb,var(--color-text)_50%,transparent)] text-sm mb-2 font-manrope">
+								{page.description}
+							</p>
+							<div className="flex items-center gap-2 text-xs text-[color-mix(in_srgb,var(--color-text)_30%,transparent)] mb-8 font-manrope">
+								<span>Last updated: {page.lastUpdated}</span>
+								<span>·</span>
+								<span>{page.readingTime}</span>
+							</div>
+
+							{renderSections(page.sections)}
+
+							<div className="flex justify-between border-t border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] pt-6 mt-12">
+								{page.prev ? (
+									<Link
+										to={`/documentation/${page.prev.slug}`}
+										className="flex items-center gap-1 text-sm text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-primary) transition-colors font-manrope"
+									>
+										<ArrowLeft size={14} />
+										{page.prev.title}
+									</Link>
+								) : (
+									<div />
+								)}
+								{page.next ? (
+									<Link
+										to={`/documentation/${page.next.slug}`}
+										className="flex items-center gap-1 text-sm text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-primary) transition-colors font-manrope"
+									>
+										{page.next.title}
+										<ArrowRight size={14} />
+									</Link>
+								) : (
+									<div />
+								)}
+							</div>
 						</div>
+					</main>
 
-						{renderSections(page.sections)}
-
-						<div className="flex justify-between border-t border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] pt-6 mt-12">
-							{page.prev ? (
-								<Link
-									to={`/documentation/${page.prev.slug}`}
-									className="flex items-center gap-1 text-sm text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-primary) transition-colors font-manrope"
-								>
-									<ArrowLeft size={14} />
-									{page.prev.title}
-								</Link>
-							) : (
-								<div />
-							)}
-							{page.next ? (
-								<Link
-									to={`/documentation/${page.next.slug}`}
-									className="flex items-center gap-1 text-sm text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-primary) transition-colors font-manrope"
-								>
-									{page.next.title}
-									<ArrowRight size={14} />
-								</Link>
-							) : (
-								<div />
-							)}
+					<aside className="hidden xl:block w-50 shrink-0 border-l border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] h-[calc(100vh-3.5rem)] sticky top-14 overflow-y-auto">
+						<div ref={tocRef} className="px-4 py-8">
+							<h4 className="text-[11px] uppercase tracking-wide text-[color-mix(in_srgb,var(--color-primary)_50%,transparent)] mb-3 font-bold font-manrope">
+								On this page
+							</h4>
+							<nav className="flex flex-col gap-px">
+								{tocHeadings.map((h) => (
+									<a
+										key={h.id}
+										data-toc-heading={h.id}
+										href={`#${h.id}`}
+										onClick={(e) => {
+											e.preventDefault();
+											const el = document.getElementById(
+												h.id,
+											);
+											if (el)
+												el.scrollIntoView({
+													behavior: "smooth",
+												});
+										}}
+										className={`text-sm py-1 transition-colors font-manrope ${
+											activeHeading === h.id
+												? "text-(--color-text) font-semibold"
+												: "text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text)"
+										}`}
+									>
+										{h.text}
+									</a>
+								))}
+							</nav>
 						</div>
-					</div>
-				</main>
-
-			<aside className="hidden xl:block w-50 shrink-0 border-l border-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] h-[calc(100vh-3.5rem)] sticky top-14 overflow-y-auto">
-				<div ref={tocRef} className="px-4 py-8">
-					<h4 className="text-[11px] uppercase tracking-wide text-[color-mix(in_srgb,var(--color-primary)_50%,transparent)] mb-3 font-bold font-manrope">
-						On this page
-					</h4>
-					<nav className="flex flex-col gap-px">
-						{tocHeadings.map((h) => (
-							<a
-								key={h.id}
-								data-toc-heading={h.id}
-								href={`#${h.id}`}
-								onClick={(e) => {
-									e.preventDefault(); 
-									const el = document.getElementById(h.id);
-									if (el)
-										el.scrollIntoView({
-											behavior: "smooth",
-										});
-								}}
-								className={`text-sm py-1 transition-colors font-manrope ${
-									activeHeading === h.id
-										? "text-(--color-text) font-semibold"
-										: "text-[color-mix(in_srgb,var(--color-text)_40%,transparent)] hover:text-(--color-text)"
-								}`}
-							>
-								{h.text}
-							</a>
-						))}
-					</nav>
-				</div>
-			</aside>
+					</aside>
 				</div>
 			</div>
 		</div>
-
 	);
 }

@@ -4,6 +4,23 @@ import { NavLink, useLocation } from "react-router-dom";
 import packageJson from "../../../package.json";
 import { useChatStore } from "../../store/chatStore";
 import { useAuthStore } from "../../store/authStore";
+import { useIconsAnimationStore } from "../../store/iconsAnimationStore";
+
+import {
+	LayoutDashboardIcon,
+	HeadphonesIcon,
+	FolderClosedIcon,
+	UsersRoundIcon,
+	BlocksIcon ,// canvas
+	CalendarDaysIcon ,
+	ContactRoundIcon, 
+	MessageSquareIcon, 
+	MailsIcon,
+	ChartColumnIncreasingIcon,
+	ServerIcon,
+} from "@animateicons/react/lucide";
+import { Settings01Icon } from "@animateicons/react/huge";
+
 import {
 	LayoutDashboard,
 	FolderKanban,
@@ -37,10 +54,49 @@ interface SidebarProps {
 	width?: number;
 }
 
+interface IconAnimationHandle {
+	startAnimation: () => void;
+	stopAnimation: () => void;
+}
+
+// Wraps an @animateicons animated icon so the hover animation is triggered by
+// the parent nav row (not by hovering the icon itself).
+function SidebarIcon({
+	Icon,
+	size,
+	animate,
+}: {
+	Icon: React.ComponentType<any>;
+	size: number;
+	animate: boolean;
+}) {
+	const ref = useRef<IconAnimationHandle>(null);
+	const enabled = useIconsAnimationStore((s) => s.enabled);
+	useEffect(() => {
+		const handle = ref.current;
+		if (!handle) return;
+		if (enabled && animate) handle.startAnimation();
+		else handle.stopAnimation();
+	}, [animate, enabled]);
+	return (
+		<Icon
+			ref={ref}
+			size={size}
+			style={{ flexShrink: 0 }}
+			isAnimated={false}
+		/>
+	);
+}
+
 export interface NavLinkItem {
 	break?: false;
 	to: string;
-	icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
+	icon: React.ComponentType<{
+		size?: number;
+		className?: string;
+		style?: React.CSSProperties;
+		isAnimated?: boolean;
+	}>;
 	label: string;
 	subItems?: SubNavItem[];
 	new?: boolean;
@@ -60,10 +116,10 @@ interface NavBreakItem {
 type NavItem = NavLinkItem | NavBreakItem;
 
 export const navItems: NavItem[] = [
-	{ to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+	{ to: "/dashboard", icon: LayoutDashboardIcon, label: "Dashboard" },
 	{
 		to: "/crm",
-		icon: Headset,
+		icon: HeadphonesIcon,
 		label: "CRM",
 		subItems: [
 			{ to: "/crm/dashboard", label: "Overview" },
@@ -79,7 +135,7 @@ export const navItems: NavItem[] = [
 	{ break: true },
 	{
 		to: "/assignments",
-		icon: FolderKanban,
+		icon: FolderClosedIcon,
 		label: "Productivity",
 		subItems: [
 			{ to: "/assignments", label: "Projects" },
@@ -87,21 +143,21 @@ export const navItems: NavItem[] = [
 			{ to: "/tasks", label: "Kanban View" },
 		],
 	},
-	{ to: "/teams", icon: Users, label: "Our Teams" },
-	{ to: "/canvas", icon: Shapes, label: "Canvas", new: false },
-	{ to: "/calendar", icon: CalendarDays, label: "Calendar", new: false },
+	{ to: "/teams", icon: UsersRoundIcon, label: "Our Teams" },
+	{ to: "/canvas", icon: BlocksIcon, label: "Canvas", new: false },
+	{ to: "/calendar", icon: CalendarDaysIcon, label: "Calendar", new: false },
 	{ break: true },
 	{
 		to: "/clients",
-		icon: Building2,
+		icon: ContactRoundIcon,
 		label: "Companies & Clients",
 		new: false,
 	},
-	{ to: "/chat", icon: MessageSquare, label: "Chat" },
-	{ to: "/bulk-email", icon: Mail, label: "Bulk Messaging", new: false },
+	{ to: "/chat", icon: MessageSquareIcon, label: "Chat" },
+	{ to: "/bulk-email", icon: MailsIcon, label: "Bulk Messaging", new: false },
 	{
 		to: "/reports",
-		icon: BarChart3,
+		icon: ChartColumnIncreasingIcon,
 		label: "Reports",
 		subItems: [
 			{ to: "/reports/employee", label: "Tracking" },
@@ -111,8 +167,8 @@ export const navItems: NavItem[] = [
 		],
 	},
 	{ break: true },
-	{ to: "/backup", icon: HardDrive, label: "Backup" },
-	{ to: "/settings", icon: Settings, label: "Settings" },
+	{ to: "/backup", icon: ServerIcon, label: "Backup" },
+	{ to: "/settings", icon: Settings01Icon, label: "Settings" },
 	// { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
@@ -120,10 +176,14 @@ export const getFirstAllowedRoute = (user: any): string => {
 	if (!user) return "/dashboard";
 	if (user.role === "admin") return "/dashboard";
 
-	const allowed = user.permissions?.allowedTabs ?? navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
+	const allowed =
+		user.permissions?.allowedTabs ??
+		navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
 
 	// Check parent items first
-	const firstParentMatch = navItems.find((item): item is NavLinkItem => !item.break && allowed.includes(item.to));
+	const firstParentMatch = navItems.find(
+		(item): item is NavLinkItem => !item.break && allowed.includes(item.to),
+	);
 	if (firstParentMatch) return firstParentMatch.to;
 
 	// If no parent matches, check subItems (e.g. /tasks)
@@ -154,15 +214,23 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const visibleNavItems =
 		user?.role === "admin"
 			? navItems
-            : navItems.filter((item) => {
-                    const allowedTabs =
-                        user?.permissions?.allowedTabs ??
-                        navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
-                    if (item.break) return true;
-                    if (allowedTabs.includes(item.to)) return true;
-                    if (item.subItems && item.subItems.some(sub => allowedTabs.includes(sub.to))) return true;
-                    return false;
-                });
+			: navItems.filter((item) => {
+					const allowedTabs =
+						user?.permissions?.allowedTabs ??
+						navItems
+							.filter((n): n is NavLinkItem => !n.break)
+							.map((n) => n.to);
+					if (item.break) return true;
+					if (allowedTabs.includes(item.to)) return true;
+					if (
+						item.subItems &&
+						item.subItems.some((sub) =>
+							allowedTabs.includes(sub.to),
+						)
+					)
+						return true;
+					return false;
+				});
 
 	const toggleExpand = (to: string) => {
 		setExpandedItems((prev) => ({
@@ -173,6 +241,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const [hoveredItem, setHoveredItem] = useState<NavLinkItem | null>(null);
 	const [popupTop, setPopupTop] = useState(0);
 	const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	// Tracks which nav row is hovered so the icon animation follows the row.
+	const [hoveredNav, setHoveredNav] = useState<Record<string, boolean>>({});
+
+	const setRowHover = (key: string, hovered: boolean) => {
+		setHoveredNav((prev) => ({ ...prev, [key]: hovered }));
+	};
 
 	const handleHoverStart = (item: NavLinkItem, top: number) => {
 		if (hoverTimeoutRef.current) {
@@ -407,7 +481,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 									display: "flex",
 									flexDirection: "column",
 								}}
-							> 
+							>
 								{hasSubItems ? (
 									// Parent with subItems - clickable to toggle
 									<div
@@ -437,33 +511,45 @@ const Sidebar: React.FC<SidebarProps> = ({
 											transition: "all 0.15s ease",
 											textDecoration: "none",
 										}}
-										onMouseEnter={(e) => {
-											if (!isActiveParent) {
-												e.currentTarget.style.background =
-													"var(--color-surface-hover)";
+									onMouseEnter={(e) => {
+										setRowHover(item.to, true);
+										if (!isActiveParent) {
+											e.currentTarget.style.background =
+												"var(--color-surface-hover)";
+										}
+										if (!isOpen && hasSubItems) {
+											const rect =
+												e.currentTarget.getBoundingClientRect();
+											const asideRect = (
+												e.currentTarget.closest(
+													"aside",
+												) as HTMLElement
+											)?.getBoundingClientRect();
+											if (asideRect) {
+												handleHoverStart(
+													item,
+													rect.top -
+														asideRect.top,
+												);
 											}
-											if (!isOpen && hasSubItems) {
-												const rect = e.currentTarget.getBoundingClientRect();
-												const asideRect = (e.currentTarget.closest("aside") as HTMLElement)?.getBoundingClientRect();
-												if (asideRect) {
-													handleHoverStart(item, rect.top - asideRect.top);
-												}
-											}
-										}}
-										onMouseLeave={(e) => {
-											if (!isActiveParent) {
-												e.currentTarget.style.background =
-													"transparent";
-											}
-											if (!isOpen && hasSubItems) {
-												handleHoverEnd();
-											}
-										}}
-									>
-										<item.icon
-											size={20}
-											style={{ flexShrink: 0 }}
-										/>
+										}
+									}}
+									onMouseLeave={(e) => {
+										setRowHover(item.to, false);
+										if (!isActiveParent) {
+											e.currentTarget.style.background =
+												"transparent";
+										}
+										if (!isOpen && hasSubItems) {
+											handleHoverEnd();
+										}
+									}}
+								>
+									<SidebarIcon
+										Icon={item.icon}
+										size={20}
+										animate={!!hoveredNav[item.to]}
+									/>
 										{isOpen && (
 											<>
 												<span
@@ -515,6 +601,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 											transition: "all 0.15s ease",
 										})}
 										onMouseEnter={(e) => {
+											setRowHover(item.to, true);
 											const el = e.currentTarget;
 											if (
 												!el.classList.contains("active")
@@ -522,9 +609,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 												el.style.background =
 													"var(--color-surface-hover)";
 											}
-											
 										}}
 										onMouseLeave={(e) => {
+											setRowHover(item.to, false);
 											const el = e.currentTarget;
 											if (
 												!el.classList.contains("active")
@@ -541,9 +628,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 												alignItems: "center",
 											}}
 										>
-											<item.icon
+											<SidebarIcon
+												Icon={item.icon}
 												size={20}
-												style={{ flexShrink: 0 }}
+												animate={
+													!!hoveredNav[item.to]
+												}
 											/>
 											{item.to === "/chat" &&
 												totalUnreadCount > 0 &&
@@ -626,140 +716,329 @@ const Sidebar: React.FC<SidebarProps> = ({
 											marginBottom: "4px",
 										}}
 									>
-										{item.subItems.filter(sub => !sub.adminOnly || user?.role === "admin" || user?.role === "manager").map((sub, idx, arr) => {
-											const isLast =
-												idx ===
-												arr.length - 1;
-											const hasNested =
-												!!sub.subItems && sub.subItems.length > 0;
-											const isNestedExpanded =
-												expandedItems[sub.to] ?? (location.pathname.startsWith(sub.to + "/") || location.pathname === sub.to);
-											return (
-												<div key={sub.to} style={{ display: "flex", flexDirection: "column" }}>
+										{item.subItems
+											.filter(
+												(sub) =>
+													!sub.adminOnly ||
+													user?.role === "admin" ||
+													user?.role === "manager",
+											)
+											.map((sub, idx, arr) => {
+												const isLast =
+													idx === arr.length - 1;
+												const hasNested =
+													!!sub.subItems &&
+													sub.subItems.length > 0;
+												const isNestedExpanded =
+													expandedItems[sub.to] ??
+													(location.pathname.startsWith(
+														sub.to + "/",
+													) ||
+														location.pathname ===
+															sub.to);
+												return (
 													<div
+														key={sub.to}
 														style={{
-															position: "relative",
 															display: "flex",
-															alignItems: "center",
+															flexDirection:
+																"column",
 														}}
 													>
-														{/* subitems starts here */}
 														<div
 															style={{
-																position: "absolute",
-																left: 0,
-																top: 0,
-																bottom: isLast && !(hasNested && isNestedExpanded)
-																	? "50%"
-																	: "-4px",
-																borderLeft: "2px solid var(--color-border)",
-																borderBottom: isLast && !(hasNested && isNestedExpanded)
-																	? "2px solid var(--color-border)"
-																	: "none",
-																borderBottomLeftRadius: isLast && !(hasNested && isNestedExpanded) ? "8px" : "0",
-																width: isLast && !(hasNested && isNestedExpanded) ? "20px" : "0",
+																position:
+																	"relative",
+																display: "flex",
+																alignItems:
+																	"center",
 															}}
-														/>
-														{!isLast && (
+														>
+															{/* subitems starts here */}
 															<div
 																style={{
-																	position: "absolute",
+																	position:
+																		"absolute",
 																	left: 0,
-																	top: "50%",
-																	width: "20px",
-																	borderTop: "2px solid var(--color-border)",
+																	top: 0,
+																	bottom:
+																		isLast &&
+																		!(
+																			hasNested &&
+																			isNestedExpanded
+																		)
+																			? "50%"
+																			: "-4px",
+																	borderLeft:
+																		"2px solid var(--color-border)",
+																	borderBottom:
+																		isLast &&
+																		!(
+																			hasNested &&
+																			isNestedExpanded
+																		)
+																			? "2px solid var(--color-border)"
+																			: "none",
+																	borderBottomLeftRadius:
+																		isLast &&
+																		!(
+																			hasNested &&
+																			isNestedExpanded
+																		)
+																			? "8px"
+																			: "0",
+																	width:
+																		isLast &&
+																		!(
+																			hasNested &&
+																			isNestedExpanded
+																		)
+																			? "20px"
+																			: "0",
 																}}
 															/>
-														)}
-
-														{hasNested ? (
-															<div
-																onClick={() => toggleExpand(sub.to)}
-																style={{
-																	marginLeft: "24px",
-																	padding: "8px 12px",
-																	borderRadius: "6px",
-																	fontSize: "0.8125rem",
-																	fontWeight: 500,
-																	color: "var(--color-text-secondary)",
-																	cursor: "pointer",
-																	width: "100%",
-																	display: "flex",
-																	alignItems: "center",
-																	gap: "6px",
-																}}
-															>
-																<span style={{ flex: 1 }}>{sub.label}</span>
-																<ChevronDown
-																	size={12}
+															{!isLast && (
+																<div
 																	style={{
-																		transform: isNestedExpanded ? "rotate(0deg)" : "rotate(-90deg)",
-																		transition: "transform 0.2s ease",
+																		position:
+																			"absolute",
+																		left: 0,
+																		top: "50%",
+																		width: "20px",
+																		borderTop:
+																			"2px solid var(--color-border)",
 																	}}
 																/>
-															</div>
-														) : (
-															<NavLink
-																to={sub.to}
-																style={({ isActive }) => ({
-																	marginLeft: "24px",
-																	padding: "8px 12px",
-																	borderRadius: "6px",
-																	fontSize: "0.8125rem",
-																	fontWeight: isActive ? 600 : 400,
-																	color: isActive ? "var(--color-primary)" : "var(--color-text-secondary)",
-																	textDecoration: "none",
-																	width: "100%",
-																	transition: "all 0.15s ease",
-																})}
-																onMouseEnter={(e) => { if (!e.currentTarget.classList.contains("active")) e.currentTarget.style.color = "var(--color-text)"; }}
-																onMouseLeave={(e) => { if (!e.currentTarget.classList.contains("active")) e.currentTarget.style.color = "var(--color-text-secondary)"; }}
-															>
-																{sub.label}
-															</NavLink>
-														)}
-													</div>
-													{hasNested && isNestedExpanded && (
-														<div style={{ marginLeft: "44px", display: "flex", flexDirection: "column" }}>
-															{sub.subItems!.filter(n => !n.adminOnly || user?.role === "admin" || user?.role === "manager").map((nested, nidx, narr) => {
-																const isNestedLast = nidx === narr.length - 1;
-																return (
-																	<div key={nested.to} style={{ position: "relative", display: "flex", alignItems: "center" }}>
-																		<div style={{
-																			position: "absolute",
-																			left: 0, top: 0,
-																			bottom: isNestedLast ? "50%" : "-4px",
-																			borderLeft: "2px solid var(--color-border)",
-																			borderBottom: isNestedLast ? "2px solid var(--color-border)" : "none",
-																			borderBottomLeftRadius: isNestedLast ? "8px" : "0",
-																			width: isNestedLast ? "20px" : "0",
-																		}} />
-																		{!isNestedLast && (
-																			<div style={{ position: "absolute", left: 0, top: "50%", width: "20px", borderTop: "2px solid var(--color-border)" }} />
-																		)}
-																		<NavLink
-																			to={nested.to}
-																			style={({ isActive }) => ({
-																				marginLeft: "24px",
-																				padding: "7px 10px",
-																				borderRadius: "6px",
-																				fontSize: "0.75rem",
-																				fontWeight: isActive ? 600 : 400,
-																				color: isActive ? "var(--color-primary)" : "var(--color-text-tertiary)",
-																				textDecoration: "none",
-																				width: "100%",
-																			})}
-																		>
-																			{nested.label}
-																		</NavLink>
-																	</div>
-																);
-															})}
+															)}
+
+															{hasNested ? (
+																<div
+																	onClick={() =>
+																		toggleExpand(
+																			sub.to,
+																		)
+																	}
+																	style={{
+																		marginLeft:
+																			"24px",
+																		padding:
+																			"8px 12px",
+																		borderRadius:
+																			"6px",
+																		fontSize:
+																			"0.8125rem",
+																		fontWeight: 500,
+																		color: "var(--color-text-secondary)",
+																		cursor: "pointer",
+																		width: "100%",
+																		display:
+																			"flex",
+																		alignItems:
+																			"center",
+																		gap: "6px",
+																	}}
+																>
+																	<span
+																		style={{
+																			flex: 1,
+																		}}
+																	>
+																		{
+																			sub.label
+																		}
+																	</span>
+																	<ChevronDown
+																		size={
+																			12
+																		}
+																		style={{
+																			transform:
+																				isNestedExpanded
+																					? "rotate(0deg)"
+																					: "rotate(-90deg)",
+																			transition:
+																				"transform 0.2s ease",
+																		}}
+																	/>
+																</div>
+															) : (
+																<NavLink
+																	to={sub.to}
+																	style={({
+																		isActive,
+																	}) => ({
+																		marginLeft:
+																			"24px",
+																		padding:
+																			"8px 12px",
+																		borderRadius:
+																			"6px",
+																		fontSize:
+																			"0.8125rem",
+																		fontWeight:
+																			isActive
+																				? 600
+																				: 400,
+																		color: isActive
+																			? "var(--color-primary)"
+																			: "var(--color-text-secondary)",
+																		textDecoration:
+																			"none",
+																		width: "100%",
+																		transition:
+																			"all 0.15s ease",
+																	})}
+																	onMouseEnter={(
+																		e,
+																	) => {
+																		if (
+																			!e.currentTarget.classList.contains(
+																				"active",
+																			)
+																		)
+																			e.currentTarget.style.color =
+																				"var(--color-text)";
+																	}}
+																	onMouseLeave={(
+																		e,
+																	) => {
+																		if (
+																			!e.currentTarget.classList.contains(
+																				"active",
+																			)
+																		)
+																			e.currentTarget.style.color =
+																				"var(--color-text-secondary)";
+																	}}
+																>
+																	{sub.label}
+																</NavLink>
+															)}
 														</div>
-													)}
-												</div>
-											);
-										})}
+														{hasNested &&
+															isNestedExpanded && (
+																<div
+																	style={{
+																		marginLeft:
+																			"44px",
+																		display:
+																			"flex",
+																		flexDirection:
+																			"column",
+																	}}
+																>
+																	{sub
+																		.subItems!.filter(
+																			(
+																				n,
+																			) =>
+																				!n.adminOnly ||
+																				user?.role ===
+																					"admin" ||
+																				user?.role ===
+																					"manager",
+																		)
+																		.map(
+																			(
+																				nested,
+																				nidx,
+																				narr,
+																			) => {
+																				const isNestedLast =
+																					nidx ===
+																					narr.length -
+																						1;
+																				return (
+																					<div
+																						key={
+																							nested.to
+																						}
+																						style={{
+																							position:
+																								"relative",
+																							display:
+																								"flex",
+																							alignItems:
+																								"center",
+																						}}
+																					>
+																						<div
+																							style={{
+																								position:
+																									"absolute",
+																								left: 0,
+																								top: 0,
+																								bottom: isNestedLast
+																									? "50%"
+																									: "-4px",
+																								borderLeft:
+																									"2px solid var(--color-border)",
+																								borderBottom:
+																									isNestedLast
+																										? "2px solid var(--color-border)"
+																										: "none",
+																								borderBottomLeftRadius:
+																									isNestedLast
+																										? "8px"
+																										: "0",
+																								width: isNestedLast
+																									? "20px"
+																									: "0",
+																							}}
+																						/>
+																						{!isNestedLast && (
+																							<div
+																								style={{
+																									position:
+																										"absolute",
+																									left: 0,
+																									top: "50%",
+																									width: "20px",
+																									borderTop:
+																										"2px solid var(--color-border)",
+																								}}
+																							/>
+																						)}
+																						<NavLink
+																							to={
+																								nested.to
+																							}
+																							style={({
+																								isActive,
+																							}) => ({
+																								marginLeft:
+																									"24px",
+																								padding:
+																									"7px 10px",
+																								borderRadius:
+																									"6px",
+																								fontSize:
+																									"0.75rem",
+																								fontWeight:
+																									isActive
+																										? 600
+																										: 400,
+																								color: isActive
+																									? "var(--color-primary)"
+																									: "var(--color-text-tertiary)",
+																								textDecoration:
+																									"none",
+																								width: "100%",
+																							})}
+																						>
+																							{
+																								nested.label
+																							}
+																						</NavLink>
+																					</div>
+																				);
+																			},
+																		)}
+																</div>
+															)}
+													</div>
+												);
+											})}
 									</div>
 								)}
 							</div>
@@ -785,60 +1064,80 @@ const Sidebar: React.FC<SidebarProps> = ({
 			)}
 
 			{/* Popup for sub-items when sidebar is closed */}
-			{!isOpen && hoveredItem && hoveredItem.subItems && hoveredItem.subItems.length > 0 && (
-				<div
-					onMouseEnter={() => handleHoverStart(hoveredItem, popupTop)}
-					onMouseLeave={handleHoverEnd}
-					style={{
-						position: "absolute",
-						left: "100%",
-						top: popupTop,
-						marginLeft: "8px",
-						background: "var(--color-surface)",
-						border: "1px solid var(--color-border)",
-						borderRadius: "8px",
-						padding: "8px",
-						boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-						zIndex: 1000,
-						minWidth: "180px",
-					}}
-				>
-					{hoveredItem.subItems
-						.filter(sub => !sub.adminOnly || user?.role === "admin" || user?.role === "manager")
-						.map((sub) => (
-							<NavLink
-								key={sub.to}
-								to={sub.to}
-								onClick={() => setHoveredItem(null)}
-								style={({ isActive }) => ({
-									display: "block",
-									padding: "8px 12px",
-									borderRadius: "6px",
-									fontSize: "0.875rem",
-									fontWeight: isActive ? 600 : 400,
-									color: isActive
-										? "var(--color-primary)"
-										: "var(--color-text-secondary)",
-									textDecoration: "none",
-									whiteSpace: "nowrap",
-									transition: "all 0.15s ease",
-								})}
-								onMouseEnter={(e) => {
-									if (!e.currentTarget.classList.contains("active")) {
-										e.currentTarget.style.background = "var(--color-surface-hover)";
-									}
-								}}
-								onMouseLeave={(e) => {
-									if (!e.currentTarget.classList.contains("active")) {
-										e.currentTarget.style.background = "transparent";
-									}
-								}}
-							>
-								{sub.label}
-							</NavLink>
-						))}
-				</div>
-			)}
+			{!isOpen &&
+				hoveredItem &&
+				hoveredItem.subItems &&
+				hoveredItem.subItems.length > 0 && (
+					<div
+						onMouseEnter={() =>
+							handleHoverStart(hoveredItem, popupTop)
+						}
+						onMouseLeave={handleHoverEnd}
+						style={{
+							position: "absolute",
+							left: "100%",
+							top: popupTop,
+							marginLeft: "8px",
+							background: "var(--color-surface)",
+							border: "1px solid var(--color-border)",
+							borderRadius: "8px",
+							padding: "8px",
+							boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+							zIndex: 1000,
+							minWidth: "180px",
+						}}
+					>
+						{hoveredItem.subItems
+							.filter(
+								(sub) =>
+									!sub.adminOnly ||
+									user?.role === "admin" ||
+									user?.role === "manager",
+							)
+							.map((sub) => (
+								<NavLink
+									key={sub.to}
+									to={sub.to}
+									onClick={() => setHoveredItem(null)}
+									style={({ isActive }) => ({
+										display: "block",
+										padding: "8px 12px",
+										borderRadius: "6px",
+										fontSize: "0.875rem",
+										fontWeight: isActive ? 600 : 400,
+										color: isActive
+											? "var(--color-primary)"
+											: "var(--color-text-secondary)",
+										textDecoration: "none",
+										whiteSpace: "nowrap",
+										transition: "all 0.15s ease",
+									})}
+									onMouseEnter={(e) => {
+										if (
+											!e.currentTarget.classList.contains(
+												"active",
+											)
+										) {
+											e.currentTarget.style.background =
+												"var(--color-surface-hover)";
+										}
+									}}
+									onMouseLeave={(e) => {
+										if (
+											!e.currentTarget.classList.contains(
+												"active",
+											)
+										) {
+											e.currentTarget.style.background =
+												"transparent";
+										}
+									}}
+								>
+									{sub.label}
+								</NavLink>
+							))}
+					</div>
+				)}
 		</aside>
 	);
 };

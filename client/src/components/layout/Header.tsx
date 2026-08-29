@@ -2,15 +2,16 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import { useThemeStore } from "../../store/themeStore";
+import { useIconsAnimationStore } from "../../store/iconsAnimationStore";
 import {
-  Bell,
-  Sun,
-  Moon,
-  LogOut,
-  Search,
-  ChevronDown,
-  Menu,
-} from "lucide-react";
+  BellIcon,
+  SunIcon,
+  MoonIcon,
+  LogOutIcon,
+  SearchIcon,
+  ChevronDownIcon,
+  MenuIcon,
+} from "@animateicons/react/lucide";
 import api from "../../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import Avatar from "../common/Avatar";
@@ -25,6 +26,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const { user, logout } = useAuthStore();
   const { isDark, toggle } = useThemeStore();
+  const iconsAnimated = useIconsAnimationStore((s) => s.enabled);
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -370,7 +372,7 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
           onClick={toggleSidebar}
           style={{ padding: 4 }}
         >
-          <Menu size={20} />
+          <MenuIcon size={20} isAnimated={iconsAnimated} />
         </button>
       </div>
       {/* Search */}
@@ -388,7 +390,7 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
         }}
         className="py-1.25 px-2.5 bg-[#fafafa]/10 text-white"
       >
-        <Search size={16} color="var(--color-text-tertiary)" />
+        <SearchIcon size={16} color="var(--color-text-tertiary)" isAnimated={iconsAnimated} />
         <input
           type="text"
           placeholder="Search Projects, tasks etc..."
@@ -662,7 +664,7 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
           onClick={toggle}
           title="Toggle theme"
         >
-          {isDark ? <Sun size={20} /> : <Moon size={20} />}
+          {isDark ? <SunIcon size={20} isAnimated={iconsAnimated} /> : <MoonIcon size={20} isAnimated={iconsAnimated} />}
         </button>
 
         {/* Notifications */}
@@ -672,7 +674,7 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
             onClick={() => setShowNotif(!showNotif)}
             style={{ position: "relative" }}
           >
-            <Bell size={18} />
+            <BellIcon size={18} isAnimated={iconsAnimated} />
             {unreadCount > 0 && (
               <span
                 style={{
@@ -859,10 +861,11 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
                 {roleLabel}
               </div>
             </div>
-            <ChevronDown
+            <ChevronDownIcon
               size={16}
               color="var(--color-text-tertiary)"
               className="hidden md:block"
+              isAnimated={iconsAnimated}
             />
           </button>
 
@@ -889,7 +892,7 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
                 }}
                 onClick={logout}
               >
-                <LogOut size={16} />
+                <LogOutIcon size={16} isAnimated={iconsAnimated} />
                 Sign out
               </button>
             </div>

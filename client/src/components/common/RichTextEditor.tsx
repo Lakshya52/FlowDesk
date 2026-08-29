@@ -274,7 +274,7 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
 
     return (
         <div
-            className="flex flex-col"
+            className="flex flex-row flex-wrap items-center whitespace-nowrap"
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             style={{
@@ -282,11 +282,10 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                 padding: "4px 6px",
                 background: "var(--color-surface)",
                 borderRadius: 8,
-                border: "1px solid var(--color-border)",
+                // border: "1px solid var(--color-border)",
             }}
         >
-            {/* Row 1: inline styles */}
-            <div className="flex flex-wrap items-center justify-start" style={{ gap: "2px" }}>
+            {/* Single row: inline styles + text color/highlight/link + blocks + alignment */}
                 <SelectMenu
                     label="Style"
                     current={state.headingLevel || (state.paragraph ? 'paragraph' : '')}
@@ -511,10 +510,8 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                         </div>
                     )}
                 </div>
-            </div>
 
-            {/* Row 2: blocks / structure */}
-            <div className="flex flex-wrap items-center justify-start" style={{ gap: "2px" }}>
+            {/* blocks / structure: font, size, lists, quote, code block, alignment, clear */}
                 <SelectMenu
                     label="Font"
                     current={state.fontFamily}
@@ -615,7 +612,6 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                 >
                     <RemoveFormatting size={15} />
                 </ToolbarButton>
-            </div>
         </div>
     );
 };
@@ -739,6 +735,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 .ProseMirror {
                     outline: none;
                     flex: 1;
+                    border: none !important;
+                    padding: 0;
+                }
+                .tiptap {
+                    border: none !important;
+                    outline: none;
                 }
                 .ProseMirror p {
                     margin: 0.5em 0 !important;

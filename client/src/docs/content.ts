@@ -308,7 +308,7 @@ define("account", {
   sections: [
     h2("profile-settings", "Profile Settings"),
     p(
-      "Click your avatar in the top-right corner and select <strong>Settings</strong> to manage your profile. You can update the following:"
+      "Navigate through the Sidebar and click the tab <strong>Settings</strong> to manage your profile. You can update the following:"
     ),
     img("/docs/images/flowdesk-profile-settings.png", "FlowDesk profile settings page showing display name, email, profile picture, and employee ID fields", "Your profile settings"),
     list([

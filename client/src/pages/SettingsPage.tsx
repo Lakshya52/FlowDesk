@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
+import { useIconsAnimationStore } from '../store/iconsAnimationStore';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import Avatar from '../components/common/Avatar';
-import { Sun, Moon, Shield, Users, UserPlus, Trash2, Eye, EyeOff, Lock, LockKeyhole, LockKeyholeOpen, Pencil, X as XIcon, MapPinned } from 'lucide-react';
+import ToggleSwitch from '../components/common/ToggleSwitch';
+import AvatarCropModal from '../components/common/AvatarCropModal';
+import { Sun, Moon, Shield, Users, UserPlus, Trash2, Eye, EyeOff, Lock, LockKeyhole, LockKeyholeOpen, Pencil, X as XIcon, MapPinned, CheckCircle, Loader2 } from 'lucide-react';
 import { navItems, NavLinkItem } from '../components/layout/Sidebar';
 
 // Flatten top-level items AND their subItems into one list of toggleable routes,
@@ -42,6 +45,7 @@ const ROLE_LABELS: Record<string, string> = { admin: 'Admin', manager: 'Manager'
 const SettingsPage: React.FC = () => {
     const { user } = useAuthStore();
     const { isDark, toggle } = useThemeStore();
+    const { enabled: iconsAnimated, toggle: toggleIconsAnimation } = useIconsAnimationStore();
     const [users, setUsers] = useState<any[]>([]);
     const [showCreateUser, setShowCreateUser] = useState(false);
     // const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'member' });
@@ -64,6 +68,7 @@ const SettingsPage: React.FC = () => {
     const [savingEdit, setSavingEdit] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -148,9 +153,17 @@ const updateUser = async (e: React.FormEvent) => {
     }
 };
 
-    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !user?._id) return;
+        if (!file) return;
+        // Open the crop modal instead of uploading immediately.
+        setCropImageUrl(URL.createObjectURL(file));
+        e.target.value = '';
+    };
+
+    const handleConfirmCrop = async (file: File) => {
+        if (!user?._id) return;
+        setCropImageUrl(null);
         setUploading(true);
         try {
             const formData = new FormData();
@@ -163,8 +176,6 @@ const updateUser = async (e: React.FormEvent) => {
             // Update local storage and store
             localStorage.setItem('flowdesk_user', JSON.stringify(data.user));
             useAuthStore.setState({ user: data.user });
-
-            // alert('Profile picture updated successfully!');
         } catch (error: any) {
             alert(error.response?.data?.message || 'Failed to update image');
         } finally {
@@ -249,26 +260,25 @@ const updateUser = async (e: React.FormEvent) => {
 
     const isMobile = window.innerWidth < 768;
 
+    const { strengthLevel, strengthColor, strengthLabel } = React.useMemo(() => {
+        const pw = passwordData.newPassword;
+        if (!pw) return { strengthLevel: 0, strengthColor: 'var(--color-text-secondary)', strengthLabel: '' };
+        let score = 0;
+        if (pw.length >= 6) score++;
+        if (pw.length >= 10) score++;
+        if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+        if (/\d/.test(pw)) score++;
+        if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+        if (score >= 4) return { strengthLevel: 4, strengthColor: 'var(--color-success)', strengthLabel: 'strong' };
+        if (score >= 3) return { strengthLevel: 3, strengthColor: 'var(--color-warning)', strengthLabel: 'good' };
+        if (score >= 2) return { strengthLevel: 2, strengthColor: 'var(--color-warning)', strengthLabel: 'fair' };
+        return { strengthLevel: 1, strengthColor: 'var(--color-error)', strengthLabel: 'weak' };
+    }, [passwordData.newPassword]);
+
     return (
         <div style={{ maxWidth: 800, width: '100%' }}>
             <h1 style={{ fontSize: isMobile ? '1.25rem' : '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: isMobile ? 16 : 24 }}>Settings</h1>
-
-            {/* Appearance */}
-            <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-                <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: 16 }}>Appearance</h3>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {isDark ? <Moon size={18} /> : <Sun size={18} />}
-                        <div>
-                            <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{isDark ? 'Dark' : 'Light'} Theme</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Toggle between light and dark mode</div>
-                        </div>
-                    </div>
-                    <button className="btn btn-secondary btn-sm" onClick={toggle}>
-                        Switch to {isDark ? 'Light' : 'Dark'}
-                    </button>
-                </div>
-            </div>
 
             {/* Profile */}
             <div className="card" style={{ padding: 24, marginBottom: 16 }}>
@@ -361,63 +371,124 @@ const updateUser = async (e: React.FormEvent) => {
 
             {/* Security */}
             <div className="card" style={{ padding: 24, marginBottom: 16 }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Lock size={18} /> Security
                 </h3>
-                <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: isMobile ? '100%' : 400 }}>
-                    {passwordError && <div style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>{passwordError}</div>}
-                    {passwordSuccess && <div style={{ color: 'var(--color-success)', fontSize: '0.875rem' }}>{passwordSuccess}</div>}
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 20 }}>
+                    Update your account password to keep your account secure. Use at least 6 characters.
+                </p>
+                <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: isMobile ? '100%' : 640 }}>
+                    {passwordError && (
+                        <div style={{
+                            background: 'var(--color-error-light, rgba(239,68,68,0.12))',
+                            color: 'var(--color-error)',
+                            padding: '10px 14px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 500,
+                        }}>{passwordError}</div>
+                    )}
+                    {passwordSuccess && (
+                        <div style={{
+                            background: 'var(--color-success-light, rgba(34,197,94,0.12))',
+                            color: 'var(--color-success)',
+                            padding: '10px 14px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 500,
+                            display: 'flex', alignItems: 'center', gap: 8,
+                        }}>
+                            <CheckCircle size={16} /> {passwordSuccess}
+                        </div>
+                    )}
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>New Password</label>
-                        <div style={{ position: 'relative' }}>
-                            <input
-                                className="input"
-                                type={showNewPassword ? 'text' : 'password'}
-                                required
-                                minLength={6}
-                                value={passwordData.newPassword}
-                                onChange={e => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                                style={{ width: '100%', paddingRight: 40 }}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowNewPassword(!showNewPassword)}
-                                style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
-                            >
-                                {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
+
+                    
+
+                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 16 }}>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
+                            <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>New Password</label>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    className="input"
+                                    type={showNewPassword ? 'text' : 'password'}
+                                    required
+                                    minLength={6}
+                                    value={passwordData.newPassword}
+                                    onChange={e => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                    style={{ width: '100%', paddingRight: 40 }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowNewPassword(!showNewPassword)}
+                                    style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
+                                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                                >
+                                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                            </div>
+                            {passwordData.newPassword && (
+                                <div style={{ marginTop: 4 }}>
+                                    <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                                        {[0, 1, 2, 3].map(i => (
+                                            <div key={i} style={{
+                                                height: 4, flex: 1, borderRadius: 2,
+                                                background: i < strengthLevel ? strengthColor : 'var(--color-border)',
+                                                transition: 'background 0.2s ease',
+                                            }} />
+                                        ))}
+                                    </div>
+                                    <span style={{ fontSize: '0.6875rem', color: strengthColor, fontWeight: 600, textTransform: 'capitalize' }}>
+                                        {strengthLabel} password
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
+                            <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Confirm New Password</label>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    className="input"
+                                    type={showConfirmPassword ? 'text' : 'password'}
+                                    required
+                                    minLength={6}
+                                    value={passwordData.confirmPassword}
+                                    onChange={e => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                    style={{
+                                        width: '100%', paddingRight: 40,
+                                        borderColor: passwordData.confirmPassword && passwordData.confirmPassword !== passwordData.newPassword
+                                            ? 'var(--color-error)'
+                                            : (passwordData.confirmPassword && passwordData.confirmPassword === passwordData.newPassword)
+                                                ? 'var(--color-success)'
+                                                : undefined,
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
+                                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                                >
+                                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                            </div>
+                            {passwordData.confirmPassword && passwordData.confirmPassword !== passwordData.newPassword && (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--color-error)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    Passwords do not match
+                                </span>
+                            )}
+                            {passwordData.confirmPassword && passwordData.confirmPassword === passwordData.newPassword && (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <CheckCircle size={14} /> Passwords match
+                                </span>
+                            )}
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Confirm New Password</label>
-                        <div style={{ position: 'relative' }}>
-                            <input
-                                className="input"
-                                type={showConfirmPassword ? 'text' : 'password'}
-                                required
-                                minLength={6}
-                                value={passwordData.confirmPassword}
-                                onChange={e => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                                style={{ width: '100%', paddingRight: 40 }}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
-                            >
-                                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                    </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 8 }}>
-                        <button type="submit" className="btn btn-primary" disabled={passwordLoading}>
-                            {passwordLoading ? 'Updating...' : 'Change Password'}
+                        <button type="submit" className="btn btn-primary btn-sm" disabled={passwordLoading || (passwordData.confirmPassword !== '' && passwordData.confirmPassword !== passwordData.newPassword)}>
+                            {passwordLoading ? <><Loader2 size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />Updating...</> : 'Change Password'}
                         </button>
                     </div>
                 </form>
             </div>
+
 
             {/* Geo-Fence Settings (Admin/Manager) */}
             {isAdminOrManager && (
@@ -447,7 +518,7 @@ const updateUser = async (e: React.FormEvent) => {
                             disabled={savingGeoFence}
                             className="btn btn-primary btn-sm"
                         >
-                            {savingGeoFence ? 'Saving...' : 'Save'}
+                            {savingGeoFence ? <><Loader2 size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />Saving...</> : <>Save</>}
                         </button>
                     </div>
                 </div>
@@ -455,7 +526,7 @@ const updateUser = async (e: React.FormEvent) => {
 
             {/* User Management (Admin only) */}
             {isAdmin && (
-                <div className="card" style={{ padding: 20 }}>
+                <div className="card" style={{ padding: 20, marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <h3 style={{ fontSize: '0.875rem', fontWeight: 600 }}>
                             <Users size={16} style={{ display: 'inline', marginRight: 8, verticalAlign: 'middle' }} />
@@ -518,7 +589,7 @@ const updateUser = async (e: React.FormEvent) => {
                                                     }}
                                                     style={{ display: 'none' }}
                                                 />
-                                                <item.icon size={14} />
+                                                <item.icon size={14} isAnimated={iconsAnimated} />
                                                 {item.label}
                                             </label>
                                         );
@@ -556,7 +627,7 @@ const updateUser = async (e: React.FormEvent) => {
                                                     }}
                                                     style={{ display: 'none' }}
                                                 />
-                                                <item.icon size={14} />
+                                                <item.icon size={14} isAnimated={iconsAnimated} />
                                                 {item.label}
                                             </label>
                                         );
@@ -737,7 +808,7 @@ const updateUser = async (e: React.FormEvent) => {
                                                                         }}
                                                                         style={{ display: 'none' }}
                                                                     />
-                                                                    <item.icon size={14} />
+                                                                    <item.icon size={14} isAnimated={iconsAnimated} />
                                                                     {item.label}
                                                                 </label>
                                                             );
@@ -756,6 +827,49 @@ const updateUser = async (e: React.FormEvent) => {
                                 </div>
                             </div>
                         )}
+
+            {/* Preferences */}
+            <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+                <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: 4 }}>Preferences</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 16 }}>
+                    Customize how the application looks and behaves for you.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* Appearance */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            {isDark ? <Moon size={18} /> : <Sun size={18} />}
+                            <div>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{isDark ? 'Dark' : 'Light'} Theme</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Toggle between light and dark mode</div>
+                            </div>
+                        </div>
+                        <ToggleSwitch checked={isDark} onChange={toggle} label="Dark theme" />
+                    </div>
+                    {/* Icon Animations */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <Lock size={18} />
+                            <div>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Icon Animations</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Animate sidebar and header icons when hovered</div>
+                            </div>
+                        </div>
+                        <ToggleSwitch
+                            checked={iconsAnimated}
+                            onChange={toggleIconsAnimation}
+                            label="Icon animations"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <AvatarCropModal
+                open={!!cropImageUrl}
+                imageUrl={cropImageUrl}
+                onCancel={() => setCropImageUrl(null)}
+                onConfirm={handleConfirmCrop}
+            />
         </div >
     );
 };
