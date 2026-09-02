@@ -178,7 +178,7 @@ define("quickstart", {
   lastUpdated: "June 14, 2026",
   readingTime: "5 min read",
   sections: [
-    h2("step-0-register", "Step 0 — Create your account"),
+    h2("step-0-register", "Create your account"),
     p(
       "Before you can log in, you need an account. There are two ways this happens:"
     ),
@@ -191,7 +191,7 @@ define("quickstart", {
       "Use your official work email address. Accounts created with personal emails may not be approved by your Admin."
     ),
 
-    h2("step-1-log-in", "Step 1 — Log in"),
+    h2("step-1-log-in", "Log in"),
     p(
       "Open FlowDesk in your browser or desktop app. You'll see the login page."
     ),
@@ -208,7 +208,7 @@ define("quickstart", {
       "If you forgot your password, click \"Forgot Password\" on the login page. You'll receive a 6-digit code via email to reset it."
     ),
 
-    h2("step-2-explore-dashboard", "Step 2 — Explore your Dashboard"),
+    h2("step-2-explore-dashboard", "Explore your Dashboard"),
     p(
       "After logging in, you'll land on your <strong>Dashboard</strong>. This is your home base. Here's what you'll see:"
     ),
@@ -223,7 +223,7 @@ define("quickstart", {
       "Take a moment to look around. The sidebar on the left gives you access to all major sections of FlowDesk."
     ),
 
-    h2("step-3-navigate-sidebar", "Step 3 — Navigate the Sidebar"),
+    h2("step-3-navigate-sidebar", "Navigate the Sidebar"),
     p(
       "The sidebar is your main navigation. Here's what each section does:"
     ),
@@ -240,7 +240,7 @@ define("quickstart", {
       ]
     ),
 
-    h2("step-4-find-your-project", "Step 4 — Find your project"),
+    h2("step-4-find-your-project", "Find your project"),
     p(
       "Click <strong>Assignments</strong> in the sidebar to see all your projects. Projects are grouped into categories:"
     ),
@@ -254,7 +254,7 @@ define("quickstart", {
       "Click on any project to open it and see its tasks, team members, chat, and activity logs."
     ),
 
-    h2("step-5-create-a-task", "Step 5 — Create a task"),
+    h2("step-5-create-a-task", "Create a task"),
     p(
       "Open any project and click <strong>Add Task</strong>. Here's how to create a good task:"
     ),
@@ -268,7 +268,7 @@ define("quickstart", {
       "Click <strong>Create</strong> — the task appears in the project immediately.",
     ]),
 
-    h2("step-6-track-progress", "Step 6 — Track progress"),
+    h2("step-6-track-progress", "Track progress"),
     p(
       "As work progresses, update the task status to keep everyone in the loop:"
     ),

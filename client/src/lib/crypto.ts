@@ -20,6 +20,7 @@
  *  - Legacy rows/messages without an `iv` are treated as plaintext.
  */
 import api from "./api";
+import { getSocket } from "../hooks/useSocket";
 
 /* ------------------------------------------------------------------ */
 /* Small utils                                                         */
@@ -430,7 +431,7 @@ async function putWraps(conversationId: string, wraps: KeyWrap[]): Promise<void>
  * Make sure we hold the AES key for this conversation.
  * Returns true when encryption/decryption is possible.
  */
-export async function ensureConversationKeys(
+async function ensureConversationKeysImpl(
     conversationId: string,
     participantIds: string[]
 ): Promise<boolean> {
@@ -493,37 +494,110 @@ export async function ensureConversationKeys(
 
     const hadExistingWraps = wraps.length > 0;
 
-    // 2) Grace window — only when someone else may hold the key (existing
-    //    wraps). A brand-new conversation skips straight to minting.
+    // 2) WhatsApp-style key handoff. Existing wraps mean a key already exists;
+    //    our device simply hasn't been given a copy yet (fresh install / new
+    //    machine / new browser profile). Minting a NEW key here would orphan
+    //    every older message — they're encrypted under the existing key. So we
+    //    ask an online participant device that holds the key to re-wrap it for
+    //    us, and poll briefly for the wrap to land.
     if (hadExistingWraps) {
-        await new Promise((r) => setTimeout(r, 600));
-        try {
-            const { data } = await api.get(`/conversations/${conversationId}/keys`);
-            for (const w of ((data.wraps ?? []) as KeyWrap[]).filter(
-                (x) => x.deviceId === id.deviceId
-            )) {
-                const raw = await unwrapWithIdentity(w);
-                if (raw && raw.length === 32) {
-                    convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
-                    lastError = "";
-                    void healMissingWraps(conversationId, raw, participantIds, wraps);
-                    return true;
+        const requestHeal = () => {
+            try {
+                getSocket().emit("request_key_heal", conversationId);
+            } catch { /* socket not ready — polling will retry */ }
+        };
+        requestHeal();
+        for (let attempt = 0; attempt < 8; attempt++) {
+            if (attempt > 0) await new Promise((r) => setTimeout(r, 500));
+            // Re-request periodically in case the holder was mid-connect when
+            // our first request landed.
+            if (attempt > 0 && attempt % 3 === 0) requestHeal();
+            try {
+                const { data } = await api.get(`/conversations/${conversationId}/keys`);
+                for (const w of ((data.wraps ?? []) as KeyWrap[]).filter(
+                    (x) => x.deviceId === id.deviceId
+                )) {
+                    const raw = await unwrapWithIdentity(w);
+                    if (raw && raw.length === 32) {
+                        convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
+                        lastError = "";
+                        void healMissingWraps(conversationId, raw, participantIds, data.wraps ?? wraps);
+                        return true;
+                    }
                 }
+            } catch {
+                break; // network down — don't keep polling
             }
-        } catch { /* fall through to unilateral recovery */ }
+        }
+        // No device kindly re-wrapped for us within the window. Do NOT mint a
+        // replacement (that would make every past message undecryptable).
+        fail(
+            "Conversation key not obtainable for this device. Another device of a " +
+            "participant that holds the key must come online, then reopen this chat."
+        );
+        return false;
     }
 
-    // 3) Mint a fresh key. For an empty conversation this is the normal first
-    //    visitor path; after existing wraps it is unilateral recovery (the
-    //    stored wraps may point at dead devices nobody can unwrap).
-    if (hadExistingWraps) {
-        try { e2eeEvents.onKeyReset?.(conversationId); } catch { /* UI hook optional */ }
-    }
+    // 3) No wraps at all → this conversation was never keyed (or every key was
+    //    wiped). Create a fresh key and distribute it to all participant devices.
     const raw = randomBytes(32);
     convKeys.set(conversationId, { raw, key: await importAesKey(raw) });
     lastError = "";
-    void distributeToAll(conversationId, raw, participantIds);
+    await distributeToAll(conversationId, raw, participantIds);
     return true;
+}
+
+/** One in-flight key bootstrap per conversation — concurrent callers share it. */
+const ensureInFlight = new Map<string, Promise<boolean>>();
+
+/**
+ * Make sure we hold the AES key for this conversation.
+ * Returns true when encryption/decryption is possible.
+ */
+export async function ensureConversationKeys(
+    conversationId: string,
+    participantIds: string[]
+): Promise<boolean> {
+    if (convKeys.has(conversationId)) return true;
+    const inFlight = ensureInFlight.get(conversationId);
+    if (inFlight) return inFlight;
+    const p = ensureConversationKeysImpl(conversationId, participantIds).finally(() => {
+        ensureInFlight.delete(conversationId);
+    });
+    ensureInFlight.set(conversationId, p);
+    return p;
+}
+
+/**
+ * Respond to a "request_key_heal" handoff request: if THIS device holds the
+ * conversation key, re-publish a wrap for every participant device that is
+ * still missing one (including the requesting newcomer).
+ */
+export async function healConversationKey(
+    conversationId: string,
+    participantIds: string[]
+): Promise<void> {
+    try {
+        const ok = await ensureConversationKeys(conversationId, participantIds);
+        if (!ok) return; // only the key holder heals
+        const entry = convKeys.get(conversationId);
+        if (!entry) return;
+        const deviceMap = await fetchDevices(participantIds);
+        const { data } = await api.get(`/conversations/${conversationId}/keys`);
+        const existing = (data.wraps ?? []) as KeyWrap[];
+        const covered = new Set(existing.map((w) => w.deviceId));
+        const newWraps: KeyWrap[] = [];
+        for (const uid of participantIds) {
+            for (const d of deviceMap[uid] ?? []) {
+                if (covered.has(d.deviceId)) continue;
+                const w = await wrapKeyForDevice(entry.raw, d);
+                if (w) newWraps.push({ ...w, userId: uid });
+            }
+        }
+        if (newWraps.length) await putWraps(conversationId, newWraps);
+    } catch {
+        /* best effort */
+    }
 }
 
 /**

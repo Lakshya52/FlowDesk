@@ -93,7 +93,7 @@ const TasksPage: React.FC = () => {
   });
   const allBoards = boardsData || [];
 
-  const { data: boardData, isFetching: boardFetching } = useQuery({
+  const { data: boardData } = useQuery({
     queryKey: ["board", activeBoardId],
     queryFn: async () => {
       const { data } = await api.get(`/boards/${activeBoardId}`);
@@ -178,7 +178,7 @@ const TasksPage: React.FC = () => {
 
   const taskQueryKey = ["tasks", activeBoardId, selectedCompany, currentTab, user?._id];
 
-  const { data: tasksData, isLoading: loading, isFetching: tasksFetching } = useQuery({
+  const { data: tasksData, isLoading: loading } = useQuery({
     queryKey: taskQueryKey,
     queryFn: async () => {
       const params: any = {};
@@ -192,8 +192,6 @@ const TasksPage: React.FC = () => {
     },
   });
   const tasks = tasksData || [];
-
-  const isSyncing = activeBoardId && (boardFetching || tasksFetching);
 
   const { data: searchData } = useQuery({
     queryKey: ["tasks-search", search],
@@ -712,7 +710,7 @@ const TasksPage: React.FC = () => {
           {search && search.trim().length >= 2 && searchResults.length > 0 && (
             <div
               style={{
-                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
+                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
                 background: "var(--color-surface)", border: "1px solid var(--color-border)",
                 borderRadius: 8, marginTop: 4, maxHeight: 300, overflowY: "auto",
                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
@@ -743,7 +741,7 @@ const TasksPage: React.FC = () => {
           {search && search.trim().length >= 2 && searchResults.length === 0 && (
             <div
               style={{
-                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
+                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
                 background: "var(--color-surface)", border: "1px solid var(--color-border)",
                 borderRadius: 8, marginTop: 4, padding: "12px 12px",
                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
@@ -767,7 +765,7 @@ const TasksPage: React.FC = () => {
       </div>
 
       {/* Kanban Board - unified view */}
-      {(loading || isSyncing) ? (
+      {loading ? (
         <div style={{ display: "flex", gap: 8, width: "100%" }}>
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="skeleton" style={{ height: 300, borderRadius: 12, flex: 1 }} />
@@ -972,8 +970,8 @@ const TasksPage: React.FC = () => {
                       )}
                       
 
-                  {/* New Task button - visible on column hover */}
-                  {hoveredColumn === col.key && !draggedTaskId && (
+                  {/* New Task button - always occupies space; invisible placeholder when not hovering, becomes the button on hover */}
+                  {!draggedTaskId && (
                     <div
                       className="card"
                       style={{
@@ -981,10 +979,12 @@ const TasksPage: React.FC = () => {
                         border: "1px dashed var(--color-border)",
                         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                         color: "var(--color-text-tertiary)", fontSize: "0.8125rem", transition: "all 0.2s ease",
+                        visibility: hoveredColumn === col.key ? "visible" : "hidden",
+                        pointerEvents: hoveredColumn === col.key ? "auto" : "none",
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.borderColor = col.color; e.currentTarget.style.color = col.color; }}
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text-tertiary)"; }}
-                      onClick={() => { setCreateColumnStatus(col.key); setShowCreateModal(true); }}
+                      onClick={() => { if (hoveredColumn === col.key) { setCreateColumnStatus(col.key); setShowCreateModal(true); } }}
                     >
                       <Plus size={14} /> New Task
                     </div>
@@ -1460,7 +1460,7 @@ const TasksPage: React.FC = () => {
 
       {/* Drop animation overlay */}
       {dropAnim && (
-        <div key={dropAnim.key} style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999 }}>
+        <div key={dropAnim.key} style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 2000 }}>
           <div
             className="drop-ghost"
             style={{
@@ -1491,7 +1491,7 @@ const TasksPage: React.FC = () => {
             borderRadius: 8,
             fontSize: "0.8125rem",
             fontWeight: 500,
-            zIndex: 9999,
+            zIndex: 2000,
             boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
             animation: "toastIn 0.3s ease",
           }}

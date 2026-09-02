@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Avatar from "../common/Avatar";
 import { getSocket } from "../../hooks/useSocket";
 import { useChatStore } from "../../store/chatStore";
+import { healConversationKey } from "../../lib/crypto";
 // import { useCalendarStore } from "../../store/calendarStore";
 
 interface HeaderProps {
@@ -132,6 +133,17 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
         useChatStore
           .getState()
           .handleUserStatusChange(userId, status, user?._id);
+      },
+    );
+
+    // WhatsApp-style key handoff: an online device holding the conversation
+    // key re-wraps it for any requesting newcomer device on request.
+    socket.on(
+      "key_heal_request",
+      ({ conversationId, participantIds }: any) => {
+        if (conversationId && Array.isArray(participantIds)) {
+          void healConversationKey(conversationId, participantIds);
+        }
       },
     );
 
@@ -420,7 +432,7 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
               marginTop: 8,
               maxHeight: 480,
               overflow: "auto",
-              zIndex: 100,
+              zIndex: 50,
               padding: "12px 0",
               boxShadow: "var(--shadow-lg)",
             }}

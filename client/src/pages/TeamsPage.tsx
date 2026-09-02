@@ -392,7 +392,7 @@ const TeamsPage: React.FC = () => {
                                                             marginLeft: i === 0 ? 0 : -9,
                                                             borderRadius: '50%',
                                                             border: '2px solid var(--color-surface, #fff)',
-                                                            zIndex: 7 - i, position: 'relative',
+                                                            zIndex: (7 - i) * 10, position: 'relative',
                                                         }}
                                                     >
                                                         <Avatar src={m.avatar} name={m.name} size={28} />
@@ -434,7 +434,7 @@ const TeamsPage: React.FC = () => {
                     style={{
                         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 100, backdropFilter: 'blur(2px)',
+                        zIndex: 3000, backdropFilter: 'blur(2px)',
                     }}
                     onClick={() => { setShowCreate(false); setForm({ name: '', description: '', members: [], manager: '' }); setCreateMemberSearch(''); }}
                 >
@@ -583,7 +583,7 @@ const TeamsPage: React.FC = () => {
                     style={{
                         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 100, backdropFilter: 'blur(2px)',
+                        zIndex: 3000, backdropFilter: 'blur(2px)',
                     }}
                     onClick={() => setShowManage(false)}
                 >

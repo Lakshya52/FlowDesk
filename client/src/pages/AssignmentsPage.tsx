@@ -1315,7 +1315,7 @@ const AssignmentsPage: React.FC = () => {
                       style={{
                         border: "2px solid var(--color-surface)",
                         marginLeft: i > 0 ? -8 : 0,
-                        zIndex: 10 - i,
+                        zIndex: (10 - i) * 10,
                       }}
                     />
                   ))}
@@ -1379,7 +1379,7 @@ const AssignmentsPage: React.FC = () => {
       )}
 
       {/* Create Modal */}
-      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} zIndex={100}>
+      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} zIndex={3010}>
         <div
           className="card animate-fade-in w-full max-w-140 p-5 sm:p-7 max-h-[90vh] overflow-auto"
         >
@@ -2190,7 +2190,7 @@ const AssignmentsPage: React.FC = () => {
           setImportResult(null);
           selectedFileRef.current = null;
         }}
-        zIndex={50}
+        zIndex={3000}
       >
         <div
           className="card animate-fade-in"
@@ -2656,7 +2656,7 @@ const AssignmentsPage: React.FC = () => {
         </Modal>
 
       {/* Confirmation Modals */}
-      <Modal isOpen={confirmState !== "none"} onClose={() => setConfirmState("none")} zIndex={200}>
+      <Modal isOpen={confirmState !== "none"} onClose={() => setConfirmState("none")} zIndex={3020}>
         <div
           className="card animate-fade-in"
           style={{

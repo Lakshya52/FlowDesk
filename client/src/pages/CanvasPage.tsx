@@ -269,7 +269,7 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 				height: note.height || "auto",
 				minHeight: 140,
 				background: note.color,
-				zIndex: isEditing ? 1000000 : zIndex,
+				zIndex: isEditing ? 10000 : zIndex,
 				color: "#1e293b",
 				touchAction: isEditing ? "auto" : "none",
 			}}
@@ -341,7 +341,7 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 								<div
 									onMouseDown={(e) => e.stopPropagation()}
 									onTouchStart={(e) => e.stopPropagation()}
-									className="absolute top-full right-0 z-[100] mt-1.5 flex w-[108px] flex-wrap gap-1.5 rounded-[10px] border border-border bg-white p-2 shadow-lg"
+									className="absolute top-full right-0 z-[1000] mt-1.5 flex w-[108px] flex-wrap gap-1.5 rounded-[10px] border border-border bg-white p-2 shadow-lg"
 								>
 									{COLORS.map((c) => (
 										<button
@@ -633,11 +633,11 @@ const CanvasPage: React.FC = () => {
 
 	// Layering: clicking a note brings it to the front of all other notes.
 	const [zLayers, setZLayers] = useState<Record<string, number>>({});
-	const zCounterRef = useRef(1);
+	const zCounterRef = useRef(10);
 
 	const bringToFront = useCallback((id: string) => {
 		setZLayers((prev) => {
-			const next = zCounterRef.current + 1;
+			const next = zCounterRef.current + 10;
 			zCounterRef.current = next;
 			return { ...prev, [id]: next };
 		});
@@ -1663,7 +1663,7 @@ const CanvasPage: React.FC = () => {
 			style={{
 				position: isFullScreen ? "fixed" : "absolute",
 				inset: 0,
-				zIndex: isFullScreen ? 9999 : 1,
+				zIndex: isFullScreen ? 2000 : 10,
 				background: bgColor || "var(--color-bg)",
 				cursor: isPanning
 					? "grabbing"
@@ -1818,7 +1818,7 @@ const CanvasPage: React.FC = () => {
 						linkingSourceId={linkingSourceId}
 						colorPickerOpenId={colorPickerOpenId}
 						saveStatus={saveStatus[note._id] || "idle"}
-						zIndex={zLayers[note._id] ?? 1}
+						zIndex={zLayers[note._id] ?? 10}
 						onBringToFront={bringToFront}
 						onNoteMouseDown={handleNoteMouseDown}
 						onNoteTouchStart={handleNoteTouchStart}
@@ -1915,7 +1915,7 @@ const CanvasPage: React.FC = () => {
 					</button>
 					{showBgMenu && (
 						<div
-							className="absolute right-0 z-[1002] cursor-default rounded-xl border border-border bg-surface p-2.5 text-text shadow-lg"
+							className="absolute right-0 z-[1020] cursor-default rounded-xl border border-border bg-surface p-2.5 text-text shadow-lg"
 							style={{
 								bottom: "calc(100% + 8px)",
 								width: 186,

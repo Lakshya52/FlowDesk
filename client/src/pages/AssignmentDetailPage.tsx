@@ -31,12 +31,13 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const isAdmin = user?.role === 'admin';
     const isManager = user?.role === 'manager';
 
-    const canEditProject = isAdmin || isManager;
+    const [assignment, setAssignment] = useState<any>(null);
+    // Permissions: Admins and Managers can edit any project. The creator of the project can edit it. Team members can edit if they are part of the assignment's team.
+    const canEditProject = isAdmin || isManager || (assignment?.createdBy?._id === user?._id) || (assignment?.team?.some((member: any) => member._id === user?._id));
     const canEditTask = (task: any) => {
         if (isAdmin || isManager) return true;
         return task.createdBy?._id === user?._id || task.assignedTo?._id === user?._id;
     };
-    const [assignment, setAssignment] = useState<any>(null);
     const [tasks, setTasks] = useState<any[]>([]);
     const [comments, setComments] = useState<any[]>([]);
     const [files, setFiles] = useState<any[]>([]);
@@ -925,8 +926,8 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         />
                                         {showCompanyDropdown && (companySearch.trim() || filteredCompanies.length > 0) && (
                                             <>
-                                                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }} onClick={() => setShowCompanyDropdown(false)} />
-                                                <div className="card shadow-xl" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 101, marginTop: 4, maxHeight: 200, overflow: 'auto', background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                                                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }} onClick={() => setShowCompanyDropdown(false)} />
+                                                <div className="card shadow-xl" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4, maxHeight: 200, overflow: 'auto', background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                                                     {filteredCompanies.length > 0 ? (
                                                         filteredCompanies.map(c => (
                                                             <div
@@ -1890,7 +1891,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         bottom: 'calc(100% + 10px)',
                                         left: mentionPosition.left,
                                         width: 220,
-                                        zIndex: 100,
+                                        zIndex: 50,
                                         padding: '4px 0',
                                         maxHeight: 200,
                                         overflow: 'auto'
@@ -2006,7 +2007,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             }
 
             {/* Manage Team Modal */}
-            <Modal isOpen={showTeamModal} onClose={() => setShowTeamModal(false)} zIndex={100}>
+            <Modal isOpen={showTeamModal} onClose={() => setShowTeamModal(false)} zIndex={3010}>
                 <div className="card animate-fade-in w-full min-w-[30dvw] p-6  " style={{
                     background: "color-mix(in srgb, var(--color-surface) 85%, transparent)",
                 }} >

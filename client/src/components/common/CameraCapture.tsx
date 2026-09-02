@@ -63,7 +63,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
+    <div className="fixed inset-0 z-[3000] bg-black flex flex-col items-center justify-center">
       {!preview ? (
         <>
           <video ref={videoRef} autoPlay playsInline className="max-w-full max-h-[70vh] rounded-lg" />

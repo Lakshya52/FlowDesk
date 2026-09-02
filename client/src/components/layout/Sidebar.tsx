@@ -22,29 +22,29 @@ import {
 import { Settings01Icon } from "@animateicons/react/huge";
 
 import {
-	LayoutDashboard,
-	FolderKanban,
+	// LayoutDashboard,
+	// FolderKanban,
 	// CheckSquare,
-	CalendarDays,
-	BarChart3,
+	// CalendarDays,
+	// BarChart3,
 	// FileText,
-	Settings,
+	// Settings,
 	// Zap,
-	Users,
+	// Users,
 	// Menu,
 	// ChevronLeft,
 	ChevronDown,
 	// ChevronRight
-	Building2,
-	Shapes,
-	Mail,
-	MessageSquare,
+	// Building2,
+	// Shapes,
+	// Mail,
+	// MessageSquare,
 	PanelRightClose,
 	PanelLeftClose,
 	X,
-	Headset,
+	// Headset,
 	PanelLeftOpen,
-	HardDrive,
+	// HardDrive,
 	// ScrollText,
 } from "lucide-react";
 
@@ -492,6 +492,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 											justifyContent: isOpen
 												? "flex-start"
 												: "center",
+											position: "relative",
 											gap: "12px",
 											padding: isOpen
 												? "10px 12px"
@@ -545,12 +546,27 @@ const Sidebar: React.FC<SidebarProps> = ({
 										}
 									}}
 								>
+									{!isOpen && hasSubItems && (
+										<span
+											style={{
+												position: "absolute",
+												top: "6px",
+												right: "6px",
+												width: 5,
+												height: 5,
+												borderRadius: "50%",
+												background:
+													"var(--color-text-tertiary)",
+												pointerEvents: "none",
+											}}
+										/>
+									)}
 									<SidebarIcon
 										Icon={item.icon}
 										size={20}
 										animate={!!hoveredNav[item.to]}
 									/>
-										{isOpen && (
+									{isOpen && (
 											<>
 												<span
 													style={{
@@ -1083,7 +1099,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 							borderRadius: "8px",
 							padding: "8px",
 							boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-							zIndex: 1000,
+							zIndex: 60,
 							minWidth: "180px",
 						}}
 					>

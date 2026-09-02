@@ -187,7 +187,7 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       {/* <OfflineBanner /> */}
-      <Toaster position="top-right" />
+      <Toaster position="top-right" containerStyle={{ zIndex: 5000 }} />
       <HashRouter>
         <AppInner />
       </HashRouter>

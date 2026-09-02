@@ -26,6 +26,8 @@ const ALLOWED_MIMES = [
   // Presentations
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // E2EE: encrypted file uploads are always sent as ciphertext (octet-stream)
+  'application/octet-stream',
 ];
 
 

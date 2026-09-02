@@ -572,11 +572,11 @@ const ClientsPage: React.FC = () => {
                         {isExportDropdownOpen && (
                             <>
                                 <div
-                                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}
+                                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }}
                                     onClick={() => setIsExportDropdownOpen(false)}
                                 />
                                 <div className="card shadow-xl" style={{
-                                    position: 'absolute', top: '100%', right: 0, zIndex: 101,
+                                    position: 'absolute', top: '100%', right: 0, zIndex: 50,
                                     marginTop: 8, width: 220, padding: 8,
                                     background: 'var(--color-surface)', border: '1px solid var(--color-border)'
                                 }}>
@@ -915,7 +915,7 @@ const CompanyNode = ({ node, onSelect, onEdit, onDelete, selectedId, selectedCom
                             marginRight: 6,
                             display: "flex",
                             color: "var(--color-text-secondary)",
-                            zIndex: 2
+                            zIndex: 10
                         }}
                         onClick={(e) => {
                             e.stopPropagation();
@@ -1337,7 +1337,7 @@ const CreateCompanyModal = ({
     };
 
     return (
-        <Modal isOpen={true} onClose={() => { setShowCreate(false); resetForm(); }} zIndex={1000}>
+        <Modal isOpen={true} onClose={() => { setShowCreate(false); resetForm(); }} zIndex={3030}>
             <div
                 className="card animate-fade-in"
                 style={{
@@ -1724,7 +1724,7 @@ const CreateCompanyModal = ({
 
 const ContactModal = ({ 
     setShowContactForm, editingContact, contactForm, setContactForm, handleSave }: any) => (
-    <Modal isOpen={true} onClose={() => setShowContactForm(false)} zIndex={1000}>
+    <Modal isOpen={true} onClose={() => setShowContactForm(false)} zIndex={3030}>
         <div className="card" style={{ padding: 24, width: 550 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h3 style={{ fontSize: "1.2rem", fontWeight: 600 }}>{editingContact ? "Edit Contact" : "Add Contact"}</h3>
@@ -1845,7 +1845,7 @@ const ImportModal = ({
     };
 
     return (
-        <Modal isOpen={true} onClose={() => { setShowImport(false); setImportResult(null); }} zIndex={1000}>
+        <Modal isOpen={true} onClose={() => { setShowImport(false); setImportResult(null); }} zIndex={3030}>
             <div className="card" style={{ padding: 24, width: 500 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                     <h3 style={{ fontSize: "1.2rem", fontWeight: 600 }}>Import Companies</h3>

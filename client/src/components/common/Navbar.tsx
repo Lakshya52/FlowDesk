@@ -7,7 +7,7 @@ const Navbar = () => {
 	return (
 		<>
 			{/* navbar glassmorphism effect */}
-			<nav className="fixed top-6 left-1/2 z-9999 -translate-x-1/2 w-[90dvw] sm:w-[80dvw] md:w-[70dvw]">
+			<nav className="fixed top-6 left-1/2 z-[2000] -translate-x-1/2 w-[90dvw] sm:w-[80dvw] md:w-[70dvw]">
 				<div className="flex items-center justify-between p-2 rounded-full border border-white/20 bg-white/30   sm:bg-[#7c3aed]/20 backdrop-blur-md">
 					{/* Logo */}
 					<Link

@@ -1072,7 +1072,7 @@ const FieldVisitList: React.FC<Props> = ({
 			</div>
 
 			{checkingInVisitId !== null && (
-				<div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+				<div className="fixed inset-0 z-[3000] bg-black/40 flex items-center justify-center p-4">
 					<div className="relative bg-(--color-surface) rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
 						<button
 							onClick={() => setCheckingInVisitId(null)}
@@ -1091,7 +1091,7 @@ const FieldVisitList: React.FC<Props> = ({
 
 			{previewImage && (
 				<div
-					className="fixed inset-0 z-50 bg-black/80 flex flex-col gap-4 items-center justify-center p-4"
+					className="fixed inset-0 z-[3000] bg-black/80 flex flex-col gap-4 items-center justify-center p-4"
 					onClick={() => setPreviewImage(null)}
 				>
 					<img
@@ -1109,7 +1109,7 @@ const FieldVisitList: React.FC<Props> = ({
 			)}
 
 			{showSchedule && (
-				<div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+				<div className="fixed inset-0 z-[3000] bg-black/40 flex items-center justify-center p-4">
 					<div className="bg-(--color-surface) rounded-xl max-w-md w-full p-5 space-y-4">
 						<div className="flex items-center justify-between">
 							<h3 className="font-semibold text-(--color-text)">

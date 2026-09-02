@@ -521,7 +521,7 @@ const FlowDeskBuddy: FC = () => {
         .buddy-floating-btn {
           position: fixed; bottom: 24px; right: 24px;
           width: 62px; height: 62px; border-radius: 50%; border: none;
-          cursor: pointer; z-index: 9999;
+          cursor: pointer; z-index: 2000;
           background: linear-gradient(135deg, #6366f1, #8b5cf6);
           color: white; font-size: 26px;
           box-shadow: 0 10px 30px rgba(99,102,241,0.35), 0 0 0 1px rgba(255,255,255,0.08);
@@ -532,7 +532,7 @@ const FlowDeskBuddy: FC = () => {
         .buddy-window {
           position: fixed; bottom: 24px; right: 24px;
           width: 400px; height: 720px; max-height: calc(100vh - 48px);
-          border-radius: 24px; overflow: hidden; z-index: 9999;
+          border-radius: 24px; overflow: hidden; z-index: 2000;
           box-shadow: 0 25px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);
           animation: fadeUp 0.25s ease;
         }

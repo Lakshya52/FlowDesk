@@ -153,7 +153,7 @@ const LandingPage: React.FC = () => {
                 position: 'relative',
                 overflow: 'hidden'
             }}>
-                <div style={{ maxWidth: 850, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+                <div style={{ maxWidth: 850, margin: '0 auto', position: 'relative', zIndex: 10 }}>
                     <div style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -390,7 +390,7 @@ const LandingPage: React.FC = () => {
                     position: 'relative',
                     overflow: 'hidden'
                 }}>
-                    <div style={{ maxWidth: 600, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+                    <div style={{ maxWidth: 600, margin: '0 auto', position: 'relative', zIndex: 10 }}>
                         <h2 style={{ fontSize: 'clamp(1.75rem, 5vw, 3rem)', fontWeight: 800, marginBottom: 24, letterSpacing: '-0.04em' }}>Ready to transform your workflow?</h2>
                         <p style={{ fontSize: '1.25rem', color: '#a3a3a3', marginBottom: 48 }}>Join thousands of high-performance teams already using FlowDesk.</p>
                         <button

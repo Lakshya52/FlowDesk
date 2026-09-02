@@ -94,7 +94,7 @@ const AppLayout: React.FC = () => {
                         position: 'fixed', 
                         inset: 0, 
                         background: 'rgba(0,0,0,0.5)', 
-                        zIndex: 998,
+                        zIndex: 4800,
                         backdropFilter: 'blur(2px)',
                     }} 
                 />
@@ -103,7 +103,7 @@ const AppLayout: React.FC = () => {
             <div style={{
                 position: isMobile ? 'fixed' : 'relative',
                 left: isMobile ? (isSidebarOpen ? 0 : '-280px') : 0,
-                zIndex: isMobile ? 999 : 1,
+                zIndex: 4900,
                 transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 height: '100vh',
                 background: 'var(--color-surface)',
@@ -120,7 +120,7 @@ const AppLayout: React.FC = () => {
                         width: '4px',
                         cursor: 'col-resize',
                         background: isResizing ? 'var(--color-primary)' : 'transparent',
-                        zIndex: 50,
+                        zIndex: 20,
                         transition: 'background 0.2s ease',
                         marginLeft: '-2px', // overlapping the border
                         marginRight: '-2px',

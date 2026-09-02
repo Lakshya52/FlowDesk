@@ -622,7 +622,7 @@ const BoardsPage: React.FC = () => {
                                                     position: "absolute",
                                                     top: "100%",
                                                     left: -150,
-                                                    zIndex: 20,
+                                                    zIndex: 50,
                                                     // marginTop: 8,
                                                     background: "var(--color-surface)",
                                                     border: "1px solid var(--color-border)",
@@ -778,7 +778,7 @@ const BoardsPage: React.FC = () => {
                                         />
                                         {inviteSearch && !inviteUserId && filteredUsers.length > 0 && (
                                             <div style={{
-                                                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+                                                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
                                                 background: "var(--color-surface)", border: "1px solid var(--color-border)",
                                                 borderRadius: 8, maxHeight: 160, overflowY: "auto", marginTop: 4,
                                             }}>

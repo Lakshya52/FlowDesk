@@ -245,7 +245,7 @@ const NoteExportMenu: React.FC<NoteExportMenuProps> = ({
                         boxShadow: '0 8px 30px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)',
                         border: '1px solid #e2e8f0',
                         overflow: 'hidden',
-                        zIndex: 9999,
+                        zIndex: 1000,
                         minWidth: 210,
                         animation: 'noteExportFadeIn 0.15s ease-out',
                     }}

@@ -851,7 +851,7 @@ const updateUser = async (e: React.FormEvent) => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <Lock size={18} />
                             <div>
-                                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Icon Animations</div>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Animated Icons</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Animate sidebar and header icons when hovered</div>
                             </div>
                         </div>

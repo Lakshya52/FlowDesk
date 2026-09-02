@@ -394,7 +394,7 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
       )}
 
       {showAdd && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[3000] bg-black/40 flex items-center justify-center p-4">
           <div className="bg-(--color-surface) rounded-xl max-w-md w-full p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-(--color-text)">Schedule Visit</h3>

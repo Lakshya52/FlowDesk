@@ -344,7 +344,7 @@ export default function LeadDetailModal({
 
 	return (
 		<div
-			className="backdrop-blur-sm bg-(--color-primary-light)/40 h-full w-full fixed inset-0 z-50 flex items-end sm:items-center justify-center transition-opacity duration-200"
+			className="backdrop-blur-sm bg-(--color-primary-light)/40 h-full w-full fixed inset-0 z-[3000] flex items-end sm:items-center justify-center transition-opacity duration-200"
 			// style={{ backgroundColor: `rgba(0,0,0,${0.2 * backdropOpacity})` }}
 			onClick={closeModal}
 		>
@@ -807,7 +807,7 @@ export default function LeadDetailModal({
 													createPortal(
 														<div
 															ref={statusDropdownRef}
-															className="fixed z-9999 bg-(--color-surface) border border-(--color-border) rounded-lg shadow-lg max-h-50 overflow-y-auto"
+															className="fixed z-[3010] bg-(--color-surface) border border-(--color-border) rounded-lg shadow-lg max-h-50 overflow-y-auto"
 															style={{
 																top: statusDropdownPos.top,
 																left: statusDropdownPos.left,

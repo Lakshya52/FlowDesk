@@ -1,6 +1,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap');
 @import "tailwindcss";
 
+/* ===== Z-INDEX LAYERS (always multiples of 10) =====
+ * Keep every z-index in the app on this scale — never hard-code a
+ * one-off number.
+ *
+ *   10     raised content inside a view (sticky sub-headers, small controls)
+ *   20     elevated containers inside a view (drag ghosts, now-lines, grips)
+ *   30     sticky view headers
+ *   40     view-level overlay panels / dropdown click-catchers / drawer backdrops
+ *   50     dropdown menus, autocompletes, tooltips, mention lists
+ *   60     pickers / popovers (reaction picker, sidebar hover popup)
+ *   70     nested popovers (emoji picker above reaction picker)
+ *   100    page-level floating surfaces
+ *   1000   canvas-internal elevated layers (toolbars, navigators, panels)
+ *   2000   app-level overlays (fullscreen canvas, celebrations, floating widgets)
+ *   3000   modal layer (backdrops + dialogs); stack extras at +10
+ *   4800   mobile sidebar drawer backdrop
+ *   4900   sidebar layer (persistent nav above every app surface)
+ *   5000   toast layer (second-top, above sidebar, below FilePreviewModal)
+ *   6000   topmost layer (FilePreviewModal — always above everything)
+ */
+
 /*
  * Register design tokens with Tailwind v4.
  * "inline" keeps utilities bound to the runtime vars (var(--color-*)) so the

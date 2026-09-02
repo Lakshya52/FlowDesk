@@ -204,7 +204,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 9999,
+        zIndex: 6000,
         backgroundColor: "rgba(0, 0, 0, 0.85)",
         display: "flex",
         flexDirection: "column",
@@ -226,7 +226,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           padding: "16px 24px",
           background:
             "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)",
-          zIndex: 10000,
+          zIndex: 6010,
           color: "white",
         }}
       >
@@ -316,7 +316,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
       {/* Clickable backdrop to close */}
       <div
-        style={{ position: "absolute", inset: 0, zIndex: 9998 }}
+        style={{ position: "absolute", inset: 0, zIndex: 5990 }}
         onClick={onClose}
       />
 
@@ -330,7 +330,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          zIndex: 9999,
+          zIndex: 6000,
           overflow: "hidden",
         }}
         onWheel={(e) => {
@@ -553,7 +553,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                             style={{
                               position: "sticky",
                               top: 0,
-                              zIndex: 2,
+                              zIndex: 10,
                               padding: "8px 6px",
                               background: "#2d2d3f",
                               color: "#60a5fa",
@@ -573,7 +573,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                               style={{
                                 position: "sticky",
                                 top: 0,
-                                zIndex: 2,
+                                zIndex: 10,
                                 padding: "8px 12px",
                                 background: "#2d2d3f",
                                 color: "#e0e0e8",

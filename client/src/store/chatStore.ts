@@ -52,6 +52,11 @@ export interface MessageSnippet {
         user: string;
         readAt: Date;
     }[];
+    /** Users whose device received the message but hasn't read it yet. */
+    deliveredTo?: {
+        user: string;
+        deliveredAt: Date;
+    }[];
     isDeleted?: boolean;
     isEdited?: boolean;
     createdAt: string;
@@ -89,6 +94,8 @@ interface ChatState {
     handleReactionUpdate: (messageId: string, conversationId: string, reactions: any[]) => void;
     markAsRead: (conversationId: string) => Promise<void>;
     updateLastMessage: (conversationId: string, message: MessageSnippet) => void;
+    /** Live-patch delivered/read status on a conversation's last message (sidebar tick). */
+    patchLastMessageStatus: (conversationId: string, patch: { deliveredTo?: { user: string; deliveredAt: Date }; readBy?: { user: string; readAt: Date }; messageId?: string }) => void;
     deleteConversation: (id: string) => Promise<void>;
     handleConversationDeleted: (id: string) => void;
     handleMessageDeleted: (payload: { messageId: string; conversationId: string; content: string; attachments: any[]; isDeleted: boolean }) => void;
@@ -266,6 +273,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 return { ...c, lastMessage: message };
             }
             return c;
+        });
+        set({ conversations: updated });
+    },
+
+    patchLastMessageStatus: (conversationId, patch) => {
+        const { conversations } = get();
+        const updated = conversations.map(c => {
+            if (c._id !== conversationId || !c.lastMessage) return c;
+            if (patch.messageId && c.lastMessage._id !== patch.messageId) return c;
+            let last = c.lastMessage;
+            if (patch.deliveredTo && String(last.sender._id) !== String(patch.deliveredTo.user)) {
+                const already = last.deliveredTo?.some(d => String(d.user) === String(patch.deliveredTo!.user));
+                if (!already) {
+                    last = { ...last, deliveredTo: [...(last.deliveredTo || []), patch.deliveredTo] };
+                }
+            }
+            if (patch.readBy && String(last.sender._id) !== String(patch.readBy.user)) {
+                const already = last.readBy?.some(r => String(r.user) === String(patch.readBy!.user));
+                if (!already) {
+                    last = { ...last, readBy: [...(last.readBy || []), patch.readBy] };
+                }
+            }
+            return { ...c, lastMessage: last };
         });
         set({ conversations: updated });
     },

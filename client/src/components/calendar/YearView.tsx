@@ -253,7 +253,7 @@ const YearView: React.FC<YearViewProps> = ({ events }) => {
             position: 'fixed',
             top: tooltip.y + 12,
             left: tooltip.x + 12,
-            zIndex: 200,
+            zIndex: 50,
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
             borderRadius: '8px',

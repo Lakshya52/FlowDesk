@@ -106,6 +106,7 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
+        const readAt = new Date();
         // Mark all unread incoming messages in this conversation as read
         await Message.updateMany(
             {
@@ -114,7 +115,20 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
                 'readBy.user': { $ne: userId }
             },
             {
-                $push: { readBy: { user: userId, readAt: new Date() } }
+                $push: { readBy: { user: userId, readAt } }
+            }
+        );
+
+        // Also mark incoming messages as delivered (the current user's device has
+        // received them). Sent → delivered → read progression for the sender.
+        await Message.updateMany(
+            {
+                conversation: conversationId,
+                sender: { $ne: userId },
+                'deliveredTo.user': { $ne: userId }
+            },
+            {
+                $push: { deliveredTo: { user: userId, deliveredAt: readAt } }
             }
         );
 
@@ -139,7 +153,14 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
         io.to(`conversation_${conversationId}`).emit('messages_read', {
             conversationId,
             readerId: userId.toString(),
-            readAt: new Date().toISOString(),
+            readAt: readAt.toISOString(),
+        });
+
+        // Notify senders that their messages were delivered to this user's device
+        io.to(`conversation_${conversationId}`).emit('messages_delivered', {
+            conversationId,
+            deliveredToUserId: userId.toString(),
+            deliveredAt: readAt.toISOString(),
         });
 
         res.json({ messages: decryptedMessages });
@@ -313,7 +334,14 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
             attachmentIds.push(attachment._id.toString());
         }
 
-        // Create the message
+        // Create the message. The sender has "read" their own message; any other
+        // participant who is currently online receives it on their live socket, so
+        // mark those as delivered (but not read) immediately.
+        const now = new Date();
+        const deliveredTo = conversation.participants
+            .filter(p => p.toString() !== senderId.toString())
+            .filter(p => activeUsers.has(p.toString()))
+            .map(p => ({ user: p, deliveredAt: now }));
         const message = await Message.create({
             conversation: conversationId,
             sender: senderId,
@@ -322,7 +350,8 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
             attachments: attachmentIds,
             parentMessage: parentMessageId || undefined,
             mentions: mentions || [],
-            readBy: [{ user: senderId, readAt: new Date() }] // Sender has read it
+            readBy: [{ user: senderId, readAt: now }], // Sender has read it
+            deliveredTo,
         });
 
         // Update conversation's updatedAt field
@@ -346,6 +375,17 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
         // Emit new message event to all participants' personal rooms
         conversation.participants.forEach(pId => {
             io.to(`user_${pId.toString()}`).emit('new_chat_message', populated);
+        });
+
+        // Notify the sender which participants received the message on their live
+        // socket (delivered, not yet read) so the tick can flip to double-gray.
+        deliveredTo.forEach(p => {
+            io.to(`user_${senderId.toString()}`).emit('message_delivered', {
+                messageId: message._id.toString(),
+                conversationId,
+                deliveredToUserId: p.user.toString(),
+                deliveredAt: now.toISOString(),
+            });
         });
 
         // Mentions notification triggering
@@ -396,11 +436,26 @@ export const markConversationRead = async (req: AuthRequest, res: Response): Pro
             },
             { $push: { readBy: { user: userId, readAt } } }
         );
+        // Also mark them as delivered (received on the reader's device)
+        await Message.updateMany(
+            {
+                conversation: id,
+                sender: { $ne: userId },
+                'deliveredTo.user': { $ne: userId },
+            },
+            { $push: { deliveredTo: { user: userId, deliveredAt: readAt } } }
+        );
         // Broadcast read event
         io.to(`conversation_${id}`).emit('messages_read', {
             conversationId: id,
             readerId: userId.toString(),
             readAt: readAt.toISOString(),
+        });
+        // Broadcast delivery event too
+        io.to(`conversation_${id}`).emit('messages_delivered', {
+            conversationId: id,
+            deliveredToUserId: userId.toString(),
+            deliveredAt: readAt.toISOString(),
         });
         res.json({ success: true });
     } catch (error: any) {
@@ -621,13 +676,20 @@ export const forwardMessage = async (req: AuthRequest, res: Response): Promise<v
         // Clone the original attachments
         const attachmentIds = originalMessage.attachments.map(att => (att as any)._id.toString());
 
-        // Forward the message
+        // Forward the message. Online non-sender participants receive it on
+        // their live socket → mark those as delivered immediately.
+        const now = new Date();
+        const deliveredTo = targetConversation.participants
+            .filter(p => p.toString() !== senderId.toString())
+            .filter(p => activeUsers.has(p.toString()))
+            .map(p => ({ user: p, deliveredAt: now }));
         const forwarded = await Message.create({
             conversation: targetConversationId,
             sender: senderId,
             content: originalMessage.content || '',
             attachments: attachmentIds,
-            readBy: [{ user: senderId, readAt: new Date() }]
+            readBy: [{ user: senderId, readAt: now }],
+            deliveredTo,
         });
 
         // Update target conversation's updatedAt field
@@ -650,6 +712,16 @@ export const forwardMessage = async (req: AuthRequest, res: Response): Promise<v
         // Emit new message event to all participants of target conversation
         targetConversation.participants.forEach(pId => {
             io.to(`user_${pId.toString()}`).emit('new_chat_message', populated);
+        });
+
+        // Notify the forwarder which participants received it on their live socket
+        deliveredTo.forEach(p => {
+            io.to(`user_${senderId.toString()}`).emit('message_delivered', {
+                messageId: forwarded._id.toString(),
+                conversationId: targetConversationId,
+                deliveredToUserId: p.user.toString(),
+                deliveredAt: now.toISOString(),
+            });
         });
 
         res.status(201).json({ message: populated });

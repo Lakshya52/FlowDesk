@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from "react";
+﻿    import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "../store/authStore";
 import { useChatStore, MessageSnippet, UserSnippet } from "../store/chatStore";
 import api from "../lib/api";
@@ -37,6 +37,7 @@ import {
   ReplyAll,
   PanelLeftOpen,
   Eye,
+  ChevronRight,
 } from "lucide-react";
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
@@ -141,6 +142,8 @@ export default function ChatsPage() {
   // Local States
   const [messages, setMessages] = useState<MessageSnippet[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  // Message ids whose E2EE content is still being decrypted — shows a loader.
+  const [decryptingIds, setDecryptingIds] = useState<string[]>([]);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [uploadingQueue, setUploadingQueue] = useState<
     {
@@ -161,6 +164,57 @@ export default function ChatsPage() {
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const isMobile = window.innerWidth < 768;
+
+  // Resizable chat sidebar width (persisted, like AppLayout)
+  const [chatSidebarWidth, setChatSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem("chat-sidebar-width");
+    return saved ? parseInt(saved, 10) : 340;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const chatsContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const stopResizing = React.useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const startResizing = React.useCallback(() => {
+    if (isMobile) return;
+    setIsResizing(true);
+    setTimeout(() => setIsResizing(false), 5000);
+  }, [isMobile]);
+
+  const resize = React.useCallback(
+    (mouseMoveEvent: MouseEvent) => {
+      if (isResizing && !isMobile) {
+        const containerLeft =
+          chatsContainerRef.current?.getBoundingClientRect().left ?? 0;
+        const newWidth = mouseMoveEvent.clientX - containerLeft;
+        if (newWidth > 220 && newWidth < 620) {
+          setChatSidebarWidth(newWidth);
+        }
+      }
+    },
+    [isResizing, isMobile]
+  );
+  React.useEffect(() => {
+    const handleBlur = () => setIsResizing(false);
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("mouseleave", handleBlur);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("mouseleave", handleBlur);
+    };
+  }, [resize, stopResizing]);
+
+  React.useEffect(() => {
+    if (!isResizing && !isMobile) {
+      localStorage.setItem("chat-sidebar-width", chatSidebarWidth.toString());
+    }
+  }, [chatSidebarWidth, isResizing, isMobile]);
 
   // Hover States
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
@@ -229,28 +283,12 @@ export default function ChatsPage() {
 
     socket.on("new_chat_message", async (message: MessageSnippet) => {
       const activeCid = currentConvRef.current;
-      // E2EE: decrypt ciphertext payloads before they touch state
-      if (message.iv && !message.isDeleted && activeCid) {
-        let plain = await decryptContent(activeCid, message.content, message.iv);
-        if (plain.startsWith("\u{1F512}")) {
-          // Key wasn't ready yet (e.g. healing just landed) â€” fetch it once
-          // and retry rather than leaving a stuck placeholder.
-          const conv = useChatStore
-            .getState()
-            .conversations.find((c) => c._id === activeCid);
-          if (
-            conv &&
-            (await ensureConversationKeys(
-              activeCid,
-              conv.participants.map((p) => p._id),
-            ))
-          ) {
-            plain = await decryptContent(activeCid, message.content, message.iv);
-          }
-        }
-        message = { ...message, content: plain };
-      }
-      if (message.conversation === activeCid) {
+      const isActive = message.conversation === activeCid;
+      const needsDecrypt = !!(message.iv && !message.isDeleted);
+
+      // Insert the message row immediately (as an unread/decrypting bubble)
+      // so the user sees it arriving before E2EE decryption finishes.
+      if (isActive) {
         setMessages((prev) => {
           if (prev.some((m) => m._id === message._id)) return prev;
           return [...prev, message];
@@ -263,7 +301,59 @@ export default function ChatsPage() {
             readerId: user._id,
           });
         }
+      } else if (
+        message.sender._id !== user?._id &&
+        user?._id &&
+        message.conversation
+      ) {
+        // Message arrived for a non-active conversation — this device still
+        // received it, so ack delivery (not read).
+        socket.emit("mark_messages_delivered", {
+          conversationId: message.conversation,
+          deliveredToUserId: user._id,
+        });
       }
+
+      // For the active conversation, decrypt in the background: keep the row
+      // visible and flip it to a "Decrypting…" loader while we work.
+      if (!needsDecrypt || !isActive) return;
+      setDecryptingIds((prev) =>
+        prev.includes(message._id) ? prev : [...prev, message._id],
+      );
+      // E2EE: decrypt ciphertext payloads before they touch state
+      let plain = await decryptContent(
+        message.conversation,
+        message.content,
+        message.iv!,
+      );
+      if (plain.startsWith("\u{1F512}")) {
+        // Key wasn't ready yet (e.g. healing just landed) — fetch it once
+        // and retry rather than leaving a stuck placeholder.
+        const conv = useChatStore
+          .getState()
+          .conversations.find((c) => c._id === activeCid);
+        if (
+          conv &&
+          (await ensureConversationKeys(
+            message.conversation,
+            conv.participants.map((p) => p._id),
+          ))
+        ) {
+          plain = await decryptContent(message.conversation, message.content, message.iv!);
+        }
+      }
+      setMessages((prev) =>
+        prev.map((m) => (m._id === message._id ? { ...m, content: plain } : m)),
+      );
+      // Also patch the cache so switching away/back mid-decrypt never shows
+      // the raw ciphertext placeholder.
+      const cached = messagesCacheRef.current[message.conversation];
+      if (cached) {
+        messagesCacheRef.current[message.conversation] = cached.map((m) =>
+          m._id === message._id ? { ...m, content: plain } : m,
+        );
+      }
+      setDecryptingIds((prev) => prev.filter((id) => id !== message._id));
     });
 
     socket.on(
@@ -359,6 +449,94 @@ export default function ChatsPage() {
             }),
           );
         }
+        // Sidebar tick — reading the conversation also marks it read.
+        useChatStore.getState().patchLastMessageStatus(conversationId, {
+          readBy: { user: readerId, readAt: new Date(readAt) },
+        });
+      },
+    );
+
+    // Delivery ack (single message, emitted right after send) — the sender sees
+    // their tick flip from single to double-gray.
+    socket.on(
+      "message_delivered",
+      ({
+        messageId,
+        conversationId,
+        deliveredToUserId,
+        deliveredAt,
+      }: {
+        messageId: string;
+        conversationId: string;
+        deliveredToUserId: string;
+        deliveredAt: string;
+      }) => {
+        if (conversationId === currentConvRef.current) {
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m._id !== messageId) return m;
+              if (String(m.sender._id) === deliveredToUserId) return m;
+              const alreadyDelivered = m.deliveredTo?.some(
+                (d) => d.user === deliveredToUserId,
+              );
+              if (alreadyDelivered) return m;
+              return {
+                ...m,
+                deliveredTo: [
+                  ...(m.deliveredTo || []),
+                  {
+                    user: deliveredToUserId,
+                    deliveredAt: new Date(deliveredAt),
+                  },
+                ],
+              };
+            }),
+          );
+        }
+        // Sidebar tick (last message) — always, active or not, since the
+        // sidebar is visible alongside the chat.
+        useChatStore.getState().patchLastMessageStatus(conversationId, {
+          messageId,
+          deliveredTo: { user: deliveredToUserId, deliveredAt: new Date(deliveredAt) },
+        });
+      },
+    );
+
+    // Delivery ack (batch, for a whole conversation) — e.g. a recipient came
+    // online and their device fetched/received messages.
+    socket.on(
+      "messages_delivered",
+      ({
+        conversationId,
+        deliveredToUserId,
+        deliveredAt,
+      }: {
+        conversationId: string;
+        deliveredToUserId: string;
+        deliveredAt: string;
+      }) => {
+        if (conversationId === currentConvRef.current) {
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (String(m.sender._id) === deliveredToUserId) return m;
+              const alreadyDelivered = m.deliveredTo?.some(
+                (d) => d.user === deliveredToUserId,
+              );
+              if (alreadyDelivered) return m;
+              return {
+                ...m,
+                deliveredTo: [
+                  ...(m.deliveredTo || []),
+                  { user: deliveredToUserId, deliveredAt: new Date(deliveredAt) },
+                ],
+              };
+            }),
+          );
+        }
+        // Sidebar tick — the receiving device delivered the latest message too.
+        useChatStore.getState().patchLastMessageStatus(conversationId, {
+          deliveredTo: { user: deliveredToUserId, deliveredAt: new Date(deliveredAt) },
+        });
       },
     );
 
@@ -1106,6 +1284,15 @@ export default function ChatsPage() {
     });
   }, []);
 
+  // Delivered = someone OTHER than the sender received the message on their
+  // device (but hasn't read it yet). Only relevant for messages we sent.
+  const isMessageDelivered = useCallback((msg: MessageSnippet): boolean => {
+    if (!msg.deliveredTo || msg.deliveredTo.length === 0) return false;
+    return msg.deliveredTo.some((d) => {
+      return String(d.user) !== String(msg.sender._id);
+    });
+  }, []);
+
   const renderMessageContent = (text: string) => {
     if (!text) return null;
     // const regex = /(@[\w][\w\s]*?)(?=\s@|\s|$)/g;
@@ -1165,6 +1352,7 @@ export default function ChatsPage() {
       />
       <style>{globalStyles}</style>
       <div
+        ref={chatsContainerRef}
         style={{
           height: "calc(100vh - 120px)",
           display: "flex",
@@ -1180,8 +1368,8 @@ export default function ChatsPage() {
         <div
 
           style={{
-            width: sidebarCollapsed ? 0 : (isMobile ? '100%' : 340),
-            minWidth: sidebarCollapsed ? 0 : (isMobile ? '100%' : 340),
+            width: sidebarCollapsed ? 0 : (isMobile ? '100%' : chatSidebarWidth),
+            minWidth: sidebarCollapsed ? 0 : (isMobile ? '100%' : chatSidebarWidth),
             display: sidebarCollapsed && isMobile ? 'none' : 'flex',
             flexDirection: "column",
             borderRight: sidebarCollapsed
@@ -1189,7 +1377,7 @@ export default function ChatsPage() {
               : "1px solid var(--color-border)",
             background: "var(--color-surface)",
             overflow: "hidden",
-            transition: isMobile ? 'none' : "width 0.25s ease, min-width 0.25s ease",
+            transition: isMobile || isResizing ? 'none' : "width 0.25s ease, min-width 0.25s ease",
             flexShrink: 0,
             ...(isMobile && !sidebarCollapsed ? { position: 'absolute' as any, inset: 0, zIndex: 20 } : {}),
           }}
@@ -1205,7 +1393,7 @@ export default function ChatsPage() {
                   size={22}
                 />
                 Chat
-                {/* E2EE badge â€” content is encrypted client-side */}
+                {/* E2EE badge content is encrypted client-side */}
                 <span
                   title="Messages in this chat are end-to-end encrypted"
                   style={{
@@ -1416,6 +1604,8 @@ export default function ChatsPage() {
                             >
                               <p
                                 style={{
+                                  display: "flex",
+                                  alignItems: "center",
                                   fontSize: "0.75rem",
                                   color: isActive
                                     ? "var(--color-primary)"
@@ -1429,18 +1619,68 @@ export default function ChatsPage() {
                               >
                                 {latestMsg ? (
                                   <>
-                                    {latestMsg.sender._id === user?._id
-                                      ? "You: "
-                                      : `${latestMsg.sender.name}: `}
-                                    {snippetTexts[c._id] ??
-                                      (latestMsg.iv && !latestMsg.isDeleted
-                                        ? "ðŸ”’ Encrypted message"
-                                        : latestMsg.content || "Sent an attachment")}
+                                    {latestMsg.sender._id === user?._id ? (
+                                      <>
+                                        You:&nbsp;
+                                        {snippetTexts[c._id] ??
+                                          (latestMsg.iv && !latestMsg.isDeleted
+                                            ? "Encrypted message"
+                                            : latestMsg.content ||
+                                              "Sent an attachment")}
+                                      </>
+                                    ) : (
+                                      <>
+                                        {`${latestMsg.sender.name}: `}
+                                        {snippetTexts[c._id] ??
+                                          (latestMsg.iv && !latestMsg.isDeleted
+                                            ? "Encrypted message"
+                                            : latestMsg.content ||
+                                              "Sent an attachment")}
+                                      </>
+                                    )}
                                   </>
                                 ) : (
                                   "No messages yet"
                                 )}
                               </p>
+                              {latestMsg &&
+                                latestMsg.sender._id === user?._id && (
+                                  <span
+                                    style={{
+                                      marginLeft: "auto",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {/* WhatsApp-style tick on the last sent message in the list */}
+                                    {isMessageRead(latestMsg) ? (
+                                      <CheckCheck
+                                        size={12}
+                                        style={{
+                                          color: "#93c5fd",
+                                          verticalAlign: "-2px",
+                                        }}
+                                      />
+                                    ) : isMessageDelivered(latestMsg) ? (
+                                      <CheckCheck
+                                        size={12}
+                                        style={{
+                                          color: "var(--color-text-tertiary)",
+                                          verticalAlign: "-2px",
+                                        }}
+                                      />
+                                    ) : (
+                                      <Check
+                                        size={12}
+                                        style={{
+                                          color: "var(--color-text-tertiary)",
+                                          verticalAlign: "-2px",
+                                        }}
+                                      />
+                                    )}
+                                  </span>
+                                )}
                               {c.unreadCount > 0 && (
                                 <span
                                   style={{
@@ -1560,6 +1800,35 @@ export default function ChatsPage() {
             )}
           </div>
         </div>
+
+        {/* Resizer handle â€” drag to resize the chat list sidebar */}
+        {!sidebarCollapsed && !isMobile && (
+          <div
+            onMouseDown={startResizing}
+            style={{
+              width: "4px",
+              cursor: "col-resize",
+              background: isResizing
+                ? "var(--color-primary)"
+                : "transparent",
+              zIndex: 10,
+              transition: "background 0.2s ease",
+              marginLeft: "-2px",
+              marginRight: "-2px",
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizing)
+                e.currentTarget.style.background =
+                  "var(--color-primary-light)";
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing)
+                e.currentTarget.style.background = "transparent";
+            }}
+            title="Drag to resize"
+          />
+        )}
 
         {/* RIGHT PANEL: Messages Board */}
         <div
@@ -1774,6 +2043,7 @@ export default function ChatsPage() {
                         new Date(prevMsg.createdAt).toDateString();
                     // FIX: use corrected read status helper
                     const isRead = isMessageRead(msg);
+                    const isDelivered = isMessageDelivered(msg);
                     const isMsgHovered = hoveredMsgId === msg._id;
                     const isGroup = activeConv.type === "group";
 
@@ -2322,7 +2592,24 @@ export default function ChatsPage() {
                                                       opacity: 0.8,
                                                     }}
                                                   >
-                                                    ðŸ”“ Decryptingâ€¦
+                                                    <div
+                                                      style={{
+                                                        width: 14,
+                                                        height: 14,
+                                                        borderRadius: "50%",
+                                                        border: "2px solid",
+                                                        borderColor: isMe
+                                                          ? "rgba(255,255,255,0.4)"
+                                                          : "var(--color-border)",
+                                                        borderTopColor: isMe
+                                                          ? "#fff"
+                                                          : "var(--color-primary)",
+                                                        animation:
+                                                          "chatsPageSpinner 1s linear infinite",
+                                                        flexShrink: 0,
+                                                      }}
+                                                    />
+                                                    Decrypting
                                                   </div>
                                                 ) : (
                                                   <>
@@ -2423,7 +2710,7 @@ export default function ChatsPage() {
                                                   }}
                                                 >
                                                   {isEncrypted && !fileUrl
-                                                    ? "Decryptingâ€¦"
+                                                    ? "Decrypting..."
                                                     : (
                                                       att.fileSize / 1024
                                                     ).toFixed(1) + " KB"}
@@ -2478,7 +2765,41 @@ export default function ChatsPage() {
                                       </div>
                                     )}
 
-                                  {msg.content && (
+                                  {decryptingIds.includes(msg._id) ? (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          width: 12,
+                                          height: 12,
+                                          borderRadius: "50%",
+                                          border: "2px solid",
+                                          borderColor: isMe
+                                            ? "rgba(255,255,255,0.4)"
+                                            : "var(--color-border)",
+                                          borderTopColor: isMe
+                                            ? "#fff"
+                                            : "var(--color-primary)",
+                                          animation:
+                                            "chatsPageSpinner 1s linear infinite",
+                                          flexShrink: 0,
+                                        }}
+                                      />
+                                      <span
+                                        style={{
+                                          fontSize: "0.72rem",
+                                          opacity: 0.85,
+                                        }}
+                                      >
+                                        Decrypting…
+                                      </span>
+                                    </div>
+                                  ) : msg.content && (
                                     <p
                                       style={{
                                         margin: 0,
@@ -2530,12 +2851,17 @@ export default function ChatsPage() {
                                     { hour: "2-digit", minute: "2-digit" },
                                   )}
                                 </span>
-                                {/* FIX: show read receipt using corrected isMessageRead helper */}
+                                {/* WhatsApp-style read receipt: single= sent, double gray= delivered, double blue= read */}
                                 {isMe &&
                                   (isRead ? (
                                     <CheckCheck
                                       size={12}
                                       style={{ color: "#93c5fd" }}
+                                    />
+                                  ) : isDelivered ? (
+                                    <CheckCheck
+                                      size={12}
+                                      style={{ color: "rgba(255,255,255,0.6)" }}
                                     />
                                   ) : (
                                     <Check
@@ -3236,15 +3562,21 @@ export default function ChatsPage() {
               {sidebarCollapsed && (
                 <button
                   onClick={() => setSidebarCollapsed(false)}
-                  className="btn btn-secondary"
+                  className="absolute top-4 left-4"
                   style={{
-                    marginBottom: 24,
-                    gap: 8,
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    color: "var(--color-text-tertiary)",
+                    padding: 4,
+                    borderRadius: 8,
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
+                    transition: "all 0.2s",
                   }}
                 >
-                  <MessageSquare size={16} /> Show Chats
+                  <ChevronRight size={16} /> 
                 </button>
               )}
               <div
@@ -3273,6 +3605,20 @@ export default function ChatsPage() {
               >
                 FlowDesk Chat
               </h3>
+              {sidebarCollapsed && (
+                <button
+                  onClick={() => setSidebarCollapsed(false)}
+                  className="btn btn-secondary "
+                  style={{
+                    marginBottom: 8,
+                    gap: 8,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <MessageSquare size={16} /> Show Chats
+                </button>
+              )}
               <p
                 style={{
                   fontSize: "0.875rem",
@@ -3281,7 +3627,7 @@ export default function ChatsPage() {
                   lineHeight: 1.6,
                   margin: 0,
                 }}
-              >
+                >
                 Start direct conversations with colleagues in real-time. Share
                 file uploads, mention colleagues, and react to messages
                 instantly.
@@ -3291,7 +3637,7 @@ export default function ChatsPage() {
         </div>
 
         {/* MODAL: Forward Message */}
-        <Modal isOpen={forwardingMessage !== null} onClose={() => { setForwardingMessage(null); setForwardSuccessConvIds([]); }} zIndex={1000}>
+        <Modal isOpen={forwardingMessage !== null} onClose={() => { setForwardingMessage(null); setForwardSuccessConvIds([]); }} zIndex={3030}>
           <div
             className="card"
             style={{

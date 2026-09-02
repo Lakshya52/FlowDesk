@@ -98,7 +98,7 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "https://static.cloudflareinsights.com"],
-        styleSrc: ["'self'", "https://fonts.googleapis.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "blob:", "https://flowdesk-api.raksco.in"],
         connectSrc: ["'self'", "https://flowdesk-api.raksco.in", "https://api.brevo.com", "https://api.openai.com"],
@@ -342,6 +342,39 @@ async function isAssignmentMember(assignmentId: string, userId: string, role: st
   }
 }
 
+// When a user's device comes online, mark all messages other users have sent
+// them (across every conversation) as delivered, and notify senders who are
+// currently viewing those conversations so their ticks flip to double-gray.
+async function markDeliveredForUser(userId: string) {
+  try {
+    const Conversation = (await import("./models/Conversation")).default;
+    const Message = (await import("./models/Message")).default;
+    const convs = await Conversation.find({ participants: userId })
+      .select("_id")
+      .lean();
+    const deliveredAt = new Date();
+    for (const c of convs) {
+      const res = await Message.updateMany(
+        {
+          conversation: c._id,
+          sender: { $ne: userId },
+          "deliveredTo.user": { $ne: userId },
+        },
+        { $push: { deliveredTo: { user: userId, deliveredAt } } },
+      );
+      if (res.modifiedCount > 0) {
+        io.to(`conversation_${c._id}`).emit("messages_delivered", {
+          conversationId: c._id.toString(),
+          deliveredToUserId: userId.toString(),
+          deliveredAt: deliveredAt.toISOString(),
+        });
+      }
+    }
+  } catch (err) {
+    console.error("markDeliveredForUser error:", err);
+  }
+}
+
 // Socket.io connection logic
 io.on("connection", (socket) => {
   socket.on("join_assignment", async (assignmentId) => {
@@ -363,6 +396,7 @@ io.on("connection", (socket) => {
     if (!userId || userId !== socket.data.userId) return;
     socket.join(`user_${userId}`);
     activeUsers.add(userId.toString());
+    void markDeliveredForUser(userId.toString());
     io.emit("user_status_change", { userId, status: "online" });
   });
 
@@ -371,6 +405,7 @@ io.on("connection", (socket) => {
     if (!userId || userId !== socket.data.userId) return;
     if (status === "online") {
       activeUsers.add(userId.toString());
+      void markDeliveredForUser(userId.toString());
       io.emit("user_status_change", { userId, status: "online" });
       console.log(
         `📡 User ${userId} status set to online. Active count: ${activeUsers.size}`,
@@ -427,15 +462,87 @@ io.on("connection", (socket) => {
         },
         { $push: { readBy: { user: readerId, readAt } } },
       );
+      // Reading implies the device received it — also mark delivered.
+      await Message.updateMany(
+        {
+          conversation: conversationId,
+          sender: { $ne: readerId },
+          "deliveredTo.user": { $ne: readerId },
+        },
+        { $push: { deliveredTo: { user: readerId, deliveredAt: readAt } } },
+      );
       io.to(`conversation_${conversationId}`).emit("messages_read", {
         conversationId,
         readerId: readerId.toString(),
         readAt: readAt.toISOString(),
       });
+      io.to(`conversation_${conversationId}`).emit("messages_delivered", {
+        conversationId,
+        deliveredToUserId: readerId.toString(),
+        deliveredAt: readAt.toISOString(),
+      });
     } catch (err) {
       console.error("mark_messages_read error:", err);
     }
   });
+
+  // Delivery ack: the recipient's device received the messages (but not read).
+  socket.on(
+    "mark_messages_delivered",
+    async ({ conversationId, deliveredToUserId }) => {
+      try {
+        // A socket may only ack delivery for its own user, and only in
+        // conversations it actually belongs to.
+        if (!deliveredToUserId || deliveredToUserId !== socket.data.userId) return;
+        if (!(await isConversationParticipant(conversationId, socket.data.userId!))) return;
+        const Message = (await import("./models/Message")).default;
+        const deliveredAt = new Date();
+        await Message.updateMany(
+          {
+            conversation: conversationId,
+            sender: { $ne: deliveredToUserId },
+            "deliveredTo.user": { $ne: deliveredToUserId },
+          },
+          { $push: { deliveredTo: { user: deliveredToUserId, deliveredAt } } },
+        );
+        // Notify senders that their messages reached this user's device.
+        io.to(`conversation_${conversationId}`).emit("messages_delivered", {
+          conversationId,
+          deliveredToUserId: deliveredToUserId.toString(),
+          deliveredAt: deliveredAt.toISOString(),
+        });
+      } catch (err) {
+        console.error("mark_messages_delivered error:", err);
+      }
+    },
+  );
+
+  // WhatsApp-style key handoff: a device that can't find a wrap addressed to
+    // it asks every participant to (re-)wrap the EXISTING conversation key for
+    // all devices missing one. Only participants may request, and the request
+    // is fan-out to the participants' user rooms so any online device holding
+    // the key can respond with a new wrap.
+    socket.on("request_key_heal", async (conversationId) => {
+      if (typeof conversationId !== "string" || !/^[0-9a-f]{24}$/i.test(conversationId)) return;
+      if (!(await isConversationParticipant(conversationId, socket.data.userId!))) return;
+      try {
+        const Conversation = (await import("./models/Conversation")).default;
+        const conv = await Conversation.findById(conversationId)
+          .select("participants")
+          .lean();
+        if (!conv) return;
+        const participantIds = (conv.participants as any[]).map((p: any) =>
+          p.toString()
+        );
+        const payload = { conversationId, participantIds };
+        for (const pid of participantIds) {
+          io.to(`user_${pid}`).emit("key_heal_request", payload);
+        }
+        io.to(`conversation_${conversationId}`).emit("key_heal_request", payload);
+      } catch (err) {
+        console.error("request_key_heal error:", err);
+      }
+    });
 
   socket.on("disconnect", () => {
     console.log("User disconnected");

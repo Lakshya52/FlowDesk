@@ -12,7 +12,7 @@ const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   children,
-  zIndex = 50,
+  zIndex = 3000,
   backdropBlur = true,
 }) => {
   useEffect(() => {

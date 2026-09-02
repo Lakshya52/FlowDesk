@@ -69,7 +69,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[3000] bg-black/50 flex items-center justify-center">
       <div className="bg-white rounded-xl p-4 max-w-lg w-full mx-4">
         <h3 className="text-lg font-semibold mb-2 text-gray-900">Sign here</h3>
         <canvas

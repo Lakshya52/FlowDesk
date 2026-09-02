@@ -94,7 +94,7 @@ const WeekView: React.FC<WeekViewProps> = ({ events }) => {
     };
 
     el.style.opacity = "0.85";
-    el.style.zIndex = "99";
+    el.style.zIndex = "90";
     el.style.boxShadow = "var(--shadow-xl)";
     el.style.transition =
       "transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
@@ -109,7 +109,7 @@ const WeekView: React.FC<WeekViewProps> = ({ events }) => {
     border: 2px dashed ${event.calendar?.color || "#6366f1"};
     background: ${event.calendar?.color || "#6366f1"}15;
     pointer-events: none;
-    z-index: 98;
+    z-index: 80;
     top: ${el.offsetTop}px;
     transition: top 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   `;

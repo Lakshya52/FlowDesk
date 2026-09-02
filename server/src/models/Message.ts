@@ -10,6 +10,11 @@ export interface IMessageReadBy {
     readAt: Date;
 }
 
+export interface IMessageDeliveredTo {
+    user: mongoose.Types.ObjectId;
+    deliveredAt: Date;
+}
+
 export interface IMessage extends Document {
     conversation: mongoose.Types.ObjectId;
     sender: mongoose.Types.ObjectId;
@@ -19,6 +24,8 @@ export interface IMessage extends Document {
     mentions: mongoose.Types.ObjectId[];
     reactions: IMessageReaction[];
     readBy: IMessageReadBy[];
+    /** Users whose device has received this message but not yet read it. */
+    deliveredTo: IMessageDeliveredTo[];
     isDeleted?: boolean;
     isEdited?: boolean;
     /** E2EE: base64 AES-GCM IV. Absent ⇒ legacy plaintext content. */
@@ -89,6 +96,19 @@ const messageSchema = new Schema<IMessage>(
                 },
             },
         ],
+        deliveredTo: [
+            {
+                user: {
+                    type: Schema.Types.ObjectId,
+                    ref: 'User',
+                    required: true,
+                },
+                deliveredAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            },
+        ],
         isDeleted: {
             type: Boolean,
             default: false,
@@ -104,5 +124,6 @@ const messageSchema = new Schema<IMessage>(
 // Indexes for fast history loading and sorting
 messageSchema.index({ conversation: 1, createdAt: -1 });
 messageSchema.index({ conversation: 1, sender: 1, 'readBy.user': 1 });
+messageSchema.index({ conversation: 1, sender: 1, 'deliveredTo.user': 1 });
 
 export default mongoose.model<IMessage>('Message', messageSchema);
