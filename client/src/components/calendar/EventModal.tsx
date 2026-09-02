@@ -12,7 +12,7 @@ interface EventModalProps {
 }
 
 const EventModal: React.FC<EventModalProps> = ({ calendars }) => {
-  const { isEventModalOpen, closeEventModal, selectedEventId, currentDate } = useCalendarStore();
+  const { isEventModalOpen, closeEventModal, selectedEventId, selectedDate, currentDate } = useCalendarStore();
   const queryClient = useQueryClient();
         const startDateRef = useRef<HTMLInputElement>(null);
 const endDateRef = useRef<HTMLInputElement>(null);
@@ -39,8 +39,9 @@ const endDateRef = useRef<HTMLInputElement>(null);
         // Edit mode - fetch event
         fetchEventDetails();
       } else {
-        // Create mode
-        const dateStr = format(currentDate, 'yyyy-MM-dd');
+        // Create mode - use the date the user clicked (selectedDate) or fall back to the current view date
+        const baseDate = selectedDate || currentDate;
+        const dateStr = format(baseDate, 'yyyy-MM-dd');
         setFormData({
           title: '',
           calendar: myCalendars.length > 0 ? myCalendars[0]._id : '',
@@ -55,7 +56,7 @@ const endDateRef = useRef<HTMLInputElement>(null);
         });
       }
     }
-  }, [isEventModalOpen, selectedEventId, currentDate, myCalendars.length]);
+  }, [isEventModalOpen, selectedEventId, selectedDate, currentDate, myCalendars.length]);
 
   const fetchEventDetails = async () => {
     try {

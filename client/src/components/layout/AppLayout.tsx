@@ -3,6 +3,9 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import WhatsNewModal from '../common/WhatsNewModal';
+import { WhatsNewEntry, fetchWhatsNewEntry, hasNewVersion, markVersionSeen } from '../../lib/whatsnew';
+import packageJson from '../../../package.json';
 
 const AppLayout: React.FC = () => {
     const { user } = useAuthStore();
@@ -14,6 +17,28 @@ const AppLayout: React.FC = () => {
         return saved ? parseInt(saved, 10) : 260;
     });
     const [isResizing, setIsResizing] = React.useState(false);
+
+    // "What's new" — fetch the latest GitHub release, compare to localStorage,
+    // and show the modal if the version is newer (or this is the first run).
+    const [whatsNewEntry, setWhatsNewEntry] = React.useState<WhatsNewEntry | null>(null);
+
+    React.useEffect(() => {
+        const currentVersion = packageJson.version;
+        // Always mark the current version on first-ever run so existing
+        // users don't see a stale changelog. New versions will override.
+        if (!localStorage.getItem("flowdesk-last-seen-version")) {
+            markVersionSeen(currentVersion);
+        }
+
+        // Only fetch the modal if the user hasn't seen this version yet
+        if (!hasNewVersion(currentVersion)) return;
+
+        let cancelled = false;
+        fetchWhatsNewEntry(currentVersion).then((entry) => {
+            if (!cancelled && entry) setWhatsNewEntry(entry);
+        });
+        return () => { cancelled = true; };
+    }, []);
 
     React.useEffect(() => {
         const handleResize = () => {
@@ -142,6 +167,11 @@ const AppLayout: React.FC = () => {
                     </div>
                 </main>
             </div>
+            <WhatsNewModal
+                open={!!whatsNewEntry}
+                entry={whatsNewEntry!}
+                onClose={() => setWhatsNewEntry(null)}
+            />
         </div>
     );
 };

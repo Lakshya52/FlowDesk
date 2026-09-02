@@ -40,10 +40,17 @@ const Navbar = () => {
 							// { name: "Features", href: "/features" },
 							{ name: "Releases", href: "/release" },
 							{ name: "Documentation", href: "/documentation" },
+							// { name: "Support", href: "/support" },
+							{ name: "Github", href: "https://github.com/Lakshya52/FlowDesk" },
 						].map((link) => (
 							<Link
 								key={link.name}
 								to={link.href}
+								{...{
+									href: link.href.startsWith("https") ? "_blank" : undefined,
+									// rel: link.href.startsWith("https") ? "noopener noreferrer" : undefined,
+									rel: link.href.startsWith("https") ? "_blank" : undefined,
+								}}
 								className={`text-[#0a0038] focus:text-(--color-primary) focus:text-bold font-manrope hover:text-[#0a0038]/50 text-sm font-medium tracking-wide transition-colors duration-100  focus:outline-(--color-primary) focus:outline rounded-full px-2  focus:outline-offset-2 
 								
 								`}
