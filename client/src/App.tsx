@@ -187,7 +187,25 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       {/* <OfflineBanner /> */}
-      <Toaster position="top-right" containerStyle={{ zIndex: 5000 }} />
+      <Toaster
+        position="top-right"
+        containerStyle={{ zIndex: 5000 }}
+        toastOptions={{
+          className: "app-toast",
+          style: {
+            background: "var(--color-surface)",
+            color: "var(--color-text)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "10px",
+            boxShadow: "var(--shadow-lg)",
+            padding: "12px 16px",
+            fontSize: "14px",
+          },
+          success: { iconTheme: { primary: "var(--color-success)", secondary: "#ffffff" } },
+          error: { iconTheme: { primary: "var(--color-danger)", secondary: "#ffffff" } },
+          duration: 4000,
+        }}
+      />
       <HashRouter>
         <AppInner />
       </HashRouter>

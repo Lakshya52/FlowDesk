@@ -737,7 +737,40 @@ input, textarea, select, button, a-button, .btn, [role="button"], a {
 }
 
 @keyframes task-highlight-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.5); }
+   0%   { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.5); }
   50%  { box-shadow: 0 0 0 6px rgba(129, 140, 248, 0); }
   100% { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0); }
+}
+
+/* ------------------------------------------------------------------ */
+/* react-hot-toast — guarantee a styled, themed toast even if goober's  */
+/* default styles fail to inject (previously toasts rendered as plain   */
+/* text with no background or border).                                  */
+/* ------------------------------------------------------------------ */
+.app-toast {
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-lg) !important;
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+  font-family: inherit !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  max-width: 360px !important;
+}
+
+.app-toast > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-toast[role="status"] {
+  background: var(--color-surface) !important;
+}
+
+.app-toast [data-title] {
+  color: var(--color-text) !important;
 }
