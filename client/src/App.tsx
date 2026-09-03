@@ -245,8 +245,8 @@ const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 
   if (!isExactOrParentMatch && !isSubItemOfAllowedParent) {
-      console.log('[RouteGuard] BLOCKED — redirecting to', getFirstAllowedRoute(user));
-      return <Navigate to={getFirstAllowedRoute(user)} replace />;
+    console.log('[RouteGuard] BLOCKED — redirecting to', getFirstAllowedRoute(user));
+    return <Navigate to={getFirstAllowedRoute(user)} replace />;
   }
 
   return <>{children}</>;

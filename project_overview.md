@@ -1,125 +1,73 @@
 # 🏢 FlowDesk Project Overview
 
-FlowDesk is a sophisticated, full-stack internal management ecosystem. It centralizes complex business operations—from high-level project management to granular day-to-day tasks—into a single, high-performance platform.
+FlowDesk is Aceone's full-stack internal management ecosystem. It centralizes project execution, task tracking, CRM, field operations, and real-time collaboration in a single multi-tenant platform.
 
 ## 🏗 Modular Architecture
 
-The software is built on a modern **MERN-like** stack (using TypeScript for end-to-end type safety):
-- **Frontend**: React + TypeScript with a custom CSS design system optimized for readability and performance.
-- **Backend**: Node.js + Express + Mongoose, providing a robust RESTful API.
-- **Real-time**: Integrated Socket.io for immediate updates on chats and notifications.
-- **Storage**: MongoDB with GridFS integration for handling secure document attachments.
+**Stack:** TypeScript end-to-end (React 19 + Vite 7 + Tailwind 4 + Zustand + TanStack Query 5 on client; Node + Express 4 + Mongoose 8 + Socket.io 4 + Helmet on server; MongoDB + GridFS; Electron 34 for desktop).
+
+- **Frontend** `client/src` — HashRouter + `AppLayout` + `RouteGuard` (`client/src/App.tsx:224` checks `user.permissions.allowedTabs` vs `navItems`), 23 pages, 13 calendar views, 11 CRM components, Zustand stores (`authStore`, `chatStore`, `calendarStore`, `themeStore`).
+- **Backend** `server/src/index.ts:58` — Express + Socket.io + Helmet CSP + CORS allowlist, GridFS inline + `GET /uploads/:filename/resize` Sharp (`server/src/index.ts:180`), Ollama proxy `POST /api/buddy/ollama → 127.0.0.1:11434` (`index.ts:230`), health `GET /api/health` (`index.ts:563`), 27 route mounts (`index.ts:261`).
+- **Real-time** `server/src/index.ts:290` — `io.use` JWT `auth.token` only, guarded rooms `isConversationParticipant` / `isAssignmentMember` (`index.ts:318`), `activeUsers` Set (`index.ts:90`), events `join_assignment|join_conversation|join_tenant|join_user`, `user_active_status` broadcast, `typing`, `mark_messages_read/delivered`, `request_key_heal` E2EE (`index.ts:403`).
+- **Storage** `server/src/utils/gridfs.ts` — Multer memory 10MB (`middlewares/upload.ts:69`) → GridFS bucket `uploads`, `Attachment.encIv/encKey` encrypted storage, streaming download.
+- **Crons** — `services/recurringTaskService.ts:439 startRecurringJob` exact timer + 5-min scan, `services/fieldVisitHeartbeatService.ts:9` 60-s stale check, `services/backupScheduleService.ts:106` one-shot per tenant frequency (`index.ts:617` start, `582` stop on SIGTERM).
 
 ---
 
-## 🚀 Core Features
+## 🚀 Core Features (implemented)
 
-### 1. Project Management (Assignments)
-The heart of FlowDesk. Projects are categorized into:
-- **Ongoing Work**: Active projects currently being handled by teams.
-- **Completed**: A permanent archive of finished projects for history and auditing.
-- **Recurring Blueprints**: A powerful automation system. Blueprints act as templates that automatically spawn new project instances (Daily, Weekly, Monthly, or Yearly) with pre-filled tasks and teams.
+### 1. Project Management (Assignments) `server/src/models/Assignment.ts:50` `routes/assignments.ts:9` `controllers/assignmentController.ts:98`
+- **Ongoing / Completed / Recurring Blueprints** — `isRecurring + recurringPattern(daily/weekly/monthly/yearly) + recurringWeekdays + recurringDayOfMonth + recurringMaxInstances + recurringDueDays + recurringNotifyOnSpawn + recurringPaused + recurringLastSpawnedAt/SpawnedCount`.
+- **Excel workflow** — `GET /import/sample` template, `POST /import/preview` parse-only, `POST /import/excel` bulk create (`assignmentController.ts:737`).
+- **Per-project collaborative whiteboard** — `canvasData Mixed` field, `PATCH /:id/canvas` (`routes/assignments.ts:9`), rendered by `components/assignments/ProjectCanvas.tsx` (fullscreen, auto-save debounce, who-edited avatars).
+- **Activity, comments, files** — cascaded on delete, paginated reads.
 
-### 2. Task Ecosystem
-Tasks are granular units of work within projects:
-- **State Management**: Tasks progress from `Todo` to `In Progress`, `Review`, and finally `Completed`.
-- **Checkpointing**: Every task supports subtask checklists for tracking multi-step processes.
-- **Team Ownership**: Tasks can be assigned to specific individuals or entire teams.
+### 2. Task Ecosystem + Kanban Boards `Task.ts:48` `Board.ts:38` `routes/tasks.ts:9` `routes/boards.ts:28`
+- **Task lifecycle** `TODO=in_progress→review→completed` `Task.ts:10`, `priority low/medium/high/urgent L48`, `rank` drag order `PUT /tasks/reorder`, `timeEstimate/timeSpent`, `subtasks[title,completed]`, `dependencies[]`, `board` ref, `tenantId`.
+- **Board columns** `Board.ts:38 columns[key/label/color/order]`, join workflow `joinRequests[status pending/accepted/rejected]` + `invitations[user/invitedBy/status]` + `members[]` (`Board.ts:47`), endpoints `POST /:id/columns`, `PUT /:id/columns/:key/rename`, `DELETE /:id/columns/:key`, `PUT /:id/columns/reorder`, `POST /:id/request`, `PUT /:id/requests/:id` (`routes/boards.ts:28`). Client `BoardsPage.tsx:16` + `TasksPage.tsx:19` (cross-project table, filters, comment thread, socket `useTaskSocket.ts:6`).
 
-### 3. AI Buddy Integration
-A built-in AI assistant that assists team members with:
-- Project analysis and deadline forecasting.
-- Generating task descriptions.
-- Providing technical guidance based on previous project history.
+### 3. AI Buddy `routes/buddy.ts:310` `services/*` `components/common/Buddy.tsx`
+- `POST /buddy` (non-stream `gpt-4o temp 0.7 max_tokens 800` + `FLOWDESK_KNOWLEDGE L6` + `INTENT_INSTRUCTIONS L268` 8 intents) + `POST /buddy/stream` SSE `text/event-stream L378` + `getFallbackResponse() L498` per-route hints.
+- Local alternative `POST /api/buddy/ollama` proxies to `127.0.0.1:11434/api/chat` chunked octet-stream 120s timeout (`index.ts:230`).
+- Floating widget history 10, path context, `Ctrl/Cmd+B` shortcut.
 
-### 4. Collaborative Canvas
-A digital whiteboard and note-taking space where teams can:
-- Create post-it style notes for brainstorming.
-- Organize visual workflows.
-- Switch between **Personal** and **Collaborative** modes for private drafting vs. team sessions.
+### 4. Communication & Presence `Message.ts:39` `Conversation.ts:32` `ChatMessage.ts:16` `Notification.ts:33` `ActivityLog.ts:27`
+- **Dual chat:** Assignment legacy (`ChatMessage assignment/file/parentMessage`, `routes/chat.ts:10` `sendMessage GET/DELETE`, `chatController.ts:11` multer GridFS) + DM E2EE (`Conversation type direct/group + encryptedKeyWraps[userId/deviceId/epk/ct]`, `Message content{encrypted/iv}/file/reactions/readBy/deliveredTo/isDeleted/isEdited/tenantId`).
+- **Ticks:** `✓ single → ✓✓ double → ✓✓ blue` (`RELEASE_NOTES.md:3`) via `index.ts:449 mark_messages_read` (validates owner+participant, updates `readBy+deliveredTo`, emits `messages_read/delivered`) + auto `markDeliveredForUser L348` on `join_user`.
+- **Resizability:** chat sidebar resizable remembered (`RELEASE_NOTES.md:4`, `ChatsPage.tsx:122`, `components/layout/AppLayout.tsx`).
+- **E2EE healing:** `request_key_heal L525` fan-out to `user_*` + `conversation_*` on new device, `WhatsNewModal` after each update (`RELEASE_NOTES.md:6`).
+- **Notifications:** `notificationService.ts:16 createNotification(s)` → `io.to(tenant_) emit new_notification`, persisted `Notification` with `type/title/message/link/metadata`, `GET /notifications PUT /:id/read PUT /read-all` (`routes/notifications.ts:9`). In-app bell + Electron native (subscribe removed).
 
-### 5. Communication & Notification
-- **Real-time Chat**: Dedicated chat rooms for every project.
-- **Activity Logs**: A comprehensive audit trail of every change made to a project or task.
-- **Dynamic Notifications**: In-app alerts for assignments, mentions, and approaching deadlines.
+### 5. Collaborative Canvas `CanvasNote.ts:20` `routes/canvas.ts:9` `CanvasPage.tsx:554`
+- Personal infinite canvas `POST /canvas` `x/y` required, `width 200 height 140 color #fef9c3`, `connections[]` graph edges (`CanvasNote.ts:20`). Client drag/resize/rich-text (Tiptap 3.22), navigator `CanvasNavigator.tsx`, export `NoteExportMenu.tsx` PNG/PDF. Private to `userId`. Distinct from assignment's shared `canvasData`.
 
----
+### 6. Calendar `Calendar.ts:26` `CalendarEvent.ts:55` `routes/calendars.ts:19` `routes/calendarEvents.ts:17`
+- **Calendars:** `name/color/icon/visibility private/public/isArchived/isDefault/isSystem/sharedWith[user/permission view/edit/status pending/accepted/rejected]/teamId/googleCalendarId` (`Calendar.ts:26`). Endpoints `POST/GET/PUT/DELETE /calendars`, `PUT /:id/archive`, `POST /:id/share`, `DELETE /:id/share/:userId`, `PUT /:id/share/accept|reject` (`routes/calendars.ts:19`).
+- **Events:** `title/description/calendar/eventType task/meeting/holiday/reminder/startDate/endDate/allDay/priority/status/isImportant/isPinned/isRecurring/recurrenceRule{frequency/interval/endDate/count}/recurringParentId/reminders[type/in_app/email/push minutesBefore]/attendees/googleEventId` (`CalendarEvent.ts:55`). `PUT /:id/move` drag-n-drop, `GET /search` (`routes/calendarEvents.ts:17`). Client 5 views `Month/Week/Day/Year/Agenda` (`components/calendar/*` 13 files), store `calendarStore.ts:11 view year|month|week|day|agenda` (`CalendarPage.tsx:18`).
 
-## 🔒 Security & Permissions
+### 7. CRM Suite `Lead.ts:58` `Campaign.ts:16` `Company.ts:32` `Contact.ts:20` `routes/leads.ts:14` `routes/campaigns.ts:8` `routes/companies.ts:27` `CrmPage.tsx:80`
+- **Campaigns** `name/purpose/description` + `POST /import/excel` (`campaignController.ts:10`).
+- **Leads** 11-stage `new→contacted→qualified→proposal→negotiation→follow_up→meeting_scheduled→meeting_done→closed_won/closed_lost` (`Lead.ts:83`), fields `designation/phone/alternatePhone/companyName/addressLine/city/state/pincode/companyPan/Gst/industry/email/website/priority/source/notes timeline/meeting{date/type/status}/callCount/lastCallAt/callDuration/nextFollowupAt` (`Lead.ts:58`), endpoints `POST /:id/notes`, `POST /:id/call`, `PATCH /:id/meeting-status`, `GET /counts|stats|upcoming|filter-options` (`routes/leads.ts:14`). Bulk Excel import `importExcel L438`, `GET /import/sample` public.
+- **Companies** unlimited hierarchy `parentCompanyId` (`Company.ts:32`), `slug unique per tenant`, `phoneCountryCode +91`, `address{street city state country postalCode}`, `status plan` SaaS fields. `POST /import` multer, `GET /export/excel|pdf` (pdfkit), `POST /bulk-email` Brevo to primary contacts (`companyController.ts:726`). Client tree sidebar `ClientsPage.tsx:37`, bulk `BulkEmailPage.tsx:19` Tiptap + virtual scroll.
+- **Summary/Logs** `GET /crm-summary + /export` aggregates (`crmSummaryController.ts:59`), `GET /activity-logs` (`activityLogController.ts:6`).
 
-FlowDesk implements a strict Role-Based Access Control (RBAC) system:
-- **Admin**: Full system control, financial reports, and user management.
-- **Manager**: Oversees specific teams, creates assignments, and approves completed work.
-- **Member**: Focuses on task execution, updates, and collaboration within their assigned projects.
+### 8. Field Visits `FieldVisit.ts:70` `LocationTrack.ts:33` `routes/fieldVisits.ts:29` `controllers/fieldVisitController.ts:26`
+- `clientId/clientType(company/lead)/scheduledDate/Time/checkInSelfie/Point[lng,lat]/checkOut/status scheduled|checked_in|checked_out|cancelled/outcome/expenses[type/amount/receiptImage]/remarks[]/locationTrack/trackingStartedAt/lastLocationUpdateAt/trackingLost/totalDistance` (`FieldVisit.ts:70`).
+- Endpoints: `POST /:id/check-in|check-out` selfie multer + reverse geocode, `POST /:id/location` live ping → `LocationTrack path[lat/lng/accuracy/timestamp] startedAt/endedAt/isActive` (`LocationTrack.ts:33`), `GET /active + /active/locations` admin live map, `POST /optimize-route` TSP nearest-neighbor (`fieldVisitController.ts:691`), `POST /:id/expenses` receipt, `PUT /:id/approve|reject` manager. Heartbeat `fieldVisitHeartbeatService.ts:9` `STALE_AFTER 5m / 60s` emits `tracking_lost/restored`, socket `fieldVisitSocketService.ts:3` 9 tenant emits, client `useLocationTracking.ts:11` `watchPosition 5s` + `useFieldVisitSocket.ts:11`.
 
-## 🛠 Advanced Features
-- **Intelligent Spawning**: The recurring engine ensures no duplicates are created and "catches up" if the system was offline during a scheduled cycle.
-- **"No Due Date" Handling**: Specialized logic to handle projects and tasks without finite deadlines, preventing the common "Unix Epoch (1970)" bug.
-- **Glassmorphism UI**: A premium, semi-transparent design language that reduces eye strain and provides a modern look-and-feel.
+### 9. Dashboard & Analytics `controllers/dashboardController.ts:12` `controllers/reportController.ts:192` `routes/dashboard.ts:9` `routes/reports.ts:15`
+- `GET /dashboard/stats?page=` (`DashboardPage.tsx:71` cards + pie/line/bar Recharts), `GET /dashboard/calendar`, `GET /dashboard/report-filters` dropdowns, `GET /dashboard/search` global regex, `ActivityLog` audit. Reports 4 types (`employee-tracking`, `workload`, `activity`, `project-health` L192) + `FilterBar` + `DrilldownModal` + `GET /reports/export` `admin/manager` exceljs (`ReportsPage.tsx:58`).
 
+### 10. Teams & Security `Team.ts:17` `User.ts:51` `Tenant.ts:26` `middlewares/auth.ts:5`
+- **Teams** `name/members/manager/joinRequests[]/tenantId` (`Team.ts:17`), `POST /teams` admin, `PUT /:id/manager L24` (role must be manager/admin), `POST /:id/request-join`, approve/reject (`routes/teams.ts:12`).
+- **RBAC** `User role admin/manager/member`, `permissions.allowedTabs[]` (`User.ts:51`), `App.tsx:224 RouteGuard` maps `navItems` top-level/subItems, redirects to `getFirstAllowedRoute`. Tenant `plan free/starter/pro/enterprise`, `maxUsers`, `settings.geoFenceRadius 10-10000 default 100` (`Tenant.ts:26`).
 
+## 🛠 Advanced Behaviors
+- **Recurring catch-up:** `processRecurringAssignments L307` scans non-paused, `nextSpawnDate L116` handles daily/weekly(with `recurringWeekdays`)/monthly(`dayOfMonth`)/yearly, clones assignment+tasks, increments `SpawnedCount`, emits notifications; `scheduleNextTick L397` exact `setTimeout` + `SCHEDULE_BUFFER 1s`.
+- **No-due-date guard:** nullable `dueDate` in `Assignment/Task` — calendar/report filters treat `null` as `Unscheduled`, no epoch 1970 (`user_guide.md` pro-tip preserved).
+- **Z-index layering:** fixed overlapping modals/toasts/mobile sidebar (`RELEASE_NOTES.md:12`, `components/common/Modal.tsx` `role=dialog`, `Toaster` `App.tsx:190` `zIndex 5000`).
+- **File resize:** `GET /uploads/:filename/resize?w=&q=` cached 604800 (`index.ts:180`) Sharp `resize(w,w).jpeg(q)` w≤200 q≤80.
 
-<!-- question -->
-what is happening under the hood, how the system is able to detect online and offline status of the user in realtime
-
-<!-- answer starts -->
-Here is exactly what is happening under the hood. It is a brilliant question, and understanding this flow makes it clear why this is the perfect solution.
-
-### The Variables in Play (From your screenshot)
-When this line of code executes:
-```typescript
-useChatStore.getState().handleUserStatusChange(userId, status, user?._id);
-```
-Here is exactly where each value comes from and what it represents:
-
-1. **`userId`** *(from the Socket.io event)*:
-   * **What it is**: The ID of the user whose status just changed (e.g. they focused their tab, went idle, or closed their app).
-   * **Who it belongs to**: This could be **any user** in the system—including your colleague "Jane", or **you** ("Deepak").
-
-2. **`status`** *(from the Socket.io event)*:
-   * **What it is**: The value `"online"` or `"offline"`.
-
-3. **`user?._id`** *(from `useAuthStore`)*:
-   * **What it is**: **Your own logged-in user ID** (e.g., `ObjectId("69fdedf8...")` for Deepak Rai).
-   * **Where it comes from**: This comes from **Zustand's Auth Store** (`useAuthStore()`) which manages your active session.
-
----
-
-### Why is this happening? (The core problem)
-In a direct messaging app like WhatsApp, every conversation on your sidebar is a **Direct Chat** between two participants:
-1. **You** (the logged-in user)
-2. **Your colleague** (the person you are talking to)
-
-When you are active, your app sends a message to the server: *"Deepak is online!"*. The server then broadcasts this globally to everyone connected. 
-
-**Because you are a client, your app also receives that broadcast.** 
-
-Previously, without your own ID as a reference, the store logic was:
-> *"Let's look at all conversations on my sidebar. If any of the participants in a chat has the ID that just went online, make that chat green."*
-
-Since **you** are a participant in **every single chat** on your sidebar, the moment the app received the broadcast that *you* went online, it matched your ID in every chat, and **turned every single conversation green**, even though your colleagues were completely offline!
-
----
-
-### How the fix works (Step-by-Step)
-By passing **your own ID** (`user?._id`) to the Zustand chat store as the third parameter (`currentUserId`), we tell the store:
-> *"Only update the green dot of a conversation if the status change belongs to the **other person** in the chat, not me."*
-
-Inside [chatStore.ts](file:///c:\Users\ACEONE\Desktop\flowdesk\FlowDesk-Password-reset=problem-fixed\FlowDesk\client\src\store\chatStore.ts#L172-L184), the filtering is now performed as:
-```typescript
-// Find if the status update is for the OTHER participant in this direct chat
-const otherParticipant = c.participants.find(p => p._id === userId && p._id !== currentUserId);
-```
-
-#### Scenario A: Your colleague "Jane" goes online
-1. `userId` is **Jane's ID**.
-2. `currentUserId` is **your ID** (Deepak).
-3. The filter checks: *Is Jane's ID equal to `userId`?* **Yes.** *Is Jane's ID different from your ID?* **Yes.**
-4. `otherParticipant` is found! The green dot next to **Jane's chat** lights up. 
-
-#### Scenario B: You ("Deepak") go online
-1. `userId` is **your ID** (Deepak).
-2. `currentUserId` is **your ID** (Deepak).
-3. The filter checks: *Is your ID equal to `userId`?* **Yes.** *Is your ID different from your ID?* **No (they are the same).**
-4. `otherParticipant` is **not found** because the status update belongs to you. No chats turn green incorrectly!
-<!-- answer ends -->
+## 🎨 UI System
+- Tailwind 4 + custom CSS vars `--color-bg/surface/border/text` via `themeStore.ts:3` light/dark toggle (`SettingsPage.tsx:45`).
+- Glassmorphism cards, `floating` hero animation (`LandingPage.tsx:29`), skeletons `ReportStates.tsx` / `DashboardPage.tsx:142`.
