@@ -344,7 +344,7 @@ export default function LeadDetailModal({
 
 	return (
 		<div
-			className="backdrop-blur-sm bg-(--color-primary-light)/40 h-full w-full fixed inset-0 z-[3000] flex items-end sm:items-center justify-center transition-opacity duration-200"
+			className="backdrop-blur-sm bg-(--color-primary-light)/40 h-full w-full fixed inset-0 z-[4950] flex items-end sm:items-center justify-center transition-opacity duration-200"
 			// style={{ backgroundColor: `rgba(0,0,0,${0.2 * backdropOpacity})` }}
 			onClick={closeModal}
 		>

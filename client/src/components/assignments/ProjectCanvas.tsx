@@ -513,7 +513,7 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
             </div>
 
             {/* Controls */}
-            <div className="absolute bottom-3 right-3 bg-(--color-surface py-1.5 px-2.5 rounded-lg flex gap-2.5 items-center shadow-[var(--shadow-md) border border-(--color-border)">
+            <div className="absolute bottom-3 right-3 bg-(--color-surface py-1.5 px-2.5 rounded-lg flex gap-2.5 items-center shadow-(--shadow-md) border border-(--color-border)">
                 <button className="btn btn-ghost btn-xs" onClick={() => {
                     const rect = containerRef.current?.getBoundingClientRect();
                     if (rect) zoomTowards(Math.min(scale + 0.2, 5), rect.width / 2, rect.height / 2);
@@ -543,23 +543,26 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
 
             {/* Top Toolbar */}
             <div
-                style={{
-                    position: "absolute",
-                    top: 12,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    display: "flex",
-                    gap: 8,
-                    zIndex: 1000,
-                    background: "var(--color-surface)",
-                    padding: "6px",
-                    borderRadius: 50,
-                    boxShadow: "var(--shadow-lg)",
-                    border: "1px solid var(--color-border)",
-                    alignItems: "center"
-                }}
+                className="absolute top-[12px] left-1/2 transform -translate-x-[50%] flex gap-2.5 z-[1000] bg-(--color-surface) p-1.5 rounded-full shadow-(--shadow-lg) border border-(--color-border) items-center"
+                // style={{
+                //     position: "absolute",
+                //     top: 12,
+                //     left: "50%",
+                //     transform: "translateX(-50%)",
+                //     display: "flex",
+                //     gap: 8,
+                //     zIndex: 1000,
+                //     background: "var(--color-surface)",
+                //     padding: "6px",
+                //     borderRadius: 50,
+                //     boxShadow: "var(--shadow-lg)",
+                //     border: "1px solid var(--color-border)",
+                //     alignItems: "center"
+                // }}
             >
-                <div style={{ display: 'flex', background: 'var(--color-bg-secondary)', borderRadius: 40, padding: 4, gap: 4 }}>
+                <div className="flex bg-(--color-bg-secondary) rounded-[40px] p-1 gap-1" 
+                    // style={{ display: 'flex', background: 'var(--color-bg-secondary)', borderRadius: 40, padding: 4, gap: 4 }}
+                >
                     <button
                         onClick={() => setSelectedTool('select')}
                         className={`btn btn-xs ${selectedTool === 'select' ? 'btn-primary' : 'btn-ghost'}`}
@@ -590,21 +593,24 @@ const ProjectCanvas: React.FC<ProjectCanvasProps> = ({ assignmentId, initialData
             </div>
 
             {/* Hint Info */}
-            <div style={{
-                position: "absolute",
-                top: 12,
-                left: 12,
-                background: "rgba(255,255,255,0.8)",
-                padding: "4px 12px",
-                borderRadius: 20,
-                fontSize: "0.7rem",
-                color: "var(--color-text-secondary)",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                border: "1px solid var(--color-border)",
-                zIndex: 10
-            }}>
+            <div 
+                className="absolute top-[12px] left-[12px] bg-(rgba(255,255,255,0.8)) p-1.5 rounded-full text-xs text-(--color-text-secondary) flex items-center gap-2 border border-(--color-border) z-[1000]"
+            // style={{
+            //     position: "absolute",
+            //     top: 12,
+            //     left: 12,
+            //     background: "rgba(255,255,255,0.8)",
+            //     padding: "4px 12px",
+            //     borderRadius: 20,
+            //     fontSize: "0.7rem",
+            //     color: "var(--color-text-secondary)",
+            //     display: "flex",
+            //     alignItems: "center",
+            //     gap: 8,
+            //     border: "1px solid var(--color-border)",
+            //     zIndex: 10
+            // }}
+            >
                 <span style={{ fontWeight: 600 }}>Whiteboard</span>
                 <span style={{ opacity: 0.5 }}>|</span>
                 <span><b>V</b> Select • <b>H</b> Pan</span>

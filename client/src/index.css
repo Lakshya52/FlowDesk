@@ -15,9 +15,10 @@
  *   100    page-level floating surfaces
  *   1000   canvas-internal elevated layers (toolbars, navigators, panels)
  *   2000   app-level overlays (fullscreen canvas, celebrations, floating widgets)
- *   3000   modal layer (backdrops + dialogs); stack extras at +10
+ *   3000   nothing her yet
  *   4800   mobile sidebar drawer backdrop
  *   4900   sidebar layer (persistent nav above every app surface)
+ *   4950   modal layer (backdrops + dialogs); stack extras at +10
  *   5000   toast layer (second-top, above sidebar, below FilePreviewModal)
  *   6000   topmost layer (FilePreviewModal — always above everything)
  */
