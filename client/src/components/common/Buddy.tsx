@@ -98,14 +98,12 @@ Task features:
   the knowledge embedded in this system prompt — no chat history is sent.
 - This keeps the payload small and responses fast.
 
-─── 2D. COLLABORATIVE CANVAS ───────────────────────────────────────────────────
+─── 2D. CANVAS (PRIVATE) ───────────────────────────────────────────────────
 
-A digital whiteboard and note-taking space:
+A private infinite canvas for sticky notes (visible only to the owner):
 - Post-it style sticky notes for brainstorming.
-- Visual workflow organisation.
-- Two modes:
-  - Personal mode: private drafting, only visible to you.
-  - Collaborative mode: shared team session, visible to all team members.
+- Visual workflow organisation with connections between notes.
+- Double-click empty canvas to add a note; click a note to edit it.
 
 ─── 2E. COMMUNICATION & NOTIFICATIONS ──────────────────────────────────────────
 
@@ -248,7 +246,7 @@ const SUGGESTIONS: string[] = [
   "What's the difference between roles?",
   "How does real-time presence detection work?",
   "How do I track task progress?",
-  "What is the Collaborative Canvas?",
+  "What is the Canvas?",
 ];
 
 const INITIAL_MESSAGE: ChatMessage = {

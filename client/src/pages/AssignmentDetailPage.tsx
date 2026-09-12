@@ -13,7 +13,7 @@ import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload,
 Download, Trash2, Send, Users,  FolderKanban, RefreshCw, Eye, Loader2, Reply, Edit2, Calendar, Briefcase, Clock, 
 Check, SquarePen, Pause, Play } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
-import ProjectCanvas from '../components/assignments/ProjectCanvas';
+
 import FilePreviewModal from '../components/common/FilePreviewModal';
 import Modal from '../components/common/Modal';
 
@@ -44,7 +44,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const [chatMessages, setChatMessages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<'tasks' | 'files' | 'chat' | 'notes'>('tasks');
+    const [activeTab, setActiveTab] = useState<'tasks' | 'files' | 'chat'>('tasks');
     // const [comment, setComment] = useState('');
     const [chatInput, setChatInput] = useState('');
     const [showTaskForm, setShowTaskForm] = useState(false);
@@ -63,7 +63,6 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const chatFileRef = useRef<HTMLInputElement>(null);
-    const whiteboardRef = useRef<HTMLDivElement>(null);
     const socketRef = useRef<any>(null);
     const [typingUsers, setTypingUsers] = useState<any>({});
     const typingTimeoutRef = useRef<any>(null);
@@ -73,7 +72,6 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const [selectedMentions, setSelectedMentions] = useState<Set<string>>(new Set());
     const [replyTo, setReplyTo] = useState<any>(null);
     const [mentionIndex, setMentionIndex] = useState(0);
-    const [canvasUnlocked, setCanvasUnlocked] = useState(false);
     const [previewFile, setPreviewFile] = useState<{ url: string, type: string, name: string } | null>(null);
     const [uploadingDetailAttachment, setUploadingDetailAttachment] = useState(false);
     const detailAttachmentInputRef = useRef<HTMLInputElement>(null);
@@ -85,18 +83,10 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const tab = params.get('tab');
-        if (tab === 'chat' || tab === 'tasks' || tab === 'files' || tab === 'notes') {
+        if (tab === 'chat' || tab === 'tasks' || tab === 'files') {
             setActiveTab(tab as any);
         }
     }, [location.search]);
-
-    useEffect(() => {
-        if (activeTab === 'notes') {
-            setTimeout(() => {
-                whiteboardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-        }
-    }, [activeTab]);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -219,6 +209,21 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             setShowCompanyDropdown(false);
         };
     }, []);
+
+    // Edit modal: close on Escape + lock background scroll while open
+    React.useEffect(() => {
+        if (!isEditingProject) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setIsEditingProject(false);
+        };
+        window.addEventListener("keydown", onKey);
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            document.body.style.overflow = prevOverflow;
+        };
+    }, [isEditingProject]);
 
     const filteredCompanies = allCompanies.filter(c =>
         c.name.toLowerCase().includes(companySearch.toLowerCase())
@@ -590,14 +595,18 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         }
     };
 
-    const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    // Files-tab dropzone state
+    const [isFilesDragOver, setIsFilesDragOver] = useState(false);
+    const [queuedCount, setQueuedCount] = useState(0);
+    const filesInputRef = useRef<HTMLInputElement>(null);
+    const filesDragCounter = useRef(0);
+    const uploadQueueRef = useRef<File[]>([]);
+    const uploadingRef = useRef(false);
 
+    const uploadSingleFile = async (file: File) => {
         const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
         if (file.size > MAX_FILE_SIZE) {
             toast.error(`"${file.name}" exceeds the 50 MB size limit`);
-            if (e.target) e.target.value = '';
             return;
         }
 
@@ -610,20 +619,89 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         try {
             const { data } = await api.post('/files', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
+                // Fail loudly instead of spinning forever on a stalled upload.
+                timeout: 5 * 60 * 1000,
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
                     setUploadProgress(percentCompleted);
                 }
             });
             setFiles(prev => [data.attachment, ...prev]);
-        } catch { }
+            toast.success(`Uploaded "${file.name}"`);
+        } catch (e: any) {
+            const serverMsg = e?.response?.data?.message;
+            const msg = e?.code === 'ECONNABORTED'
+                ? `Upload of "${file.name}" timed out — please check your connection and retry`
+                : (serverMsg || `Failed to upload "${file.name}"`);
+            toast.error(msg);
+        }
         finally {
             setIsUploadingFile(false);
             setUploadingFileName(null);
             setUploadProgress(0);
-            if (e.target) e.target.value = '';
         }
     };
+
+    // Sequential queue so drops + browse picks never overlap banners.
+    const processUploadQueue = async () => {
+        if (uploadingRef.current) return;
+        uploadingRef.current = true;
+        try {
+            while (uploadQueueRef.current.length > 0) {
+                const file = uploadQueueRef.current.shift()!;
+                setQueuedCount(uploadQueueRef.current.length);
+                await uploadSingleFile(file);
+            }
+        } finally {
+            uploadingRef.current = false;
+            setQueuedCount(0);
+        }
+    };
+
+    const enqueueFiles = (list: File[]) => {
+        if (list.length === 0) return;
+        uploadQueueRef.current.push(...list);
+        setQueuedCount(uploadQueueRef.current.length);
+        processUploadQueue();
+    };
+
+    const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const list = e.target.files ? Array.from(e.target.files) : [];
+        if (e.target) e.target.value = '';
+        enqueueFiles(list);
+    };
+
+    const handleFilesDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        if (!e.dataTransfer.types.includes('Files')) return;
+        filesDragCounter.current += 1;
+        setIsFilesDragOver(true);
+    };
+
+    const handleFilesDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        filesDragCounter.current = Math.max(0, filesDragCounter.current - 1);
+        if (filesDragCounter.current === 0) setIsFilesDragOver(false);
+    };
+
+    const handleFilesDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        filesDragCounter.current = 0;
+        setIsFilesDragOver(false);
+        enqueueFiles(Array.from(e.dataTransfer.files || []));
+    };
+
+    // Safety: a missed drop outside the zone must never navigate the page away.
+    React.useEffect(() => {
+        if (activeTab !== 'files') return;
+        const guard = (e: DragEvent) => e.preventDefault();
+        window.addEventListener('dragover', guard);
+        window.addEventListener('drop', guard);
+        return () => {
+            window.removeEventListener('dragover', guard);
+            window.removeEventListener('drop', guard);
+        };
+    }, [activeTab]);
 
     const downloadFile = async (fileId: string, originalName: string) => {
         try {
@@ -639,6 +717,22 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch { }
+    };
+
+    const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+    const handleDeleteFile = async (fileId: string, originalName: string) => {
+        if (!window.confirm(`Delete "${originalName}"? This cannot be undone.`)) return;
+        setDeletingFileId(fileId);
+        try {
+            await api.delete(`/files/${fileId}`);
+            setFiles(prev => prev.filter((f: any) => f._id !== fileId));
+            toast.success(`Deleted "${originalName}"`);
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || `Failed to delete "${originalName}"`);
+        } finally {
+            setDeletingFileId(null);
+        }
     };
 
     const getDeadlineStyle = (dueDate: string, status: string) => {
@@ -863,7 +957,6 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         { key: 'tasks', label: 'Tasks', count: tasks.length },
         { key: 'chat', label: 'Chat', count: chatMessages.length },
         { key: 'files', label: 'Files', count: files.length },
-        { key: 'notes', label: 'Whiteboard', count: assignment.canvasData?.length || 0, new: true },
     ];
 
     return (
@@ -887,9 +980,17 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                 <div className="flex flex-col md:flex-row justify-between items-stretch md:items-start mb-4 gap-3 md:gap-0">
                     <div style={{ flex: 1 }}>
                         {isEditingProject ? (
+                            <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+                                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} onClick={() => setIsEditingProject(false)} />
+                                <div className="card" role="dialog" aria-modal="true" aria-label="Edit project" style={{ position: 'relative', width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto', padding: 24 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                                        <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Edit Project</h2>
+                                        <button className="btn btn-ghost btn-sm" onClick={() => setIsEditingProject(false)} title="Close"><X size={18} /></button>
+                                    </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
                                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5">
                                     <input
+                                        autoFocus
                                         className="input text-xl font-bold flex-1"
                                         value={editProjectForm.title}
                                         onChange={e => setEditProjectForm({ ...editProjectForm, title: e.target.value })}
@@ -1155,6 +1256,14 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                     )}
                                 </div>
                             </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
+                                        <button className="btn btn-secondary btn-sm" onClick={() => setIsEditingProject(false)}>Cancel</button>
+                                        <button className="btn btn-primary btn-sm" onClick={handleUpdateProject} disabled={saving}>
+                                            {saving ? 'Saving...' : 'Save Changes'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         ) : (
                             <>
                                 <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -1242,26 +1351,15 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                     </div>
                     {canEditProject && (
                         <div className="flex flex-wrap gap-2">
-                            {isEditingProject ? (
-                                <>
-                                    <button className="btn btn-secondary btn-sm" onClick={() => setIsEditingProject(false)}>Cancel</button>
-                                    <button className="btn btn-primary btn-sm" onClick={handleUpdateProject} disabled={saving}>
-                                        {saving ? 'Saving...' : 'Save Changes'}
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <button className="btn btn-ghost btn-sm" onClick={startEditingProject} title="Edit Project Details">
-                                        <Edit2 size={18} />
-                                    </button>
-                                    <select className="select" style={{ width: 140 }} value={assignment.status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateStatus(e.target.value)}>
-                                        {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                    </select>
-                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={handleDelete} title="Delete Project">
-                                        <Trash2 size={18} />
-                                    </button>
-                                </>
-                            )}
+                            <button className="btn btn-ghost btn-sm" onClick={startEditingProject} title="Edit Project Details">
+                                <Edit2 size={18} />
+                            </button>
+                            <select className="select" style={{ width: 140 }} value={assignment.status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateStatus(e.target.value)}>
+                                {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                            </select>
+                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={handleDelete} title="Delete Project">
+                                <Trash2 size={18} />
+                            </button>
                         </div>
                     )}
                 </div>
@@ -1372,134 +1470,14 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                             color: activeTab === t.key ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                             fontWeight: activeTab === t.key ? 600 : 400,
                             paddingBottom: 12,
+                            outline: 'none',
                         }}
                     >
                         {t.label}
-                        {t.key !== 'notes' ? (
-                            <span style={{ fontWeight: 400, fontSize: '0.75rem', opacity: 0.6, marginLeft: 6 }}>({t.count})</span>
-                        ) : (
-                            <span style={{
-                                fontSize: '0.6rem',
-                                background: '#22c55e',
-                                color: 'white',
-                                padding: '2px 6px',
-                                borderRadius: 10,
-                                marginLeft: 8,
-                                fontWeight: 700,
-                                textTransform: 'uppercase'
-                            }}>New</span>
-                        )}
+                        <span style={{ fontWeight: 400, fontSize: '0.75rem', opacity: 0.6, marginLeft: 6 }}>({t.count})</span>
                     </button>
                 ))}
             </div>
-
-            {/* Notes/Whiteboard Tab */}
-            {activeTab === 'notes' && (
-                <div ref={whiteboardRef}>
-                    <div style={{ marginBottom: 16 }}>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 4 }}>Project Whiteboard</h3>
-                        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-                            Collaborative space for visual notes and brainstorming. All project members can see and edit these notes.
-                        </p>
-                    </div>
-                    {/* Canvas Gate Overlay */}
-                    {!canvasUnlocked ? (
-                        <div style={{
-                            position: 'relative',
-                            height: 500,
-                            borderRadius: 12,
-                            overflow: 'hidden',
-                            border: '1px solid var(--color-border)',
-                            background: 'var(--color-bg)',
-                        }}>
-                            {/* Blurred preview background */}
-                            <div style={{
-                                position: 'absolute',
-                                inset: 0,
-                                backgroundImage: 'radial-gradient(circle at 1px 1px, var(--color-text-tertiary) 1px, transparent 0)',
-                                backgroundSize: '20px 20px',
-                                opacity: 0.15,
-                            }} />
-                            {/* Decorative fake notes */}
-                            <div style={{ position: 'absolute', inset: 0, filter: 'blur(3px)', opacity: 0.4, pointerEvents: 'none' }}>
-                                {['#fef9c3', '#dcfce7', '#dbeafe', '#f3e8ff'].map((color, i) => (
-                                    <div key={i} style={{
-                                        position: 'absolute',
-                                        left: 60 + i * 180,
-                                        top: 80 + (i % 2) * 100,
-                                        width: 160,
-                                        height: 120,
-                                        background: color,
-                                        borderRadius: 10,
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                                    }} />
-                                ))}
-                            </div>
-                            {/* Overlay content */}
-                            <div style={{
-                                position: 'absolute',
-                                inset: 0,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 16,
-                                background: 'rgba(255,255,255,0.05)',
-                                backdropFilter: 'blur(2px)',
-                                zIndex: 10,
-                            }}>
-                                <div style={{
-                                    width: 64,
-                                    height: 64,
-                                    borderRadius: 16,
-                                    background: 'linear-gradient(135deg, var(--color-primary), #818cf8)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 8px 24px rgba(99,102,241,0.3)',
-                                }}>
-                                    <FolderKanban size={28} color="#fff" />
-                                </div>
-                                <div style={{ textAlign: 'center' }}>
-                                    <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: 4, color: 'var(--color-text)' }}>
-                                        Collaborative Canvas
-                                    </h3>
-                                    <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', maxWidth: 360 }}>
-                                        An interactive whiteboard shared with your project team. Add, edit, and organize notes collaboratively.
-                                    </p>
-                                </div>
-                                <button
-                                    className="btn btn-primary"
-                                    style={{
-                                        padding: '10px 28px',
-                                        fontSize: '0.9rem',
-                                        fontWeight: 600,
-                                        borderRadius: 10,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 8,
-                                        marginTop: 4,
-                                        boxShadow: '0 4px 16px rgba(99,102,241,0.25)',
-                                    }}
-                                    onClick={() => setCanvasUnlocked(true)}
-                                >
-                                    <Eye size={16} /> Enter Collaborative Canvas
-                                </button>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-                                    {assignment.team?.length || 0} team member{(assignment.team?.length || 0) !== 1 ? 's' : ''} have access
-                                </span>
-                            </div>
-                        </div>
-                    ) : (
-                        <ProjectCanvas
-                            assignmentId={id!}
-                            initialData={assignment.canvasData}
-                            startFullScreen={true}
-                            onExitFullScreen={() => setCanvasUnlocked(false)}
-                        />
-                    )}
-                </div>
-            )}
 
             {/* Tasks Tab */}
             {activeTab === 'tasks' && (
@@ -1959,29 +1937,71 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             {
                 activeTab === 'files' && (
                     <div>
-                        {isUploadingFile && activeTab === 'files' ? (
+                        {isUploadingFile && (
                             <div style={{
-                                marginBottom: 16, padding: '12px 16px', borderRadius: 12,
+                                marginBottom: 12, padding: '12px 16px', borderRadius: 12,
                                 background: 'var(--color-primary-light)', color: 'var(--color-primary)',
-                                display: 'flex', alignItems: 'center', gap: 12, fontWeight: 500, fontSize: '0.875rem',
                                 border: '1px solid var(--color-primary)'
                             }}>
-                                <div style={{ width: 18, height: 18, border: '2px solid var(--color-primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                Uploading: <span style={{ textDecoration: 'underline' }}>{uploadingFileName}</span>
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                                    <Upload size={16} /> Upload File
-                                    <input type="file" style={{ display: 'none' }} onChange={uploadFile} />
-                                </label>
-                                <button className="btn btn-ghost btn-sm" onClick={async () => { const { data } = await api.get(`/files?assignmentId=${id}`); setFiles(data.attachments || []); }} title="Refresh files">
-                                    <RefreshCw size={16} /> Refresh
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontWeight: 500, fontSize: '0.875rem' }}>
+                                    <div style={{ width: 18, height: 18, flexShrink: 0, border: '2px solid var(--color-primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        Uploading: <span style={{ textDecoration: 'underline' }}>{uploadingFileName}</span>
+                                    </span>
+                                    <span style={{ marginLeft: 'auto', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                                        {uploadProgress}%{queuedCount > 0 ? ` · ${queuedCount} more in queue` : ''}
+                                    </span>
+                                </div>
+                                <div style={{ height: 6, borderRadius: 4, background: 'rgba(99,102,241,0.2)', marginTop: 10, overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', width: `${uploadProgress}%`, borderRadius: 4, background: 'var(--color-primary)', transition: 'width 0.2s' }} />
+                                </div>
                             </div>
                         )}
+                        {/* Drop files here */}
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Upload files: drop files here or press Enter to browse"
+                            onClick={() => filesInputRef.current?.click()}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); filesInputRef.current?.click(); } }}
+                            onDragEnter={handleFilesDragEnter}
+                            onDragLeave={handleFilesDragLeave}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={handleFilesDrop}
+                            className="card"
+                            style={{
+                                marginBottom: 12, cursor: 'pointer', textAlign: 'center',
+                                padding: files.length === 0 ? '48px 24px' : '20px 16px',
+                                border: `2px dashed ${isFilesDragOver ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                                background: isFilesDragOver ? 'var(--color-primary-light)' : 'var(--color-surface)',
+                                transform: isFilesDragOver ? 'scale(1.01)' : 'none',
+                                transition: 'border-color 0.15s, background 0.15s, transform 0.15s',
+                            }}
+                        >
+                            <div style={{
+                                width: files.length === 0 ? 56 : 40, height: files.length === 0 ? 56 : 40,
+                                borderRadius: '50%', margin: '0 auto 12px', display: 'flex',
+                                alignItems: 'center', justifyContent: 'center',
+                                background: isFilesDragOver ? 'var(--color-primary)' : 'var(--color-primary-light)',
+                                transition: 'background 0.15s',
+                            }}>
+                                <Upload size={files.length === 0 ? 26 : 18} color={isFilesDragOver ? '#fff' : 'var(--color-primary)'} />
+                            </div>
+                            <p style={{ fontSize: files.length === 0 ? '1rem' : '0.875rem', fontWeight: 700, margin: '0 0 4px', color: isFilesDragOver ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                                {isFilesDragOver ? 'Drop to upload' : 'Drop files here'}
+                            </p>
+                            <p style={{ fontSize: '0.78rem', margin: 0, color: 'var(--color-text-secondary)' }}>
+                                or <span style={{ color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'underline' }}>click to browse</span> · Max 50 MB per file
+                            </p>
+                        </div>
+                        <input ref={filesInputRef} type="file" multiple style={{ display: 'none' }} onChange={uploadFile} />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                            <button className="btn btn-ghost btn-sm" onClick={async () => { const { data } = await api.get(`/files?assignmentId=${id}`); setFiles(data.attachments || []); }} title="Refresh files">
+                                <RefreshCw size={16} /> Refresh
+                            </button>
+                        </div>
                         {files.length === 0 ? (
-                            <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>No files uploaded</div>
+                            <div style={{ padding: 8, textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>No files yet — drop one above to get started</div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                 {files.map(f => (
@@ -1995,9 +2015,20 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <button className="btn btn-ghost btn-sm" onClick={() => downloadFile(f._id, f.originalName)} title="Download">
-                                            <Download size={16} />
-                                        </button>
+                                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                                            <button className="btn btn-ghost btn-sm" onClick={() => downloadFile(f._id, f.originalName)} title="Download">
+                                                <Download size={16} />
+                                            </button>
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                style={{ color: 'var(--color-error)' }}
+                                                onClick={() => handleDeleteFile(f._id, f.originalName)}
+                                                disabled={deletingFileId === f._id}
+                                                title="Delete"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

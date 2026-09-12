@@ -60,7 +60,7 @@ test.describe('Assignments / Projects', () => {
     await expect(page.getByRole('button', { name: /tasks/i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /chat/i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /files/i }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: /whiteboard/i }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /whiteboard/i })).toHaveCount(0);
   });
 
   test('6. Edit project from detail page', async ({ page }) => {

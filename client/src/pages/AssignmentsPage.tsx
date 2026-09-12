@@ -664,7 +664,7 @@ const AssignmentsPage: React.FC = () => {
             setActiveTab("all");
             setStatusFilter("");
           }}
-          className="flex"
+          className="flex cursor-pointer"
           style={{
             padding: "8px 4px",
             fontSize: "0.875rem",
@@ -701,7 +701,7 @@ const AssignmentsPage: React.FC = () => {
             setActiveTab("ongoing");
             setStatusFilter("");
           }}
-          className="flex"
+          className="flex cursor-pointer"
           style={{
             padding: "8px 4px",
             fontSize: "0.875rem",
@@ -738,7 +738,7 @@ const AssignmentsPage: React.FC = () => {
             setActiveTab("completed");
             setStatusFilter("");
           }}
-          className="flex"
+          className="flex cursor-pointer"
           style={{
             padding: "8px 4px",
             fontSize: "0.875rem",
@@ -775,7 +775,7 @@ const AssignmentsPage: React.FC = () => {
             setActiveTab("blueprints");
             setStatusFilter("");
           }}
-          className="flex"
+          className="flex cursor-pointer"
           style={{
             padding: "8px 4px",
             fontSize: "0.875rem",

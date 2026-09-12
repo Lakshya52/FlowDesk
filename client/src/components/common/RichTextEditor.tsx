@@ -9,32 +9,51 @@ import TaskItem from '@tiptap/extension-task-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Color } from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
+import Underline from '@tiptap/extension-underline';
 import {
     Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code,
     Code2, List, ListOrdered, CheckSquare, Quote, AlignLeft, AlignCenter,
     AlignRight, AlignJustify, Link as LinkIcon, Unlink, Highlighter,
-    Palette, RemoveFormatting, ChevronDown
+    Palette, RemoveFormatting, ChevronDown, MoreHorizontal
 } from 'lucide-react';
+
+/** Custom line-height icon (Lucide has none): text lines + vertical spread arrows. */
+const LineHeightIcon: React.FC<{ size?: number }> = ({ size = 16 }) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+    >
+        <line x1="4" y1="4" x2="4" y2="20" />
+        <polyline points="2.4,5.6 4,4 5.6,5.6" />
+        <polyline points="2.4,18.4 4,20 5.6,18.4" />
+        <line x1="9" y1="6" x2="20" y2="6" />
+        <line x1="9" y1="12" x2="20" y2="12" />
+        <line x1="9" y1="18" x2="16" y2="18" />
+    </svg>
+);
 
 interface RichTextEditorProps {
     content: string;
     onChange: (content: string) => void;
     onBlur?: () => void;
+    onFocus?: () => void;
     placeholder?: string;
     readOnly?: boolean;
     onEdit?: () => void;
     hideToolbar?: boolean;
     onReady?: (editor: Editor) => void;
+    /** Focus at the end once, on mount (used for freshly created notes). */
+    autoFocus?: boolean;
+    className?: string;
+    style?: React.CSSProperties;
 }
-
-const FONT_FAMILIES = [
-    { label: 'Inter', value: 'Inter, sans-serif' },
-    { label: 'Arial', value: 'Arial, sans-serif' },
-    { label: 'Times', value: '"Times New Roman", serif' },
-    { label: 'Courier', value: '"Courier New", monospace' },
-    { label: 'Georgia', value: 'Georgia, serif' },
-    { label: 'Verdana', value: 'Verdana, sans-serif' },
-];
 
 const FONT_SIZES = [
     { label: '12px', value: '12px' },
@@ -74,6 +93,51 @@ const HIGHLIGHT_COLORS = [
     { label: 'Pink', value: '#fbcfe8' },
     { label: 'Red', value: '#fecaca' },
 ];
+
+const LINE_HEIGHTS = [
+    { label: 'Default', value: '' },
+    { label: 'Single', value: '1' },
+    { label: '1.15', value: '1.15' },
+    { label: '1.5', value: '1.5' },
+    { label: 'Double', value: '2' },
+];
+
+// Custom LineHeight extension (mirrors FontSize — no extra dependency)
+const LineHeight = Extension.create({
+    name: 'lineHeight',
+    addOptions() {
+        return {
+            types: ['textStyle'],
+        };
+    },
+    addGlobalAttributes() {
+        return [
+            {
+                types: this.options.types,
+                attributes: {
+                    lineHeight: {
+                        default: null,
+                        parseHTML: element => element.style.lineHeight,
+                        renderHTML: attributes => {
+                            if (!attributes.lineHeight) return {};
+                            return { style: `line-height: ${attributes.lineHeight}` };
+                        },
+                    },
+                },
+            },
+        ];
+    },
+    addCommands() {
+        return {
+            setLineHeight: (lineHeight: string) => ({ chain }) => {
+                return chain().setMark('textStyle', { lineHeight }).run();
+            },
+            unsetLineHeight: () => ({ chain }) => {
+                return chain().setMark('textStyle', { lineHeight: null }).removeEmptyTextStyle().run();
+            },
+        };
+    },
+});
 
 // Custom FontSize extension
 const FontSize = Extension.create({
@@ -118,7 +182,8 @@ const ToolbarButton: React.FC<{
     disabled?: boolean;
     title: string;
     children: React.ReactNode;
-}> = ({ onClick, isActive, disabled, title, children }) => (
+    className?: string;
+}> = ({ onClick, isActive, disabled, title, children, className = '' }) => (
     <button
         type="button"
         disabled={disabled}
@@ -128,18 +193,26 @@ const ToolbarButton: React.FC<{
         }}
         onClick={onClick}
         title={title}
-        className={`rounded transition-colors ${isActive
+        className={`rounded-lg transition-colors ${isActive
                 ? 'bg-primary-light text-primary'
                 : 'text-text-secondary hover:bg-surface-hover'
-            } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
-        style={{ cursor: disabled ? "not-allowed" : "pointer", padding: "4px" }}
+            } ${disabled ? 'opacity-40 cursor-not-allowed' : ''} ${className}`}
+        style={{
+            cursor: disabled ? "not-allowed" : "pointer",
+            padding: "8px",
+            minWidth: 40,
+            minHeight: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+        }}
     >
         {children}
     </button>
 );
 
-const Divider = () => (
-    <div className="w-px h-4 bg-border self-center" style={{ margin: "0 4px" }} />
+const Divider: React.FC<{ className?: string }> = ({ className = '' }) => (
+    <div className={`w-px h-7 bg-border self-center ${className}`} style={{ margin: "0 6px" }} />
 );
 
 /** Generic dropdown used for font family / font size / heading level. */
@@ -149,14 +222,18 @@ const SelectMenu: React.FC<{
     title?: string;
     options: { label: string; value: string; style?: React.CSSProperties }[];
     onSelect: (value: string) => void;
-}> = ({ label, current, title, options, onSelect }) => {
+    /** When set, the trigger shows only this icon (no label, no chevron). */
+    icon?: React.ReactNode;
+    /** Extra classes for the dropdown wrapper (e.g. spacing). */
+    className?: string;
+}> = ({ label, current, title, options, onSelect, icon, className = '' }) => {
     const [open, setOpen] = useState(false);
     const display = options.find(o => o.value === current)?.label ?? label;
-    const displayStyle =
-        options.find(o => o.value === current)?.style ?? { fontSize: '0.7rem' };
+    // Fixed trigger size: the button must never inherit the selected option's
+    // preview style (e.g. picking 24px must not blow the trigger up to 24px).
 
     return (
-        <div className="relative">
+        <div className={`relative ${className}`}>
             <button
                 type="button"
                 onMouseDown={(e) => {
@@ -164,17 +241,28 @@ const SelectMenu: React.FC<{
                     e.stopPropagation();
                 }}
                 onClick={() => setOpen((o) => !o)}
-                className="flex items-center rounded text-xs font-medium text-text bg-surface border border-border hover:bg-surface-hover"
-                style={{ padding: "5px 6px", gap: "4px", cursor: "pointer" }}
+                className={`flex items-center rounded-lg text-sm font-medium text-text-secondary bg-surface hover:bg-surface-hover hover:text-text ${icon ? "" : "border border-border"}`}
+                style={{
+                    padding: "9px 12px",
+                    gap: "6px",
+                    cursor: "pointer",
+                    minHeight: 40,
+                    minWidth: icon ? 40 : undefined,
+                    justifyContent: icon ? "center" : undefined,
+                }}
                 title={title}
             >
-                <span style={{ ...displayStyle }}>{display}</span>
-                <ChevronDown size={14} />
+                {icon ?? (
+                    <>
+                        <span style={{ fontSize: '0.85rem' }}>{display}</span>
+                        <ChevronDown size={17} />
+                    </>
+                )}
             </button>
             {open && (
                 <div
                     className="absolute top-full left-0 bg-surface border border-border rounded-lg shadow-lg z-50"
-                    style={{ marginTop: "4px", padding: "4px", minWidth: 130 }}
+                    style={{ marginTop: "6px", padding: "6px", minWidth: 150 }}
                     onMouseDown={(e) => e.stopPropagation()}
                 >
                     {options.map(opt => (
@@ -185,7 +273,7 @@ const SelectMenu: React.FC<{
                                 e.preventDefault();
                                 e.stopPropagation();
                             }}
-                            className={`w-full text-left rounded px-2.5 py-1.5 text-xs text-text hover:bg-surface-hover flex items-center justify-between ${current === opt.value ? 'bg-primary-light text-primary' : ''
+                            className={`w-full text-left rounded-lg px-3 py-2 text-sm text-text hover:bg-surface-hover flex items-center justify-between ${current === opt.value ? 'bg-primary-light text-primary' : ''
                                 }`}
                             style={{ cursor: "pointer", ...(opt.style || {}) }}
                             onClick={() => {
@@ -195,7 +283,7 @@ const SelectMenu: React.FC<{
                         >
                             <span style={{ ...(opt.style || {}) }}>{opt.label}</span>
                             {current === opt.value && (
-                                <CheckSquare size={12} style={{ opacity: 0.7, color: 'var(--color-primary)' }} />
+                                <CheckSquare size={15} style={{ opacity: 0.7, color: 'var(--color-primary)' }} />
                             )}
                         </button>
                     ))}
@@ -209,11 +297,34 @@ const SelectMenu: React.FC<{
  * Reusable formatting toolbar. Rendered inside the note header so the user has a
  * single unified header with every note action.
  */
-export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
+/**
+ * If the cursor sits in text with nothing selected, expand the selection to
+ * the whole parent block first — otherwise Size/Spacing commands silently
+ * apply to nothing and the user sees no change.
+ */
+const selectBlockIfCollapsed = (editor: Editor) => {
+    const { selection } = editor.state;
+    if (!selection.empty) return;
+    const $from = selection.$from;
+    editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: $from.start(), to: $from.end() })
+        .run();
+};
+
+export const RichTextToolbar: React.FC<{
+    editor: Editor;
+    /** Notifies the host when a focus-stealing overlay (link dialog) opens/closes. */
+    onOverlayOpen?: (open: boolean) => void;
+    /** Narrow canvas: show essentials + a More expander instead of everything. */
+    compact?: boolean;
+}> = ({ editor, onOverlayOpen, compact = false }) => {
     const [showColorMenu, setShowColorMenu] = useState(false);
     const [showHighlightMenu, setShowHighlightMenu] = useState(false);
     const [showLinkMenu, setShowLinkMenu] = useState(false);
     const [linkUrl, setLinkUrl] = useState("");
+    const [showMore, setShowMore] = useState(false);
 
     const state = useEditorState({
         editor,
@@ -238,8 +349,8 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
             alignJustify: editor.isActive({ textAlign: 'justify' }),
             link: editor.isActive('link'),
             linkHref: (editor.getAttributes('link') as { href?: string }).href ?? "",
-            fontFamily: (editor.getAttributes('textStyle').fontFamily as string) || "",
             fontSize: (editor.getAttributes('textStyle').fontSize as string) || "",
+            lineHeight: (editor.getAttributes('textStyle').lineHeight as string) || "",
             textColor: (editor.getAttributes('textStyle').color as string) || "",
             highlight: editor.isActive('highlight'),
         }),
@@ -249,12 +360,14 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
         setShowColorMenu(false);
         setShowHighlightMenu(false);
         setShowLinkMenu(false);
+        onOverlayOpen?.(false);
     };
 
     const openLinkMenu = () => {
         closeOverlays();
         setLinkUrl(editor.getAttributes('link').href || "");
         setShowLinkMenu(true);
+        onOverlayOpen?.(true);
     };
 
     const applyLink = () => {
@@ -265,85 +378,78 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
             editor.chain().focus().extendMarkRange('link').unsetLink().run();
         }
         setShowLinkMenu(false);
+        onOverlayOpen?.(false);
     };
 
     const removeLink = () => {
         editor.chain().focus().extendMarkRange('link').unsetLink().run();
         setShowLinkMenu(false);
+        onOverlayOpen?.(false);
     };
 
     return (
+        <>
+            <style>{`
+                .tb-compact .tb-extra { display: none !important; }
+                .tb-compact.tb-expanded .tb-extra { display: revert !important; }
+            `}</style>
         <div
-            className="flex flex-row flex-wrap items-center whitespace-nowrap"
+            className={`flex flex-row flex-wrap items-center whitespace-nowrap ${compact ? "tb-compact" : ""} ${showMore ? "tb-expanded" : ""}`}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             style={{
-                gap: "4px",
-                padding: "4px 6px",
-                background: "var(--color-surface)",
-                borderRadius: 8,
-                // border: "1px solid var(--color-border)",
+                // gap: "8px",
+                padding: "8px 10px",
+                // Transparent: the parent pill (CanvasPage) provides background + shape.
             }}
         >
             {/* Single row: inline styles + text color/highlight/link + blocks + alignment */}
-                <SelectMenu
-                    label="Style"
-                    current={state.headingLevel || (state.paragraph ? 'paragraph' : '')}
-                    title="Text style / heading"
-                    options={HEADINGS}
-                    onSelect={(value) => {
-                        closeOverlays();
-                        if (value === 'paragraph') {
-                            editor.chain().focus().setParagraph().run();
-                        } else {
-                            const level = Number(value.replace('h', '')) as 1 | 2 | 3;
-                            editor.chain().focus().toggleHeading({ level }).run();
-                        }
-                    }}
-                />
+                
 
-                <Divider />
+                {/* <Divider /> */}
 
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleBold().run()}
                     isActive={state.bold}
                     title="Bold (Ctrl+B)"
                 >
-                    <Bold size={15} />
+                    <Bold size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleItalic().run()}
                     isActive={state.italic}
                     title="Italic (Ctrl+I)"
                 >
-                    <Italic size={15} />
+                    <Italic size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleUnderline().run()}
                     isActive={state.underline}
                     title="Underline (Ctrl+U)"
                 >
-                    <UnderlineIcon size={15} />
+                    <UnderlineIcon size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleStrike().run()}
                     isActive={state.strike}
                     title="Strikethrough"
+                    className="tb-extra"
                 >
-                    <Strikethrough size={15} />
+                    <Strikethrough size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleCode().run()}
                     isActive={state.code}
                     title="Inline code"
+                    className="tb-extra"
                 >
-                    <Code size={15} />
+                    <Code size={16} />
                 </ToolbarButton>
 
-                <Divider />
+                <Divider className="tb-extra" />
 
                 {/* Text color */}
-                <div className="relative">
+                <div className="relative tb-extra">
                     <ToolbarButton
                         onClick={() => {
                             closeOverlays();
@@ -352,15 +458,15 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                         isActive={!!state.textColor}
                         title="Text color"
                     >
-                        <Palette size={15} />
+                        <Palette size={16} />
                     </ToolbarButton>
                     {showColorMenu && (
                         <div
                             className="absolute top-full left-0 bg-surface border border-border rounded-lg shadow-lg z-50"
-                            style={{ marginTop: "4px", padding: "8px", width: 150 }}
+                            style={{ marginTop: "6px", padding: "12px", width: 178 }}
                             onMouseDown={(e) => e.stopPropagation()}
                         >
-                            <div className="flex flex-wrap" style={{ gap: "6px" }}>
+                            <div className="flex flex-wrap" style={{ gap: "8px" }}>
                                 {TEXT_COLORS.map((color) => (
                                     <button
                                         key={color.label}
@@ -371,8 +477,8 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                                         }}
                                         className={`rounded-full flex items-center justify-center ${!state.textColor && color.value === null ? 'ring-2 ring-primary' : ''}`}
                                         style={{
-                                            width: 18,
-                                            height: 18,
+                                            width: 24,
+                                            height: 24,
                                             cursor: "pointer",
                                             border: color.value
                                                 ? "2px solid rgba(0,0,0,0.12)"
@@ -399,7 +505,7 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                 </div>
 
                 {/* Highlight */}
-                <div className="relative">
+                <div className="relative tb-extra">
                     <ToolbarButton
                         onClick={() => {
                             closeOverlays();
@@ -408,15 +514,15 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                         isActive={state.highlight}
                         title="Highlight"
                     >
-                        <Highlighter size={15} />
+                        <Highlighter size={16} />
                     </ToolbarButton>
                     {showHighlightMenu && (
                         <div
                             className="absolute top-full left-0 bg-surface border border-border rounded-lg shadow-lg z-50"
-                            style={{ marginTop: "4px", padding: "8px", width: 150 }}
+                            style={{ marginTop: "6px", padding: "12px", width: 178 }}
                             onMouseDown={(e) => e.stopPropagation()}
                         >
-                            <div className="flex flex-wrap" style={{ gap: "6px" }}>
+                            <div className="flex flex-wrap" style={{ gap: "8px" }}>
                                 {HIGHLIGHT_COLORS.map((hl) => (
                                     <button
                                         key={hl.label}
@@ -427,8 +533,8 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                                         }}
                                         className={`rounded-full flex items-center justify-center ${!state.highlight && hl.value === null ? 'ring-2 ring-primary' : ''}`}
                                         style={{
-                                            width: 18,
-                                            height: 18,
+                                            width: 24,
+                                            height: 24,
                                             cursor: "pointer",
                                             border: hl.value
                                                 ? "2px solid rgba(0,0,0,0.12)"
@@ -454,21 +560,21 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                     )}
                 </div>
 
-                <Divider />
+                <Divider className="tb-extra" />
 
                 {/* Link */}
-                <div className="relative">
+                <div className="relative tb-extra">
                     <ToolbarButton
                         onClick={openLinkMenu}
                         isActive={state.link}
                         title="Add or edit link"
                     >
-                        {state.link ? <Unlink size={15} /> : <LinkIcon size={15} />}
+                        {state.link ? <Unlink size={16} /> : <LinkIcon size={16} />}
                     </ToolbarButton>
                     {showLinkMenu && (
                         <div
                             className="absolute top-full left-0 bg-surface border border-border rounded-lg shadow-lg z-50"
-                            style={{ marginTop: "4px", padding: "8px", width: 190 }}
+                            style={{ marginTop: "6px", padding: "12px", width: 220 }}
                             onMouseDown={(e) => e.stopPropagation()}
                         >
                             <input
@@ -480,17 +586,20 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                                 onChange={(e) => setLinkUrl(e.target.value)}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') applyLink();
-                                    if (e.key === 'Escape') setShowLinkMenu(false);
+                                    if (e.key === 'Escape') {
+                                        setShowLinkMenu(false);
+                                        onOverlayOpen?.(false);
+                                    }
                                 }}
-                                className="w-full rounded bg-bg text-text border border-border px-2 py-1 text-xs outline-none focus:border-primary"
+                                className="w-full rounded-lg bg-bg text-text border border-border px-3 py-2 text-sm outline-none focus:border-primary"
                                 style={{ boxSizing: "border-box" }}
                             />
-                            <div className="flex items-center justify-between" style={{ gap: 6, marginTop: 6 }}>
+                            <div className="flex items-center justify-between" style={{ gap: 8, marginTop: 8 }}>
                                 <button
                                     type="button"
                                     onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                     onClick={applyLink}
-                                    className="rounded bg-primary px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-hover"
+                                    className="rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-white hover:bg-primary-hover"
                                     style={{ cursor: "pointer" }}
                                 >
                                     Apply
@@ -511,108 +620,152 @@ export const RichTextToolbar: React.FC<{ editor: Editor }> = ({ editor }) => {
                     )}
                 </div>
 
-            {/* blocks / structure: font, size, lists, quote, code block, alignment, clear */}
+            {/* blocks / structure: size, lists, quote, code block, alignment, clear */}
+
                 <SelectMenu
-                    label="Font"
-                    current={state.fontFamily}
-                    title="Font family"
-                    options={FONT_FAMILIES.map(f => ({ ...f, style: { fontFamily: f.value } as React.CSSProperties }))}
+                    label="Style"
+                    className="mr-2 tb-extra"
+                    current={state.headingLevel || (state.paragraph ? 'paragraph' : '')}
+                    title="Text style / heading"
+                    options={HEADINGS}
                     onSelect={(value) => {
                         closeOverlays();
-                        editor.chain().focus().setFontFamily(value).run();
+                        if (value === 'paragraph') {
+                            editor.chain().focus().setParagraph().run();
+                        } else {
+                            const level = Number(value.replace('h', '')) as 1 | 2 | 3;
+                            editor.chain().focus().toggleHeading({ level }).run();
+                        }
                     }}
                 />
                 <SelectMenu
                     label="Size"
+                    className="mr-2 tb-extra"
                     current={state.fontSize}
                     title="Font size"
                     options={FONT_SIZES.map(s => ({ ...s, style: { fontSize: s.value } as React.CSSProperties }))}
                     onSelect={(value) => {
                         closeOverlays();
+                        selectBlockIfCollapsed(editor);
                         editor.chain().focus().setFontSize(value).run();
                     }}
                 />
+                <SelectMenu
+                    label="Spacing"
+                    className="tb-extra"
+                    current={state.lineHeight}
+                    title="Line height"
+                    icon={<LineHeightIcon size={16} />}
+                    options={LINE_HEIGHTS}
+                    onSelect={(value) => {
+                        closeOverlays();
+                        selectBlockIfCollapsed(editor);
+                        if (value) {
+                            editor.chain().focus().setLineHeight(value).run();
+                        } else {
+                            editor.chain().focus().unsetLineHeight().run();
+                        }
+                    }}
+                />
 
-                <Divider />
+                <Divider className="tb-extra" />
 
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleBulletList().run()}
                     isActive={state.bulletList}
                     title="Bullet list"
                 >
-                    <List size={15} />
+                    <List size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleOrderedList().run()}
                     isActive={state.orderedList}
                     title="Numbered list"
                 >
-                    <ListOrdered size={15} />
+                    <ListOrdered size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleTaskList().run()}
                     isActive={state.taskList}
                     title="Checkbox list"
+                    className="tb-extra"
                 >
-                    <CheckSquare size={15} />
+                    <CheckSquare size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleBlockquote().run()}
                     isActive={state.blockquote}
                     title="Blockquote"
+                    className="tb-extra"
                 >
-                    <Quote size={15} />
+                    <Quote size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().toggleCodeBlock().run()}
                     isActive={state.codeBlock}
                     title="Code block"
+                    className="tb-extra"
                 >
-                    <Code2 size={15} />
+                    <Code2 size={16} />
                 </ToolbarButton>
 
-                <Divider />
+                <Divider className="tb-extra" />
 
                 <ToolbarButton
                     onClick={() => editor.chain().focus().setTextAlign('left').run()}
                     isActive={state.alignLeft}
                     title="Align left"
+                    className="tb-extra"
                 >
-                    <AlignLeft size={15} />
+                    <AlignLeft size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().setTextAlign('center').run()}
                     isActive={state.alignCenter}
                     title="Align center"
+                    className="tb-extra"
                 >
-                    <AlignCenter size={15} />
+                    <AlignCenter size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().setTextAlign('right').run()}
                     isActive={state.alignRight}
                     title="Align right"
+                    className="tb-extra"
                 >
-                    <AlignRight size={15} />
+                    <AlignRight size={16} />
                 </ToolbarButton>
                 <ToolbarButton
                     onClick={() => editor.chain().focus().setTextAlign('justify').run()}
                     isActive={state.alignJustify}
                     title="Justify"
+                    className="tb-extra"
                 >
-                    <AlignJustify size={15} />
+                    <AlignJustify size={16} />
                 </ToolbarButton>
 
-                <Divider />
+                <Divider className="tb-extra" />
 
                 <ToolbarButton
                     onClick={() => {
                         editor.chain().focus().clearNodes().setParagraph().unsetAllMarks().run();
                     }}
                     title="Clear formatting"
+                    className="tb-extra"
                 >
-                    <RemoveFormatting size={15} />
+                    <RemoveFormatting size={16} />
                 </ToolbarButton>
+                {compact && (
+                    <ToolbarButton
+                        onClick={() => setShowMore((v) => !v)}
+                        isActive={showMore}
+                        title={showMore ? "Show fewer options" : "More formatting options"}
+                    >
+                        <MoreHorizontal size={16} />
+                    </ToolbarButton>
+                )}
         </div>
+        </>
     );
 };
 
@@ -620,11 +773,15 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     content,
     onChange,
     onBlur,
+    onFocus,
     placeholder,
     readOnly = false,
     onEdit,
     hideToolbar = false,
-    onReady
+    onReady,
+    autoFocus = false,
+    className = '',
+    style
 }) => {
     const editor = useEditor({
         extensions: [
@@ -647,6 +804,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             TextStyle,
             FontFamily,
             FontSize,
+            LineHeight,
             TextAlign.configure({
                 types: ['heading', 'paragraph'],
             }),
@@ -665,12 +823,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             Highlight.configure({
                 multicolor: true,
             }),
+            Underline,
             Placeholder.configure({
                 placeholder: placeholder || 'Write something…',
             }),
         ],
         content,
-        autofocus: 'end',
         editable: !readOnly,
         editorProps: {
             attributes: {
@@ -680,23 +838,29 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
         onUpdate: ({ editor }) => {
             onChange(editor.getHTML());
         },
+        onFocus: () => {
+            onFocus?.();
+        },
         onBlur: () => {
             onBlur?.();
         },
     });
 
     useEffect(() => {
-        if (editor && content !== editor.getHTML()) {
-            editor.commands.setContent(content);
+        if (autoFocus && editor) {
+            editor.commands.focus('end');
         }
-    }, [content, editor]);
+    }, [autoFocus, editor]);
+
+    // NOTE: intentionally NO content-sync effect here. The editor owns its
+    // document from mount (initialized with `content` once). Any setContent
+    // on re-render risks rebuilding the visible document mid-edit, which
+    // previously corrupted notes at open. External updates don't exist in
+    // this app (notes load once; each note mounts a fresh editor on open).
 
     useEffect(() => {
         if (editor) {
             editor.setEditable(!readOnly);
-            if (!readOnly) {
-                editor.commands.focus('end');
-            }
         }
     }, [readOnly, editor]);
 
@@ -710,12 +874,20 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     return (
         <div
-            className="flex flex-col h-full"
+            className={`flex flex-col h-full ${className}`}
+            style={style}
             onMouseDown={(e) => {
                 if (readOnly && onEdit) {
                     onEdit();
                 }
-                e.stopPropagation();
+                // Focused = user is editing: keep the event local so text
+                // selection works. Unfocused = let it bubble so the note can
+                // start a drag (select tool).
+                if (!readOnly && editor.isFocused) e.stopPropagation();
+            }}
+            onTouchStart={(e) => {
+                if (readOnly) return;
+                if (editor.isFocused) e.stopPropagation();
             }}
         >
             {!readOnly && !hideToolbar && <RichTextToolbar editor={editor} />}
@@ -737,6 +909,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                     flex: 1;
                     border: none !important;
                     padding: 0;
+                    overflow-wrap: anywhere;
+                    word-break: break-word;
                 }
                 .tiptap {
                     border: none !important;

@@ -70,6 +70,18 @@ export const updateNote = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteAllNotes = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user._id;
+
+    const result = await CanvasNote.deleteMany({ userId });
+
+    res.json({ message: 'All notes deleted', deletedCount: result.deletedCount });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 export const deleteNote = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user._id;

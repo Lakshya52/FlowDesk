@@ -28,7 +28,7 @@ export const linkSlugs: Record<string, string> = {
   "Your Team": "your-team",
   "Chat & Communication": "chat",
   "AI Buddy": "ai-buddy",
-  "Collaborative Canvas": "canvas",
+  "Canvas": "canvas",
   "Understanding Roles": "roles",
   "What You Can Do": "role-permissions",
 }
@@ -112,7 +112,7 @@ define("introduction", {
     list([
       ["Project Management", "Create and track projects with full visibility into progress, deadlines, and team assignments. See everything at a glance on your dashboard."],
       ["Task Tracking", "Break work into tasks with clear states (Todo → In Progress → Review → Completed), checkpoints, and priorities. Know exactly what's in progress and what's done."],
-      ["Team Collaboration", "Chat with your team, share files, use the collaborative canvas for brainstorming, and stay updated with automatic activity logs."],
+      ["Team Collaboration", "Chat with your team, share files, and stay updated with automatic activity logs. Use your private canvas for personal brainstorming."],
       ["AI Assistant", "Get help from AI Buddy — it can generate task descriptions, analyse project velocity, suggest deadlines, and answer questions about your project history."],
       ["Role-Based Access", "Everyone sees exactly what they need. Admins have full control, Managers oversee teams and projects, and Members focus on task execution."],
       ["Real-time Updates", "See changes as they happen. When a teammate updates a task, sends a message, or marks something complete, you'll see it instantly."],
@@ -938,8 +938,8 @@ define("ai-buddy", {
 }, { prev: "chat", next: "canvas" })
 
 define("canvas", {
-  title: "Collaborative Canvas",
-  description: "A digital whiteboard for brainstorming, visual workflows, and real-time collaboration.",
+  title: "Canvas",
+  description: "A private infinite canvas for brainstorming with sticky notes.",
   breadcrumbs: [
     { label: "Docs", slug: "introduction" },
     { label: "Collaboration" },
@@ -950,11 +950,11 @@ define("canvas", {
   sections: [
     h2("what-is-the-canvas", "What is the Canvas?"),
     p(
-      "The Collaborative Canvas is a digital whiteboard where you can brainstorm ideas, create visual workflows, and collaborate with your team in real time. Think of it as a shared space for notes, diagrams, and planning."
+      "The Canvas is your private infinite board for sticky notes — brainstorm ideas, organise thoughts, and map out plans. Only you can see your notes."
     ),
-    img("/docs/images/flowdesk-canvas-overview.png", "FlowDesk collaborative canvas showing colour-coded notes, arrows connecting ideas, and team cursors", "The collaborative canvas"),
+    img("/docs/images/flowdesk-canvas-overview.png", "FlowDesk canvas showing colour-coded notes with arrows connecting ideas", "The canvas"),
     p(
-      "It's perfect for sprint planning, brainstorming sessions, process mapping, or any time your team needs to visualise ideas together."
+      "It's perfect for personal brainstorming, planning your work, and visualising how ideas connect."
     ),
 
     h2("creating-notes", "Creating Notes"),
@@ -985,14 +985,9 @@ define("canvas", {
       "This is great for creating flowcharts, mind maps, process diagrams, or showing how different ideas relate to each other."
     ),
 
-    h2("personal-vs-team", "Personal vs Team Mode"),
-    p("The canvas supports two modes:"),
-    list([
-      ["Personal Mode", "Your private canvas for drafting and brainstorming. Only you can see your notes. Perfect for organising your thoughts before sharing with the team."],
-      ["Team Mode", "Collaborate in real time with your teammates. See everyone's cursors and edits as they happen. Changes sync instantly across all connected devices."],
-    ]),
+    h2("private-by-design", "Private by Design"),
     p(
-      "You can switch between modes at any time. When you're ready to share your personal canvas with the team, switch to Team mode and your notes become visible to everyone."
+      "There is only one canvas, and it is yours alone. Every note you create is private — teammates cannot see your canvas. Use it freely for drafting, planning, and thinking out loud."
     ),
 
     h2("canvas-tips", "Tips for Effective Canvas Use"),
@@ -1123,7 +1118,7 @@ define("role-permissions", {
     p("Members are the core contributors who execute work within projects:"),
     list([
       ["Task Execution", "View and work on assigned tasks. Update task status, add checkpoints, and mark tasks complete."],
-      ["Collaboration", "Participate in project chats, comment on tasks, use the Collaborative Canvas, and mention teammates."],
+      ["Collaboration", "Participate in project chats, comment on tasks, and mention teammates."],
       ["File Management", "Upload, download, and manage files within assigned projects. Attach files to tasks and share in chat."],
       ["Notifications", "Receive alerts for assignments, mentions, approaching deadlines, and task updates."],
       ["Personal Settings", "Manage their own profile, notification preferences, and appearance settings."],

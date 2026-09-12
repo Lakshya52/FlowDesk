@@ -30,7 +30,6 @@ export interface IAssignment extends Document {
     recurringPattern?: 'daily' | 'weekly' | 'monthly' | 'yearly';
     recurringStartDate?: Date;
     parentAssignmentId?: mongoose.Types.ObjectId | null;
-    canvasData?: any;
     createdAt: Date;
     updatedAt: Date;
     recurringTime?: string;
@@ -62,7 +61,6 @@ const assignmentSchema = new Schema<IAssignment>(
         recurringPattern: { type: String, enum: ['daily', 'weekly', 'monthly', 'yearly'], default: undefined },
         recurringStartDate: { type: Date, default: undefined },
         parentAssignmentId: { type: Schema.Types.ObjectId, ref: 'Assignment', default: null },
-        canvasData: { type: Schema.Types.Mixed, default: null },
         recurringTime: { type: String, default: undefined },
         recurringEndDate: { type: Date, default: undefined },
         recurringPaused: { type: Boolean, default: false },

@@ -64,13 +64,6 @@ file sharing, reporting, and more.
   - Full project description and metadata
   - Task list tied to the project
   - Team chat / real-time messaging (Socket.io powered)
-  - **Project Whiteboard / Notes** (NEW):
-    - **Collaborative** visual playground for brainstorming
-    - **Shared Visibility**: Everyone assigned to the project can see and edit the notes
-    - Sticky notes can be moved and edited by any team member
-    - Tracks who created each note and who edited it (avatar history)
-    - Full-screen mode for intensive brainstorming sessions
-    - Auto-saves changes across the team
   - File attachments
   - Activity timeline with all changes
   - Edit assignment settings
@@ -234,10 +227,9 @@ file sharing, reporting, and more.
 The application uses a collapsible sidebar with the following structure:
 - Dashboard
 - Projects (with sub-item: Tasks)
-- Whiteboard / Notes (inside Project Details - **Collaborative**)
 - Companies & Clients
 - Bulk Messaging (NEW)
-- Personal Canvas (Private Playground - **Limited to Self**)
+- Canvas (Private Playground - **Limited to Self**)
 - Teams
 - Calendar
 - Reports (with sub-items: Tracking, Workload, User Activity)
@@ -509,7 +501,7 @@ function getFallbackResponse(message: string, path: string = "/"): string {
     "/reports": "You're on the **Reports** page!\n\nAvailable report types:\n1. **Tracking** — Employee performance\n2. **Workload** — Team capacity\n3. **User Activity** — Engagement logs\n\nFilter by date, team, or project, then export as PDF or Excel.\n\nWhich report do you need?",
     "/settings": "You're on **Settings**!\n\nYou can configure:\n- 👤 Profile (name, email, avatar)\n- 🔒 Security (password, 2FA)\n- 🔔 Notifications (email, in-app)\n- 🎨 Appearance (Light/Dark mode)\n\nWhat would you like to change?",
     "/bulk-email": "You're on the **Bulk Messaging** page!\n\nHere you can:\n1. Select multiple companies or entire groups from the list\n2. Compose an email message in the editor\n3. Send the message to all primary contacts of the selected companies at once\n\nNeed help selecting companies?",
-    "/canvas": "You're on your **Personal Canvas**!\n\nThis is a private playground where you can create sticky notes and organize your own ideas. Notes here are **limited to you** and not visible to others.\n\nFor team-wide brainstorming, visit an **Assignment Detail** page and click the **Whiteboard** tab.",
+    "/canvas": "You're on your **Canvas**!\n\nThis is a private playground where you can create sticky notes and organize your own ideas. Notes here are **limited to you** and not visible to others.\n\nDouble-click anywhere to add a note, drag notes to move them, and click a note to edit its text.",
   };
 
   // Check if asking about current page
@@ -535,7 +527,7 @@ function getFallbackResponse(message: string, path: string = "/"): string {
   }
 
   if (lowerMsg.includes("whiteboard") || lowerMsg.includes("notes") || lowerMsg.includes("canvas")) {
-    return "### Collaborative vs Personal Whiteboards 🎨\n\n**1. Project Whiteboard (Collaborative):**\n- Found inside any **Assignment** (/assignments) under the **Whiteboard** tab.\n- **Everyone** assigned to the project can see and edit these notes in real-time.\n\n**2. Personal Canvas (Private):**\n- Accessible from the **Personal Canvas** (/canvas) sidebar link.\n- These notes are **private and limited to you**. No one else can see your personal canvas.";
+    return "### Canvas 🎨\n\nYour **Canvas** (/canvas) is a private infinite board for sticky notes:\n- Double-click anywhere to add a note\n- Drag to move, drag the corner to resize\n- Click a note to edit; use the format bar for **bold**, *italic*, lists\n- Zoom with the controls (bottom right) or Alt+scroll\n\nNotes are **private and limited to you**.";
   }
 
   if (lowerMsg.includes("email") || lowerMsg.includes("message") || lowerMsg.includes("bulk")) {

@@ -41,7 +41,7 @@ List filters `status/team/search`, localStorage `projects_items_per_page L75`, c
 - **Completed** — archived, full history retained (tasks, files, chats, logs).
 - **Recurring Blueprints** — template with `recurringPattern` `daily/weekly/monthly/yearly` + `recurringTime/recurringWeekdays/recurringDayOfMonth/recurringMaxInstances/recurringDueDays/notifyOnSpawn` (`Assignment.ts:50`). Engine (`services/recurringTaskService.ts:116`) auto-spawns fresh clones; duplicate guard + 5-min safety scan; editing blueprint affects *next* instances only.
 
-**Detail page:** tabs → tasks, files (GridFS download), activity timeline, team chat (`ChatMessage` + typing `index.ts:422`), **Project Whiteboard** (`components/assignments/ProjectCanvas.tsx`) — sticky notes `PATCH /assignments/:id/canvas` collaborative, fullscreen, auto-save, who-edited avatars.
+**Detail page:** tabs → tasks, files (GridFS download), activity timeline, team chat (`ChatMessage` + typing `index.ts:422`).
 
 **Excel:** Download sample `GET /assignments/import/sample`, `POST /assignments/import/preview` (multer) dry-run, `POST /assignments/import/excel` bulk (`routes/assignments.ts:9`).
 
@@ -94,8 +94,7 @@ E2EE per-device `encryptedKeyWraps` → `POST /conversations` (direct/group + `n
 
 ## 🎨 Canvas `CanvasPage.tsx:554` `CanvasNote.ts:20`
 
-- **Personal:** your infinite canvas `GET /canvas?userId` `createNote POST /canvas x/y required` (`canvasController.ts:6`) — post-its drag/resize (200×140 default `#fef9c3`), rich text Tiptap, `connections[]` graph, navigator `CanvasNavigator.tsx`, export `NoteExportMenu`. Only you see it.
-- **Collaborative:** switch via assignment whiteboard (shared `canvasData`).
+- Your private infinite canvas `GET /canvas` `createNote POST /canvas x/y required` (`canvasController.ts:6`) — post-its drag/resize, rich text, `connections[]` graph, navigator `CanvasNavigator.tsx`, export `NoteExportMenu`. Only you see it.
 
 ---
 

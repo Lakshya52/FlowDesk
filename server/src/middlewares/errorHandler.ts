@@ -6,6 +6,16 @@ export interface AppError extends Error {
 }
 
 export const errorHandler = (err: AppError, _req: Request, res: Response, _next: NextFunction): void => {
+    // Multer upload errors (e.g. LIMIT_FILE_SIZE) are client errors, not 500s.
+    if (err.name === 'MulterError') {
+        const message =
+            (err as any).code === 'LIMIT_FILE_SIZE'
+                ? 'File exceeds the 50 MB size limit'
+                : err.message || 'File upload failed';
+        res.status(400).json({ status: 'error', statusCode: 400, message });
+        return;
+    }
+
     const statusCode = err.statusCode || 500;
     const message = err.isOperational ? err.message : 'Internal server error';
 

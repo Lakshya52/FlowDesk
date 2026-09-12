@@ -19,7 +19,6 @@ FlowDesk is Aceone's full-stack internal management ecosystem. It centralizes pr
 ### 1. Project Management (Assignments) `server/src/models/Assignment.ts:50` `routes/assignments.ts:9` `controllers/assignmentController.ts:98`
 - **Ongoing / Completed / Recurring Blueprints** — `isRecurring + recurringPattern(daily/weekly/monthly/yearly) + recurringWeekdays + recurringDayOfMonth + recurringMaxInstances + recurringDueDays + recurringNotifyOnSpawn + recurringPaused + recurringLastSpawnedAt/SpawnedCount`.
 - **Excel workflow** — `GET /import/sample` template, `POST /import/preview` parse-only, `POST /import/excel` bulk create (`assignmentController.ts:737`).
-- **Per-project collaborative whiteboard** — `canvasData Mixed` field, `PATCH /:id/canvas` (`routes/assignments.ts:9`), rendered by `components/assignments/ProjectCanvas.tsx` (fullscreen, auto-save debounce, who-edited avatars).
 - **Activity, comments, files** — cascaded on delete, paginated reads.
 
 ### 2. Task Ecosystem + Kanban Boards `Task.ts:48` `Board.ts:38` `routes/tasks.ts:9` `routes/boards.ts:28`
@@ -38,8 +37,8 @@ FlowDesk is Aceone's full-stack internal management ecosystem. It centralizes pr
 - **E2EE healing:** `request_key_heal L525` fan-out to `user_*` + `conversation_*` on new device, `WhatsNewModal` after each update (`RELEASE_NOTES.md:6`).
 - **Notifications:** `notificationService.ts:16 createNotification(s)` → `io.to(tenant_) emit new_notification`, persisted `Notification` with `type/title/message/link/metadata`, `GET /notifications PUT /:id/read PUT /read-all` (`routes/notifications.ts:9`). In-app bell + Electron native (subscribe removed).
 
-### 5. Collaborative Canvas `CanvasNote.ts:20` `routes/canvas.ts:9` `CanvasPage.tsx:554`
-- Personal infinite canvas `POST /canvas` `x/y` required, `width 200 height 140 color #fef9c3`, `connections[]` graph edges (`CanvasNote.ts:20`). Client drag/resize/rich-text (Tiptap 3.22), navigator `CanvasNavigator.tsx`, export `NoteExportMenu.tsx` PNG/PDF. Private to `userId`. Distinct from assignment's shared `canvasData`.
+### 5. Canvas `CanvasNote.ts:20` `routes/canvas.ts:9` `CanvasPage.tsx`
+- Private infinite canvas `POST /canvas` `x/y` required, `width/height/color`, `connections[]` graph edges (`CanvasNote.ts:20`). Client drag/resize/rich-text, navigator `CanvasNavigator.tsx`, export `NoteExportMenu.tsx`. Private to `userId` — the only canvas in the app.
 
 ### 6. Calendar `Calendar.ts:26` `CalendarEvent.ts:55` `routes/calendars.ts:19` `routes/calendarEvents.ts:17`
 - **Calendars:** `name/color/icon/visibility private/public/isArchived/isDefault/isSystem/sharedWith[user/permission view/edit/status pending/accepted/rejected]/teamId/googleCalendarId` (`Calendar.ts:26`). Endpoints `POST/GET/PUT/DELETE /calendars`, `PUT /:id/archive`, `POST /:id/share`, `DELETE /:id/share/:userId`, `PUT /:id/share/accept|reject` (`routes/calendars.ts:19`).

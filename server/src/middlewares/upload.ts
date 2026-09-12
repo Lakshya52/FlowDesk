@@ -62,7 +62,12 @@ const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterC
   if (ALLOWED_MIMES.includes(file.mimetype) && ALLOWED_EXTENSIONS.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error(`File type "${file.mimetype}" (${ext}) is not allowed`));
+    // Operational 400 (not a 500): the global errorHandler turns this into a
+    // clean JSON response so the client fails fast instead of hanging.
+    const err = new Error(`File type "${file.mimetype}" (${ext || 'no extension'}) is not allowed`) as Error & { statusCode?: number; isOperational?: boolean };
+    err.statusCode = 400;
+    err.isOperational = true;
+    cb(err);
   }
 };
 

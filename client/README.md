@@ -25,7 +25,7 @@ client/
 │   │   ├── LoginPage.tsx       # OTP forgot flow, remember me
 │   │   ├── RegisterPage.tsx    # company slug + OTP verify tenant creation
 │   │   ├── DashboardPage.tsx   # stats cards + pie/line/bar + activity pagination
-│   │   ├── AssignmentsPage.tsx / AssignmentDetailPage.tsx # list + detail+whiteboard
+│   │   ├── AssignmentsPage.tsx / AssignmentDetailPage.tsx # list + detail (tasks/chat/files)
 │   │   ├── TasksPage.tsx       # cross-project table, rank drag reorder
 │   │   ├── BoardsPage.tsx      # Kanban + column/member workflows
 │   │   ├── CalendarPage.tsx    # 5 views + Share + Google import
@@ -42,7 +42,7 @@ client/
 │   │   ├── layout/             # AppLayout, Sidebar (navItems + allowedTabs), Header (Ctrl+K search + bell)
 │   │   ├── calendar/           # 13 files: CalendarSidebar/Toolbar, Month/Week/Day/Year/AgendaView, EventModal/Drawer/Chip, CalendarModal/ShareModal, ImportModal
 │   │   ├── crm/                # CrmDashboard, Campaigns, DialQueue, LeadDetailModal, FieldVisits/* (List/Map/RoutePlanner/CheckIn/Out/Expenses/Remarks), Schedule, Summary, CrmLogs
-│   │   ├── assignments/        # ProjectCanvas (assignment shared whiteboard)
+│   │   ├── assignments/        # assignment-scoped components
 │   │   ├── reports/            # FilterBar, EmployeeTracking/Workload/Activity/ProjectHealthReport, DrilldownModal, ReportStates
 │   │   └── common/             # Buddy (SSE stream), Avatar, AvatarCropModal, CameraCapture, SignaturePad, RichTextEditor, Modal, FilePreviewModal, CanvasNavigator, NoteExportMenu, Navbar, Footer, WhatsNewModal
 │   ├── store/                  # authStore (persist token + loadUser GET /auth/me), chatStore, calendarStore (view year|month|week|day|agenda), themeStore, iconsAnimationStore

@@ -551,69 +551,6 @@ export const deleteAssignment = async (
   }
 };
 
-export const updateAssignmentCanvas = async (
-  req: AuthRequest,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { canvasData } = req.body;
-    const tenantUserIds = await getTenantUserIds(req.user);
-
-    const assignment = await Assignment.findById(id);
-
-    if (!assignment) {
-      res.status(404).json({ message: "Assignment not found" });
-      return;
-    }
-
-    // Tenant check
-    const creatorInTenant = tenantUserIds.includes(assignment.createdBy.toString());
-    const teamInTenant = assignment.team?.some((id: any) =>
-      tenantUserIds.includes(id.toString())
-    );
-    if (!creatorInTenant && !teamInTenant) {
-      res.status(403).json({ message: "Access denied" });
-      return;
-    }
-
-    // Everyone authorized to update canvas
-    // (Removed role/creator/team check)
-
-    const oldCanvasData = assignment.canvasData || [];
-    const newCanvasData = canvasData || [];
-
-    let changeSummary = "Modified canvas";
-    if (Array.isArray(oldCanvasData) && Array.isArray(newCanvasData)) {
-      if (newCanvasData.length > oldCanvasData.length)
-        changeSummary = "Added note(s) to canvas";
-      else if (newCanvasData.length < oldCanvasData.length)
-        changeSummary = "Removed note(s) from canvas";
-      else changeSummary = "Rearranged/Edited notes on canvas";
-    }
-
-    assignment.canvasData = canvasData;
-    assignment.markModified("canvasData");
-    await assignment.save();
-
-    await ActivityLog.create({
-      action: "Canvas updated",
-      user: req.user!._id,
-      entityType: EntityType.ASSIGNMENT,
-      entityId: assignment._id,
-      metadata: {
-        summary: changeSummary,
-        noteCount: newCanvasData.length,
-        previousCount: oldCanvasData.length,
-      },
-    });
-
-    res.json({ success: true, message: "Canvas data updated" });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
 const ASSIGNMENT_IMPORT_COLUMNS = [
   "title", "clientName", "description", "priority",
   "status", "startDate", "dueDate", "isRecurring",

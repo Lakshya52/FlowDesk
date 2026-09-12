@@ -21,24 +21,30 @@ import {
 	Hand,
 	Undo2,
 	Redo2,
-	Move,
 	Loader2,
 	RefreshCcw,
 	Expand,
-	Pencil,
-	Check,
 	CheckCircle2,
 	Trash2,
 	AlertCircle,
 	Palette,
+	EllipsisVertical,
+	FileCode,
+	FileText,
+	FileType,
 } from "lucide-react";
 import type { Editor } from "@tiptap/react";
+import toast from "react-hot-toast";
 import api from "../lib/api";
 import CanvasNavigator from "../components/common/CanvasNavigator";
 import RichTextEditor, {
 	RichTextToolbar,
 } from "../components/common/RichTextEditor";
-import NoteExportMenu from "../components/common/NoteExportMenu";
+import {
+	exportNoteAsHTML,
+	exportNoteAsTXT,
+	exportNoteAsPDF,
+} from "../components/common/NoteExportMenu";
 
 interface Note {
 	_id: string;
@@ -92,6 +98,7 @@ const NoteHeaderButton: React.FC<{
 	children: React.ReactNode;
 }> = ({ onClick, title, children }) => (
 	<button
+		style={{cursor: "pointer"}}
 		onClick={(e) => {
 			e.stopPropagation();
 			onClick();
@@ -195,29 +202,27 @@ interface NoteWindowProps {
 	note: Note;
 	isMobile: boolean;
 	isLinking: boolean;
-	activeEditId: string | null;
+	isFocused: boolean;
+	autoFocus: boolean;
 	hoveredNoteId: string | null;
 	hoveredDropId: string | null;
 	linkingSourceId: string | null;
-	colorPickerOpenId: string | null;
 	saveStatus: SaveStatus;
 	zIndex: number;
 	onBringToFront: (id: string) => void;
 	onNoteMouseDown: (e: React.MouseEvent, id: string) => void;
 	onNoteTouchStart: (e: React.TouchEvent, id: string) => void;
 	onTitleChange: (id: string, title: string) => void;
-	onOpenEditor: (id: string) => void;
-	onCloseEditor: (id: string | null) => void;
 	onColorChange: (id: string, color: string) => void;
 	onDelete: (id: string) => void;
-	onToggleColorPicker: (id: string) => void;
 	onHover: (id: string | null) => void;
 	onLinkingStart: (e: React.MouseEvent, id: string) => void;
 	onLinkingStartTouch: (e: React.TouchEvent, id: string) => void;
-	onPreviewTouchEnd: (e: React.TouchEvent, id: string) => void;
 	onResizeMouseDown: (e: React.MouseEvent, id: string) => void;
 	onResizeTouchStart: (e: React.TouchEvent, id: string) => void;
-	onEditorReady: (editor: Editor) => void;
+	onEditorReady: (id: string, editor: Editor) => void;
+	onFocusNote: (id: string) => void;
+	onBlurNote: (id: string) => void;
 	onContentChange: (id: string, html: string) => void;
 }
 
@@ -230,33 +235,48 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 	note,
 	isMobile,
 	isLinking,
-	activeEditId,
+	isFocused,
+	autoFocus,
 	hoveredNoteId,
 	hoveredDropId,
 	linkingSourceId,
-	colorPickerOpenId,
 	saveStatus,
 	zIndex,
 	onBringToFront,
 	onNoteMouseDown,
 	onNoteTouchStart,
 	onTitleChange,
-	onOpenEditor,
-	onCloseEditor,
 	onColorChange,
 	onDelete,
-	onToggleColorPicker,
 	onHover,
 	onLinkingStart,
 	onLinkingStartTouch,
-	onPreviewTouchEnd,
 	onResizeMouseDown,
 	onResizeTouchStart,
 	onEditorReady,
+	onFocusNote,
+	onBlurNote,
 	onContentChange,
 }) => {
-	const isEditing = activeEditId === note._id;
 	const isThisLinking = linkingSourceId === note._id;
+	const [menuOpen, setMenuOpen] = useState(false);
+	const menuRef = useRef<HTMLDivElement>(null);
+	const pressPosRef = useRef<{ x: number; y: number } | null>(null);
+
+	// Close the options menu on outside click.
+	useEffect(() => {
+		if (!menuOpen) return;
+		const close = (e: MouseEvent) => {
+			if (
+				menuRef.current &&
+				!menuRef.current.contains(e.target as Node)
+			) {
+				setMenuOpen(false);
+			}
+		};
+		document.addEventListener("mousedown", close);
+		return () => document.removeEventListener("mousedown", close);
+	}, [menuOpen]);
 
 	return (
 		<div
@@ -266,12 +286,20 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 				left: note.x,
 				top: note.y,
 				width: note.width || 200,
-				height: note.height || "auto",
-				minHeight: 140,
+				height: "auto",
+				// Manual height is a floor only: the note always grows to fit
+				// content and can never shrink below it — no clipping, no scrollbar.
+				minHeight: Math.max(note.height || 140, 140),
 				background: note.color,
-				zIndex: isEditing ? 10000 : zIndex,
+				zIndex,
 				color: "#1e293b",
-				touchAction: isEditing ? "auto" : "none",
+				touchAction: "none",
+				outline: isFocused
+					? "2px solid rgba(99,102,241,0.55)"
+					: hoveredNoteId === note._id
+						? "2px solid rgba(99,102,241,0.25)"
+						: "none",
+				outlineOffset: 1,
 			}}
 			onMouseDownCapture={() => onBringToFront(note._id)}
 			onTouchStartCapture={() => onBringToFront(note._id)}
@@ -282,178 +310,217 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 		>
 			{/* Unified Header: move / title / edit / format / download / color / delete */}
 			<div
-				className="mb-2.5 flex cursor-grab flex-col gap-1.5 border-b pb-2 border-black/10"
+				className="relative z-10 mb-2.5 flex cursor-grab flex-col gap-1.5 border-b pb-2 border-black/10"
 				title="Drag to move"
 			>
 				{/* Row 1: drag + title + actions */}
 				<div className="flex min-w-0 items-center justify-between gap-1.5">
 					<div className="flex min-w-0 flex-1 items-center gap-1.5">
-						<Move size={16} className="shrink-0 opacity-50" />
-						<div
+						{/* <Grip size={16} className="shrink-0 opacity-50" /> */}
+						{/* <div
 							style={{
 								width: 8,
 								height: 8,
 								flexShrink: 0,
 							}}
+						/> */}
+						{/* Always-editable title: rename without entering body edit mode */}
+						<input
+							value={note.title || ""}
+							placeholder="Untitled"
+							title="Rename note"
+							onChange={(e) =>
+								onTitleChange(note._id, e.target.value)
+							}
+							onMouseDown={(e) => e.stopPropagation()}
+							onTouchStart={(e) => e.stopPropagation()}
+							onFocus={(e) => e.stopPropagation()}
+							className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[0.78rem] font-semibold text-slate-800 outline-none placeholder:font-medium placeholder:text-slate-400"
 						/>
-						{isEditing ? (
-							<input
-								value={note.title || ""}
-								placeholder="Untitled"
-								onChange={(e) =>
-									onTitleChange(note._id, e.target.value)
-								}
-								onMouseDown={(e) => e.stopPropagation()}
-								onTouchStart={(e) => e.stopPropagation()}
-								className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[0.78rem] font-semibold text-slate-800 outline-none"
-							/>
-						) : (
-							<span
-								onClick={() => onOpenEditor(note._id)}
-								title="Click to edit title"
-								className="min-w-0 flex-1 cursor-text overflow-hidden text-ellipsis whitespace-nowrap text-[0.78rem] font-semibold opacity-85"
-							>
-								{note.title || "Untitled"}
-							</span>
-						)}
 					</div>
 
-					<div className="flex shrink-0 items-center gap-1.5">
-						{isEditing && <SaveIndicator status={saveStatus} />}
+					<div className="flex shrink-0 items-center gap-1">
+						<SaveIndicator status={saveStatus} />
 
-						{/* Color picker */}
-						<div className="relative">
+						{/* Three-dot menu: color, download, delete */}
+						<div className="relative" ref={menuRef}>
 							<NoteHeaderButton
-								onClick={() => onToggleColorPicker(note._id)}
-								title="Change color"
+								onClick={() => setMenuOpen((v) => !v)}
+								title="Note options"
 							>
-								<div
-									style={{
-										width: 14,
-										height: 14,
-										borderRadius: "50%",
-										background: note.color,
-										border: "1px solid rgba(0,0,0,0.25)",
-									}}
-								/>
+								<EllipsisVertical size={16} />
 							</NoteHeaderButton>
-							{colorPickerOpenId === note._id && (
+							{menuOpen && (
 								<div
 									onMouseDown={(e) => e.stopPropagation()}
 									onTouchStart={(e) => e.stopPropagation()}
-									className="absolute top-full right-0 z-[1000] mt-1.5 flex w-[108px] flex-wrap gap-1.5 rounded-[10px] border border-border bg-white p-2 shadow-lg"
+									className="absolute top-full right-0 z-[1000] mt-1.5 w-60 rounded-2xl border border-border bg-surface p-2 text-text shadow-xl"
 								>
-									{COLORS.map((c) => (
+									<p className="px-2.5 pt-1.5 pb-1 text-[11px] font-bold tracking-wide text-text-tertiary uppercase">
+										Color
+									</p>
+									<div className="flex flex-wrap gap-2 px-2.5 pb-1">
+										{COLORS.map((c) => (
+											<button
+												key={c}
+												onClick={(e) => {
+													e.stopPropagation();
+													onColorChange(note._id, c);
+													setMenuOpen(false);
+												}}
+												title={c}
+												aria-label={`Set color ${c}`}
+												style={{
+													width: 28,
+													height: 28,
+													borderRadius: "50%",
+													background: c,
+													border:
+														note.color === c
+															? "3px solid var(--color-primary)"
+															: "1px solid rgba(0,0,0,0.15)",
+													cursor: "pointer",
+												}}
+											/>
+										))}
+									</div>
+
+									<div className="my-1.5 h-px bg-border" />
+									<p className="px-2.5 pt-1 pb-1 text-[11px] font-bold tracking-wide text-text-tertiary uppercase">
+										Download
+									</p>
+									{[
+										{
+											label: "HTML file",
+											icon: (
+												<FileCode
+													size={16}
+													color="#f97316"
+												/>
+											),
+											run: () =>
+												exportNoteAsHTML(
+													note.content || "",
+													note._id,
+												),
+										},
+										{
+											label: "PDF document",
+											icon: (
+												<FileText
+													size={16}
+													color="#ef4444"
+												/>
+											),
+											run: () =>
+												exportNoteAsPDF(
+													note.content || "",
+												),
+										},
+										{
+											label: "Plain text",
+											icon: (
+												<FileType
+													size={16}
+													color="#6366f1"
+												/>
+											),
+											run: () =>
+												exportNoteAsTXT(
+													note.content || "",
+													note._id,
+												),
+										},
+									].map((opt) => (
 										<button
-											key={c}
+											key={opt.label}
 											onClick={(e) => {
 												e.stopPropagation();
-												onColorChange(note._id, c);
-												onToggleColorPicker(note._id);
+												opt.run();
+												setMenuOpen(false);
 											}}
-											title={c}
-											style={{
-												width: 20,
-												height: 20,
-												borderRadius: "50%",
-												background: c,
-												border:
-													note.color === c
-														? "2px solid #6366f1"
-														: "1px solid rgba(0,0,0,0.15)",
-												cursor: "pointer",
-											}}
-										/>
+											className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover"
+										>
+											{opt.icon}
+											{opt.label}
+										</button>
 									))}
+
+									<div className="my-1.5 h-px bg-border" />
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											setMenuOpen(false);
+											onDelete(note._id);
+										}}
+										className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium text-danger hover:bg-danger-light"
+									>
+										<Trash2 size={16} />
+										Delete note
+									</button>
 								</div>
 							)}
 						</div>
-
-						<NoteExportMenu
-							noteContent={note.content}
-							noteId={note._id}
-							iconSize={16}
-						/>
-
-						{isEditing ? (
-							<NoteHeaderButton
-								onClick={() => onCloseEditor(note._id)}
-								title="Done"
-							>
-								<Check size={16} />
-							</NoteHeaderButton>
-						) : (
-							<>
-								<NoteHeaderButton
-									onClick={() => onOpenEditor(note._id)}
-									title="Edit note"
-								>
-									<Pencil
-										size={16}
-										className="text-(--color-success)"
-									/>
-								</NoteHeaderButton>
-								<NoteHeaderButton
-									onClick={() => onDelete(note._id)}
-									title="Delete note"
-								>
-									<Trash2
-										size={16}
-										className="text-(--color-danger)"
-									/>
-								</NoteHeaderButton>
-							</>
-						)}
 					</div>
 				</div>
 			</div>
 
-			{/* Editor/Preview Area */}
-			<div
-				className="flex-1 overflow-auto rounded-lg"
-				style={{
-					border: isEditing
-						? "1px solid rgba(99,102,241,0.3)"
-						: "1px solid transparent",
-					boxShadow: isEditing
-						? "0 0 0 2px rgba(99,102,241,0.1)"
-						: "none",
-				}}
-				onMouseDown={(e) => {
-					e.stopPropagation();
-					if (!isEditing) {
-						onOpenEditor(note._id);
-					}
-				}}
-				onTouchStart={(e) => {
-					if (isEditing) {
-						e.stopPropagation();
-					}
-				}}
-			>
-				{isEditing ? (
-					<RichTextEditor
-						content={note.content}
-						placeholder="Write something…"
-						onChange={(html) => onContentChange(note._id, html)}
-						hideToolbar
-						onReady={onEditorReady}
-					/>
-				) : (
-					<div
-						className="note-content-area max-w-none flex-1 cursor-text"
-						onTouchEnd={(e) => onPreviewTouchEnd(e, note._id)}
-						onClick={() => onOpenEditor(note._id)}
-						dangerouslySetInnerHTML={{ __html: note.content }}
-					/>
-				)}
-			</div>
+			{/* Always-live editor: click the canvas and just type. The header
+				remains the drag handle; the body never starts a note drag. */}
+			<RichTextEditor
+				content={note.content || ""}
+				placeholder="Write something…"
+				onChange={(html) => onContentChange(note._id, html)}
+				hideToolbar
+				autoFocus={autoFocus}
+				onReady={(ed) => onEditorReady(note._id, ed)}
+				onFocus={() => onFocusNote(note._id)}
+				onBlur={() => onBlurNote(note._id)}
+				className="flex-1"
+			/>
+
+			{/* Idle drag shield: same size as the note, only while not editing.
+				Press-and-drag moves the note (events bubble to the note root);
+				a plain click focuses the editor with caret precision. Header
+				controls, resize and linking handles sit above it (z-10). */}
+			{!isFocused && (
+				<div
+					className="absolute inset-0 z-[5] cursor-grab active:cursor-grabbing"
+					onMouseDown={(e) => {
+						// Record only: focusing here would unmount this shield
+						// mid-gesture (focus → isFocused) and destabilize the
+						// press. Tracking bubbles to the note root.
+						pressPosRef.current = {
+							x: e.clientX,
+							y: e.clientY,
+						};
+					}}
+					onClick={(e) => {
+						// Focus after the gesture completes, when targets are
+						// stable — a genuine click starts typing exactly where
+						// hit; a drag release does nothing.
+						const p = pressPosRef.current;
+						pressPosRef.current = null;
+						if (
+							!p ||
+							Math.hypot(e.clientX - p.x, e.clientY - p.y) > 5
+						)
+							return;
+						const root =
+							e.currentTarget
+								.parentElement as HTMLElement | null;
+						if (root)
+							focusEditorAtPoint(root, e.clientX, e.clientY);
+					}}
+				/>
+			)}
 
 			{/* Resize Handle */}
 			<div
+				data-note-control
 				onMouseDown={(e) => onResizeMouseDown(e, note._id)}
 				onTouchStart={(e) => onResizeTouchStart(e, note._id)}
-				className="absolute right-0 bottom-0 flex items-center justify-center opacity-30"
+				className="absolute right-0 bottom-0 z-10 flex items-center justify-center opacity-30"
 				style={{
 					width: isMobile ? 32 : 20,
 					height: isMobile ? 32 : 20,
@@ -478,6 +545,7 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 
 			{/* Left Connection Point (drop target) */}
 			<div
+				data-note-control
 				className="absolute top-1/2 -left-3.5 z-10 flex h-[26px] w-[26px] -translate-y-1/2 items-center justify-center"
 				style={{
 					cursor: "crosshair",
@@ -517,6 +585,7 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 
 			{/* Right Connection Point (drag to link) */}
 			<div
+				data-note-control
 				onMouseDown={(e) => onLinkingStart(e, note._id)}
 				onTouchStart={(e) => onLinkingStartTouch(e, note._id)}
 				className={`absolute top-1/2 left-full z-10 flex h-[26px] w-[26px] -translate-x-1/2 -translate-y-1/2 items-center justify-center ${
@@ -547,6 +616,52 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 			</div>
 		</div>
 	);
+};
+
+/**
+ * Focuses the note's editor, placing the caret at the given viewport point
+ * when it lands inside the editable area (otherwise focuses the editor end).
+ * Used by the idle drag overlay so a click starts typing exactly where hit.
+ */
+const focusEditorAtPoint = (noteRoot: HTMLElement, x: number, y: number) => {
+	const ed = noteRoot.querySelector(
+		'[contenteditable="true"]',
+	) as HTMLElement | null;
+	if (!ed) return;
+	const doc = noteRoot.ownerDocument;
+	try {
+		let range: Range | null = null;
+		if (typeof doc.caretRangeFromPoint === "function") {
+			range = doc.caretRangeFromPoint(x, y);
+		} else {
+			const pos = (doc as Document & {
+				caretPositionFromPoint?: (
+					x: number,
+					y: number,
+				) => { offsetNode: Node; offset: number } | null;
+			}).caretPositionFromPoint?.(x, y);
+			if (pos) {
+				range = doc.createRange();
+				range.setStart(pos.offsetNode, pos.offset);
+				range.collapse(true);
+			}
+		}
+		const sel = doc.getSelection();
+		if (
+			range &&
+			sel &&
+			(ed === range.commonAncestorContainer ||
+				ed.contains(range.commonAncestorContainer))
+		) {
+			sel.removeAllRanges();
+			sel.addRange(range);
+			ed.focus({ preventScroll: true });
+			return;
+		}
+	} catch {
+		/* fall through to plain focus */
+	}
+	ed.focus({ preventScroll: true });
 };
 
 const MemoNote = React.memo(NoteWindow);
@@ -615,7 +730,6 @@ const CanvasPage: React.FC = () => {
 	// Active Element References
 	const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
 	const [resizingNoteId, setResizingNoteId] = useState<string | null>(null);
-	const [activeEditId, setActiveEditId] = useState<string | null>(null);
 	const [isFullScreen, setIsFullScreen] = useState(false);
 	const [selectedTool, setSelectedTool] = useState<"select" | "pan">(
 		"select",
@@ -643,20 +757,69 @@ const CanvasPage: React.FC = () => {
 		});
 	}, []);
 
-	// Active rich-text editor instance (for the header toolbar) + autosave state.
-	const [editEditor, setEditEditor] = useState<Editor | null>(null);
+	// Notes size themselves to content (height auto, no scrollbar), so link
+	// endpoints use measured DOM heights instead of the stored height field.
+	const [noteHeights, setNoteHeights] = useState<Record<string, number>>({});
+	useEffect(() => {
+		const root = containerRef.current;
+		if (!root) return;
+		const ro = new ResizeObserver((entries) => {
+			setNoteHeights((prev) => {
+				let changed = false;
+				const next = { ...prev };
+				for (const en of entries) {
+					const id = (en.target as HTMLElement).getAttribute(
+						"data-note-id",
+					);
+					if (!id) continue;
+					// Border-box: contentRect excludes the note's p-4 padding
+					// (32px), which put every endpoint ~16px above center.
+					const bb = (
+						en as ResizeObserverEntry & {
+							borderBoxSize?: { blockSize: number }[];
+						}
+					).borderBoxSize;
+					const h =
+						bb && bb[0]
+							? bb[0].blockSize
+							: en.contentRect.height;
+					if (Math.abs((next[id] ?? -1) - h) > 0.5) {
+						next[id] = h;
+						changed = true;
+					}
+				}
+				return changed ? next : prev;
+			});
+		});
+		root.querySelectorAll(".canvas-note").forEach((el) =>
+			ro.observe(el, { box: "border-box" }),
+		);
+		return () => ro.disconnect();
+		// Length only: content edits don't add/remove elements, and existing
+		// observations keep firing on size changes. (Resubscribing per
+		// keystroke was a major source of lag.)
+	}, [notes.length]);
+
+	const effH = useCallback(
+		(n: Note) => noteHeights[n._id] ?? 140,
+		[noteHeights],
+	);
+	// Ref mirror for callbacks that read notes via notesRef (no state access).
+	const noteHeightsRef = useRef<Record<string, number>>({});
+	useEffect(() => {
+		noteHeightsRef.current = noteHeights;
+	}, [noteHeights]);
+	const effHById = (id: string) => noteHeightsRef.current[id] ?? 140;
+
+	// Autosave state for note edits.
 	const [saveStatus, setSaveStatus] = useState<Record<string, SaveStatus>>(
 		{},
 	);
 	const saveTimerRef = useRef<number | null>(null);
-	const pendingSaveRef = useRef<{
-		id: string;
-		changes: Record<string, unknown>;
-	} | null>(null);
-	const [colorPickerOpenId, setColorPickerOpenId] = useState<string | null>(
-		null,
+	const pendingSavesRef = useRef<Record<string, Record<string, unknown>>>(
+		{},
 	);
-	// const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
+
 
 	const containerRef = useRef<HTMLDivElement>(null);
 	const canvasRef = useRef<HTMLDivElement>(null);
@@ -829,7 +992,7 @@ const CanvasPage: React.FC = () => {
 		const radius = Math.max(28 / scaleRef.current, 14);
 		for (const target of notesRef.current) {
 			if (target._id === sourceId) continue;
-			const ly = target.y + (target.height || 140) / 2;
+			const ly = target.y + effHById(target._id) / 2;
 			if (Math.hypot(pos.x - target.x, pos.y - ly) <= radius) {
 				addConnection(sourceId, target._id);
 				break;
@@ -879,7 +1042,7 @@ const CanvasPage: React.FC = () => {
 			let dropId: string | null = null;
 			for (const target of notesRef.current) {
 				if (target._id === sourceId) continue;
-				const ly = target.y + (target.height || 140) / 2;
+				const ly = target.y + effHById(target._id) / 2;
 				if (Math.hypot(pos.x - target.x, pos.y - ly) <= radius) {
 					dropId = target._id;
 					break;
@@ -899,9 +1062,9 @@ const CanvasPage: React.FC = () => {
 				const target = targets.get(targetId);
 				if (!target) continue;
 				const x1 = note.x + (note.width || 200);
-				const y1 = note.y + (note.height || 140) / 2;
+				const y1 = note.y + effH(note) / 2;
 				const x2 = target.x;
-				const y2 = target.y + (target.height || 140) / 2;
+				const y2 = target.y + effH(target) / 2;
 				lines.push({
 					key: `${note._id}:${targetId}`,
 					x1,
@@ -914,7 +1077,7 @@ const CanvasPage: React.FC = () => {
 			}
 		}
 		return lines;
-	}, [notes]);
+	}, [notes, effH]);
 
 	// Bounding box of every line endpoint (plus the live drag cursor) so the SVG
 	// is always large enough to draw them all, no matter where the notes are.
@@ -934,7 +1097,7 @@ const CanvasPage: React.FC = () => {
 				points.push(
 					{
 						x: src.x + (src.width || 200),
-						y: src.y + (src.height || 140) / 2,
+						y: src.y + effH(src) / 2,
 					},
 					linkMousePos,
 				);
@@ -952,7 +1115,7 @@ const CanvasPage: React.FC = () => {
 			width: Math.max(...xs) - minX + pad,
 			height: Math.max(...ys) - minY + pad,
 		};
-	}, [connectionLines, isLinking, linkingSourceId, linkMousePos, notes]);
+	}, [connectionLines, isLinking, linkingSourceId, linkMousePos, notes, effH]);
 
 	// Helper to zoom towards a specific point
 	/**
@@ -1060,6 +1223,11 @@ const CanvasPage: React.FC = () => {
 				);
 				if (moveDist > 3) {
 					setIsDraggingNode(true);
+					// A real drag won over editing: drop focus so stray keys
+					// can't type mid-drag.
+					(
+						document.activeElement as HTMLElement | null
+					)?.blur?.();
 				}
 				return;
 			}
@@ -1212,6 +1380,9 @@ const CanvasPage: React.FC = () => {
 			if (!isDraggingNode) {
 				if (movedDistance > 4) {
 					setIsDraggingNode(true);
+					(
+						document.activeElement as HTMLElement | null
+					)?.blur?.();
 				} else {
 					return;
 				}
@@ -1284,9 +1455,19 @@ const CanvasPage: React.FC = () => {
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
+			// Escape always just drops focus (hides the format bar).
+			if (e.key === "Escape") {
+				(document.activeElement as HTMLElement | null)?.blur?.();
+				return;
+			}
+
+			// Never hijack keystrokes typed into inputs or note editors.
+			const t = e.target as HTMLElement | null;
 			if (
 				e.target instanceof HTMLTextAreaElement ||
-				e.target instanceof HTMLInputElement
+				e.target instanceof HTMLInputElement ||
+				t?.isContentEditable ||
+				t?.closest?.('[contenteditable="true"]')
 			)
 				return;
 
@@ -1390,6 +1571,9 @@ const CanvasPage: React.FC = () => {
 		try {
 			const { data } = await api.post("/canvas", newNoteData);
 			setNotes([...notes, data]);
+			// Focus the fresh note so the user can just start typing.
+			setAutoFocusId(data._id);
+			setFocusedNoteId(data._id);
 		} catch (error) {
 			console.error("Failed to create note", error);
 		}
@@ -1408,6 +1592,22 @@ const CanvasPage: React.FC = () => {
 	const deleteNote = useCallback(async (id: string) => {
 		try {
 			await api.delete(`/canvas/${id}`);
+			editorsRef.current.delete(id);
+			delete pendingSavesRef.current[id];
+			delete pendingContentRef.current[id];
+			setFocusedNoteId((prev) => (prev === id ? null : prev));
+			setNoteHeights((prev) => {
+				if (!(id in prev)) return prev;
+				const next = { ...prev };
+				delete next[id];
+				return next;
+			});
+			setSaveStatus((prev) => {
+				if (!(id in prev)) return prev;
+				const next = { ...prev };
+				delete next[id];
+				return next;
+			});
 			setNotes((prev) =>
 				prev
 					.filter((n) => n._id !== id)
@@ -1427,24 +1627,33 @@ const CanvasPage: React.FC = () => {
 		}
 	}, []);
 
+	// Per-note pending saves: typing in one note must never drop another
+	// note's unsaved changes, and each indicator tracks only its own note.
 	const flushSave = useCallback(async () => {
 		if (saveTimerRef.current) {
 			clearTimeout(saveTimerRef.current);
 			saveTimerRef.current = null;
 		}
-		const pending = pendingSaveRef.current;
-		if (!pending) return;
-		pendingSaveRef.current = null;
-		try {
-			await api.put(`/canvas/${pending.id}`, pending.changes);
-			setSaveStatus((s) => ({ ...s, [pending.id]: "saved" }));
-			window.setTimeout(() => {
-				setSaveStatus((s) => ({ ...s, [pending.id]: "idle" }));
-			}, 1500);
-		} catch (error) {
-			console.error("Failed to save note changes", error);
-			setSaveStatus((s) => ({ ...s, [pending.id]: "error" }));
-		}
+		const entries = Object.entries(pendingSavesRef.current);
+		pendingSavesRef.current = {};
+		if (entries.length === 0) return;
+		await Promise.all(
+			entries.map(async ([id, changes]) => {
+				try {
+					await api.put(`/canvas/${id}`, changes);
+					setSaveStatus((s) => ({ ...s, [id]: "saved" }));
+					window.setTimeout(() => {
+						// Only clear if nothing newer started saving meanwhile.
+						setSaveStatus((s) =>
+							s[id] === "saved" ? { ...s, [id]: "idle" } : s,
+						);
+					}, 1500);
+				} catch (error) {
+					console.error("Failed to save note changes", error);
+					setSaveStatus((s) => ({ ...s, [id]: "error" }));
+				}
+			}),
+		);
 	}, []);
 
 	const scheduleSave = useCallback(() => {
@@ -1457,27 +1666,51 @@ const CanvasPage: React.FC = () => {
 
 	const queueChange = useCallback(
 		(id: string, changes: Record<string, unknown>) => {
-			pendingSaveRef.current = {
-				id,
-				changes: {
-					...(pendingSaveRef.current?.id === id
-						? pendingSaveRef.current.changes
-						: {}),
-					...changes,
-				},
+			pendingSavesRef.current[id] = {
+				...pendingSavesRef.current[id],
+				...changes,
 			};
-			setSaveStatus((s) => ({ ...s, [id]: "saving" }));
+			setSaveStatus((s) =>
+				s[id] === "saving" ? s : { ...s, [id]: "saving" },
+			);
 			scheduleSave();
 		},
 		[scheduleSave],
 	);
 
+	// Trailing mirror of editor content into state. The editor owns its text,
+	// so parent re-renders (page, minimap lines, export data) catch up on
+	// pause instead of on every keystroke — this is what keeps typing smooth.
+	const pendingContentRef = useRef<Record<string, string>>({});
+	const contentSyncTimer = useRef<number | null>(null);
+
 	const updateNoteContent = useCallback(
 		(id: string, content: string) => {
-			setNotes((prev) =>
-				prev.map((n) => (n._id === id ? { ...n, content } : n)),
-			);
+			// Save path always sees every keystroke immediately.
 			queueChange(id, { content });
+			// Render path catches up trailing.
+			pendingContentRef.current[id] = content;
+			if (contentSyncTimer.current)
+				clearTimeout(contentSyncTimer.current);
+			contentSyncTimer.current = window.setTimeout(() => {
+				contentSyncTimer.current = null;
+				const pending = pendingContentRef.current;
+				pendingContentRef.current = {};
+				const ids = Object.keys(pending);
+				if (ids.length === 0) return;
+				setNotes((prev) => {
+					let changed = false;
+					const next = prev.map((n) => {
+						const c = pending[n._id];
+						if (c !== undefined && c !== n.content) {
+							changed = true;
+							return { ...n, content: c };
+						}
+						return n;
+					});
+					return changed ? next : prev;
+				});
+			}, 350);
 		},
 		[queueChange],
 	);
@@ -1504,52 +1737,60 @@ const CanvasPage: React.FC = () => {
 		}
 	}, []);
 
-	const closeEditor = useCallback(
-		(id?: string | null) => {
-			if (saveTimerRef.current) {
-				clearTimeout(saveTimerRef.current);
-				saveTimerRef.current = null;
+	// Two-step clear-board confirmation (resets if abandoned).
+	const [clearStep, setClearStep] = useState<0 | 1 | 2>(0);
+	const clearTimer = useRef<number | null>(null);
+	const armClearReset = () => {
+		if (clearTimer.current) clearTimeout(clearTimer.current);
+		clearTimer.current = window.setTimeout(() => {
+			clearTimer.current = null;
+			setClearStep(0);
+		}, 5000);
+	};
+
+	const handleClearBoard = async () => {
+		if (notes.length === 0) return;
+		if (clearStep < 2) {
+			setClearStep((s) => (s === 0 ? 1 : 2));
+			armClearReset();
+			return;
+		}
+		if (clearTimer.current) {
+			clearTimeout(clearTimer.current);
+			clearTimer.current = null;
+		}
+		setClearStep(0);
+		try {
+			await api.delete("/canvas");
+			editorsRef.current.clear();
+			pendingSavesRef.current = {};
+			pendingContentRef.current = {};
+			setNotes([]);
+			setNoteHeights({});
+			setSaveStatus({});
+			setFocusedNoteId(null);
+			setAutoFocusId(null);
+			toast.success("Board cleared");
+		} catch (error) {
+			console.error("Failed to clear board", error);
+			toast.error("Failed to clear board");
+		}
+	};
+
+	// Flush any pending autosave when leaving the page.
+	useEffect(() => {
+		return () => {
+			if (contentSyncTimer.current) {
+				clearTimeout(contentSyncTimer.current);
+				contentSyncTimer.current = null;
+			}
+			if (clearTimer.current) {
+				clearTimeout(clearTimer.current);
+				clearTimer.current = null;
 			}
 			flushSave();
-			if (id) setSaveStatus((s) => ({ ...s, [id]: "idle" }));
-			setActiveEditId(null);
-			setEditEditor(null);
-		},
-		[flushSave],
-	);
-
-	useEffect(() => {
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") {
-				closeEditor(activeEditId);
-			}
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [closeEditor, activeEditId]);
-
-	useEffect(() => {
-		if (!activeEditId) return;
-		const onDown = (e: MouseEvent) => {
-			const target = e.target as HTMLElement | null;
-			if (!target || !target.closest) return;
-			const inTopTools = topToolsRef.current?.contains(target);
-			if (inTopTools) return;
-			const inControls = target.closest(".canvas-controls");
-			if (inControls) return;
-			const noteEl = target.closest(".canvas-note");
-			if (
-				!noteEl ||
-				noteEl.getAttribute("data-note-id") !== activeEditId
-			) {
-				closeEditor(activeEditId);
-			}
-		};
-		// Capture phase so the previous note's editor closes before the clicked
-		// note's own handler opens its editor (allows switching edits between notes).
-		document.addEventListener("mousedown", onDown, true);
-		return () => document.removeEventListener("mousedown", onDown, true);
-	}, [activeEditId, closeEditor]);
+	}, [flushSave]);
 
 	const resetView = () => {
 		setScale(1);
@@ -1567,6 +1808,9 @@ const CanvasPage: React.FC = () => {
 			if (isLinking) return;
 			if (selectedTool === "pan") return;
 
+			// Drag-vs-edit is decided before this runs (idle shield focuses,
+			// focused editor keeps the press local), so tracking always starts
+			// here. A real drag blurs the editor at the movement threshold.
 			if (selectedTool === "select") {
 				setDraggedNoteId(id);
 				mousePosRef.current = { x: e.clientX, y: e.clientY };
@@ -1601,32 +1845,63 @@ const CanvasPage: React.FC = () => {
 		[selectedTool, isLinking],
 	);
 
-	const handleOpenEditor = useCallback((id: string) => {
-		setActiveEditId(id);
-		setSaveStatus((s) => ({ ...s, [id]: "idle" }));
+	// When an editing session started (to tell a fresh double-click open apart
+	/**
+	 * Focus tracking for the shared top toolbar: it always drives whichever
+	 * note's editor is currently focused. editorsRef holds every live editor
+	 * instance (one per note — notes are always editable, there is no
+	 * open/close edit mode).
+	 */
+	const editorsRef = useRef(new Map<string, Editor>());
+	const [focusedNoteId, setFocusedNoteId] = useState<string | null>(null);
+	const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
+	const focusedEditor = focusedNoteId
+		? (editorsRef.current.get(focusedNoteId) ?? null)
+		: null;
+
+	const handleEditorReady = useCallback((id: string, editor: Editor) => {
+		editorsRef.current.set(id, editor);
 	}, []);
 
-	const handleToggleColorPicker = useCallback((id: string) => {
-		setColorPickerOpenId((prev) => (prev === id ? null : id));
+	const handleFocusNote = useCallback((id: string) => {
+		bringToFront(id);
+		setFocusedNoteId(id);
+	}, [bringToFront]);
+
+	// True while a toolbar popup that steals focus (link dialog) is open: the
+	// resulting editor blur must not hide the toolbar out from under it.
+	const toolbarLockRef = useRef(false);
+
+	// Sidebar width for sizing the format bar: 100dvw minus the sidebar
+	// (from localStorage, like AppLayout) minus margins. On mobile the
+	// sidebar is a drawer, so it takes no canvas space.
+	const readSidebarWidth = () => {
+		if (typeof window === "undefined" || window.innerWidth < 768) return 0;
+		const saved = parseInt(
+			localStorage.getItem("sidebar-width") || "",
+			10,
+		);
+		return Number.isFinite(saved) && saved > 0 ? saved : 260;
+	};
+	const formatMaxWidth =
+		containerSize.width > 0
+			? containerSize.width - 48
+			: `calc(100dvw - ${readSidebarWidth()}px - 48px)`;
+	// Compact essentials+More mode is only for narrow desktop canvases —
+	// mobile (<md) always shows every tool, wrapped inside the width above.
+	const tbCompact =
+		!isMobile && containerSize.width > 0 && containerSize.width < 560;
+
+	const handleBlurNote = useCallback((id: string) => {
+		if (toolbarLockRef.current) return;
+		setFocusedNoteId((prev) => (prev === id ? null : prev));
 	}, []);
 
 	const handleNoteHover = useCallback((id: string | null) => {
 		setHoveredNoteId(id);
 	}, []);
 
-	const handleEditorReady = useCallback((editor: Editor) => {
-		setEditEditor(editor);
-	}, []);
 
-	const handlePreviewTouchEnd = useCallback(
-		(e: React.TouchEvent, id: string) => {
-			e.stopPropagation();
-			if (!touchMovedRef.current) {
-				setActiveEditId(id);
-			}
-		},
-		[],
-	);
 
 	const handleResizeMouseDown = useCallback(
 		(e: React.MouseEvent, id: string) => {
@@ -1788,7 +2063,7 @@ const CanvasPage: React.FC = () => {
 									src.x + (src.width || 200) - svgBounds.x;
 								const sy =
 									src.y +
-									(src.height || 140) / 2 -
+									effH(src) / 2 -
 									svgBounds.y;
 								const tx = linkMousePos.x - svgBounds.x;
 								const ty = linkMousePos.y - svgBounds.y;
@@ -1812,29 +2087,27 @@ const CanvasPage: React.FC = () => {
 						note={note}
 						isMobile={isMobile}
 						isLinking={isLinking}
-						activeEditId={activeEditId}
+						isFocused={focusedNoteId === note._id}
+						autoFocus={autoFocusId === note._id}
 						hoveredNoteId={hoveredNoteId}
 						hoveredDropId={hoveredDropId}
 						linkingSourceId={linkingSourceId}
-						colorPickerOpenId={colorPickerOpenId}
 						saveStatus={saveStatus[note._id] || "idle"}
 						zIndex={zLayers[note._id] ?? 10}
 						onBringToFront={bringToFront}
 						onNoteMouseDown={handleNoteMouseDown}
 						onNoteTouchStart={handleNoteTouchStart}
 						onTitleChange={handleTitleChange}
-						onOpenEditor={handleOpenEditor}
-						onCloseEditor={closeEditor}
 						onColorChange={updateNoteColor}
 						onDelete={deleteNote}
-						onToggleColorPicker={handleToggleColorPicker}
 						onHover={handleNoteHover}
 						onLinkingStart={startLinking}
 						onLinkingStartTouch={startLinkingTouch}
-						onPreviewTouchEnd={handlePreviewTouchEnd}
 						onResizeMouseDown={handleResizeMouseDown}
 						onResizeTouchStart={handleResizeTouchStart}
 						onEditorReady={handleEditorReady}
+						onFocusNote={handleFocusNote}
+						onBlurNote={handleBlurNote}
 						onContentChange={updateNoteContent}
 					/>
 				))}
@@ -1846,6 +2119,57 @@ const CanvasPage: React.FC = () => {
 						className="animate-spin text-(--color-primary)"
 						size={32}
 					/>
+				</div>
+			)}
+
+			{/* Clear board: two explicit confirmations, then delete-all */}
+			{notes.length > 0 && (
+				<div
+					className="absolute z-[1000]"
+					style={{
+						bottom: isMobile ? 60 : 78,
+						right: isMobile ? 12 : 24,
+					}}
+				>
+					<button
+						onClick={handleClearBoard}
+						title={
+							clearStep === 0
+								? "Delete all notes"
+								: clearStep === 1
+									? "Click again to confirm"
+									: `Really delete all ${notes.length} notes?`
+						}
+						className={
+							clearStep === 0
+								? "btn btn-ghost btn-xs"
+								: clearStep === 1
+									? "btn btn-secondary btn-xs"
+									: "btn btn-xs"
+						}
+						style={
+							clearStep === 0
+								? { opacity: 0.75 }
+								: clearStep === 1
+									? {
+											border: "1px solid #f59e0b",
+											color: "#b45309",
+											background: "#fffbeb",
+										}
+									: {
+											background: "#ef4444",
+											color: "#fff",
+											fontWeight: 700,
+										}
+						}
+					>
+						<Trash2 size={14} />
+						{clearStep === 0
+							? "Clear All"
+							: clearStep === 1
+								? "Sure?"
+								: `Really... Delete ${notes.length} notes?`}
+					</button>
 				</div>
 			)}
 
@@ -1973,18 +2297,28 @@ const CanvasPage: React.FC = () => {
 				</button>
 			</div>
 
-			{/* Top Tools */}
+			{/* Top Tools: main pill + dedicated formatting row while editing */}
 			<div
 				ref={topToolsRef}
-				className="absolute z-[1000] flex w-max max-w-[94vw] flex-row items-center gap-1.5 rounded-full border border-border bg-surface p-2 shadow-lg transition-all duration-300 ease-out"
-				style={{
-					top: isMobile ? 12 : 24,
-					left: "50%",
-					transform: "translateX(-50%)",
-				}}
+				className={`absolute z-[1000] flex gap-2 ${
+					isMobile
+						? focusedEditor
+							? "top-0 right-0 left-0 flex-col-reverse items-stretch"
+							: "top-3 right-0 left-0 flex-col items-center"
+						: "w-max max-w-[94vw] flex-col items-center"
+				}`}
+				style={
+					isMobile
+						? undefined
+						: {
+								top: 24,
+								left: "50%",
+								transform: "translateX(-50%)",
+							}
+				}
 			>
 				{/* main toolbar */}
-				<div className="flex items-center gap-1.5">
+				<div className={`flex max-w-[94vw] flex-row items-center gap-1.5 rounded-full border border-border bg-surface p-2 shadow-lg transition-all duration-300 ease-out ${isMobile ? "self-center" : ""}`}>
 					<div className="flex gap-1 rounded-full bg-(--color-bg-secondary) p-1">
             {/* pointer */}
 						<button
@@ -2018,23 +2352,13 @@ const CanvasPage: React.FC = () => {
 
 					<div className="mx-1 h-6 w-px bg-border" />
 
-          {/* Undo / Redo (single toolbar, live-wired to the active note editor) */}
-          <ToolbarUndoRedo editor={editEditor} />
-          
-					{/* Rich text formatting: shown while a note is being edited, positioned
-						between the undo/redo controls and the Add Note button */}
-					{activeEditId && editEditor && (
-						<div className="flex animate-slide-in items-center gap-1.5">
-							<div className="mx-1 h-6 w-px bg-border" />
-							<RichTextToolbar editor={editEditor} />
-							<div className="mx-1 h-6 w-px bg-border" />
-						</div>
-					)}
+          {/* Undo / Redo (live-wired to whichever note is focused) */}
+          <ToolbarUndoRedo editor={focusedEditor} />
 
 					<button
 						onClick={addNote}
 						disabled={loading}
-						className="btn btn-primary flex h-9 items-center rounded-full text-[0.85rem] font-semibold" 
+						className="btn btn-primary flex h-9 items-center rounded-full text-[0.85rem] font-semibold"
 						style={{
 							padding: isMobile ? "6px 10px" : "6px 16px",
 							gap: isMobile ? 4 : 8,
@@ -2045,8 +2369,24 @@ const CanvasPage: React.FC = () => {
 					>
 						<Plus size={16} /> {!isMobile && "Add Note"}
 					</button>
-
 				</div>
+
+				{/* Rich text formatting follows the focused note (notes are
+					always editable — no edit mode). Wraps so dropdowns open fully. */}
+				{focusedEditor && (
+					<div
+						className={`animate-slide-in border border-border bg-surface shadow-lg ${isMobile ? "w-full rounded-none border-x-0 border-t-0" : "max-w-[94vw] rounded-full"}`}
+						style={isMobile ? undefined : { maxWidth: formatMaxWidth }}
+					>
+						<RichTextToolbar
+							editor={focusedEditor}
+							onOverlayOpen={(open) => {
+								toolbarLockRef.current = open;
+							}}
+							compact={tbCompact}
+						/>
+					</div>
+				)}
 			</div>
 
 			{/* Canvas Navigator */}

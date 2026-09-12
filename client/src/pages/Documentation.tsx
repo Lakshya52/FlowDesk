@@ -38,7 +38,7 @@ const navSections = [
 			"Your Team",
 			"Chat & Communication",
 			"AI Buddy",
-			"Collaborative Canvas",
+			"Canvas",
 		],
 	},
 	{

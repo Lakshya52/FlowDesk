@@ -91,6 +91,75 @@ const htmlToPlainText = (html: string): string => {
     return text;
 };
 
+/** Standalone export helpers (also used by the note three-dot menu). */
+export const downloadNoteBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
+
+export const exportNoteAsHTML = (noteContent: string, noteId: string) => {
+    const html = buildStyledHtml(noteContent);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    downloadNoteBlob(blob, `note-${noteId}.html`);
+};
+
+export const exportNoteAsTXT = (noteContent: string, noteId: string) => {
+    const text = htmlToPlainText(noteContent);
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    downloadNoteBlob(blob, `note-${noteId}.txt`);
+};
+
+export const exportNoteAsPDF = (noteContent: string) => {
+    const html = buildStyledHtml(noteContent);
+
+    // Open a hidden iframe, write the styled content, and trigger print → Save as PDF
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.opacity = '0';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (iframeDoc) {
+        iframeDoc.open();
+        iframeDoc.write(html);
+        iframeDoc.close();
+
+        // Wait for fonts/styles to load then print
+        iframe.onload = () => {
+            setTimeout(() => {
+                iframe.contentWindow?.print();
+                // Cleanup after a delay to allow print dialog to render
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                }, 1000);
+            }, 300);
+        };
+
+        // Fallback if onload doesn't fire (already loaded)
+        setTimeout(() => {
+            try {
+                iframe.contentWindow?.print();
+            } catch { /* ignore */ }
+            setTimeout(() => {
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            }, 1000);
+        }, 800);
+    }
+};
+
 const NoteExportMenu: React.FC<NoteExportMenuProps> = ({
     noteContent,
     noteId,
@@ -112,75 +181,18 @@ const NoteExportMenu: React.FC<NoteExportMenuProps> = ({
         return () => document.removeEventListener('mousedown', handler);
     }, [open]);
 
-    const downloadBlob = (blob: Blob, filename: string) => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    };
-
     const exportHTML = () => {
-        const html = buildStyledHtml(noteContent);
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        downloadBlob(blob, `note-${noteId}.html`);
+        exportNoteAsHTML(noteContent, noteId);
         setOpen(false);
     };
 
     const exportTXT = () => {
-        const text = htmlToPlainText(noteContent);
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        downloadBlob(blob, `note-${noteId}.txt`);
+        exportNoteAsTXT(noteContent, noteId);
         setOpen(false);
     };
 
     const exportPDF = () => {
-        const html = buildStyledHtml(noteContent);
-
-        // Open a hidden iframe, write the styled content, and trigger print → Save as PDF
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = 'none';
-        iframe.style.opacity = '0';
-        document.body.appendChild(iframe);
-
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (iframeDoc) {
-            iframeDoc.open();
-            iframeDoc.write(html);
-            iframeDoc.close();
-
-            // Wait for fonts/styles to load then print
-            iframe.onload = () => {
-                setTimeout(() => {
-                    iframe.contentWindow?.print();
-                    // Cleanup after a delay to allow print dialog to render
-                    setTimeout(() => {
-                        document.body.removeChild(iframe);
-                    }, 1000);
-                }, 300);
-            };
-
-            // Fallback if onload doesn't fire (already loaded)
-            setTimeout(() => {
-                try {
-                    iframe.contentWindow?.print();
-                } catch { /* ignore */ }
-                setTimeout(() => {
-                    if (document.body.contains(iframe)) {
-                        document.body.removeChild(iframe);
-                    }
-                }, 1000);
-            }, 800);
-        }
-
+        exportNoteAsPDF(noteContent);
         setOpen(false);
     };
 
