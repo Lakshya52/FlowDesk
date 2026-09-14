@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import Avatar from '../components/common/Avatar';
+import Modal from '../components/common/Modal';
 import { useAuthStore } from '../store/authStore';
 import {
     Plus, Users, Trash2, UserPlus, UserMinus,
@@ -429,19 +430,10 @@ const TeamsPage: React.FC = () => {
             )}
 
             {/* ── Create Team Modal ──────────────────────────────────── */}
-            {showCreate && (
-                <div
-                    style={{
-                        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 3000, backdropFilter: 'blur(2px)',
-                    }}
-                    onClick={() => { setShowCreate(false); setForm({ name: '', description: '', members: [], manager: '' }); setCreateMemberSearch(''); }}
-                >
+            <Modal isOpen={showCreate} onClose={() => { setShowCreate(false); setForm({ name: '', description: '', members: [], manager: '' }); setCreateMemberSearch(''); }} zIndex={4950}>
                     <div
                         className="card animate-fade-in"
-                        style={{ width: '100%', maxWidth: 460, padding: 28, margin: 16 }}
-                        onClick={e => e.stopPropagation()}
+                        style={{ width: 'min(460px, calc(100vw - 32px))', padding: 28, maxHeight: '88vh', overflowY: 'auto' }}
                     >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
                             <div style={{
@@ -574,27 +566,18 @@ const TeamsPage: React.FC = () => {
                             </div>
                         </form>
                     </div>
-                </div>
-            )}
+            </Modal>
 
             {/* ── Manage Team Modal ──────────────────────────────────── */}
             {showManage && selectedTeam && (
-                <div
-                    style={{
-                        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 3000, backdropFilter: 'blur(2px)',
-                    }}
-                    onClick={() => setShowManage(false)}
-                >
+            <Modal isOpen={showManage} onClose={() => setShowManage(false)} zIndex={4960}>
                     <div
                         className="card animate-fade-in"
                         style={{
-                            width: '100%', maxWidth: 520, margin: 16,
+                            width: 'min(520px, calc(100vw - 32px))',
                             padding: 0, overflow: 'hidden',
                             maxHeight: '88vh', display: 'flex', flexDirection: 'column',
                         }}
-                        onClick={e => e.stopPropagation()}
                     >
                         {/* Modal header + tabs */}
                         <div style={{ padding: '20px 22px 0', borderBottom: '1px solid var(--color-border, #e2e8f0)', flexShrink: 0 }}>
@@ -868,7 +851,7 @@ const TeamsPage: React.FC = () => {
                             </button>
                         </div> */}
                     </div>
-                </div>
+            </Modal>
             )}
         </div>
     );

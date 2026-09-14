@@ -79,6 +79,8 @@ const Campaigns = () => {
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<{ imported: number; errors: any[] } | null>(null);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const [deletingCampaign, setDeletingCampaign] = useState<Campaign | null>(null);
+    const [deleteLeads, setDeleteLeads] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -134,9 +136,11 @@ const Campaigns = () => {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (campaignId: string) => api.delete(`/campaigns/${campaignId}`),
+        mutationFn: ({ id, withLeads }: { id: string; withLeads: boolean }) =>
+            api.delete(`/campaigns/${id}`, { params: { deleteLeads: withLeads } }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+            queryClient.invalidateQueries({ queryKey: ["campaign-leads"] });
         },
     });
 
@@ -196,14 +200,27 @@ const Campaigns = () => {
         );
     };
 
-    const handleDelete = (campaignId: string) => {
-        if (!window.confirm('Delete this campaign? This cannot be undone.')) return;
-        if (selectedCampaignId === campaignId) setSelectedCampaignId(null);
-        deleteMutation.mutate(campaignId, {
-            onError: (err: any) => {
-                setToast({ message: err.response?.data?.message || 'Failed to delete campaign', type: 'error' });
-            },
-        });
+    const handleDelete = (campaign: Campaign) => {
+        setDeletingCampaign(campaign);
+        setDeleteLeads(false);
+    };
+
+    const confirmDelete = () => {
+        if (!deletingCampaign) return;
+        const id = deletingCampaign._id;
+        if (selectedCampaignId === id) setSelectedCampaignId(null);
+        deleteMutation.mutate(
+            { id, withLeads: deleteLeads },
+            {
+                onSuccess: (res: any) => {
+                    setDeletingCampaign(null);
+                    setToast({ message: res?.data?.message || 'Campaign deleted successfully', type: 'success' });
+                },
+                onError: (err: any) => {
+                    setToast({ message: err.response?.data?.message || 'Failed to delete campaign', type: 'error' });
+                },
+            }
+        );
     };
 
     const handleCampaignEdit = (campaign: Campaign) => {
@@ -429,7 +446,7 @@ const Campaigns = () => {
                                     )}
                                     {(currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?._id === campaign.createdBy?._id) && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(campaign._id); }}
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(campaign); }}
                                             title="Delete campaign"
                                             className="bg-transparent border-none cursor-pointer text-(--color-text-tertiary) p-1 rounded-md shrink-0 leading-none hover:bg-[#fef2f2] hover:text-[#ef4444]!"
                                         >
@@ -630,6 +647,77 @@ const Campaigns = () => {
                         </div>
                     </div>
                 </Modal>
+
+            {/* Delete Campaign Modal */}
+            <Modal isOpen={!!deletingCampaign} onClose={() => { if (!deleteMutation.isPending) setDeletingCampaign(null); }}>
+                <div className="card animate-fade-in max-w-105 w-full p-0 overflow-hidden rounded-2xl" style={{padding:0}}>
+                    <div className="px-6 py-5 border-b border-(--color-border) flex items-center justify-between bg-(--color-surface)">
+                        <div className="flex items-center gap-2.5">
+                            {/* <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--color-error-light, rgba(239,68,68,0.12))' }}>
+                                <Trash2 size={18} style={{ color: 'var(--color-error)' }} />
+                            </div> */}
+                            <div>
+                                <h3 className="text-base font-bold m-0">Delete campaign?</h3>
+                                <p className="text-[0.72rem] text-(--color-text-tertiary) mt-0.5 m-0">
+                                    This cannot be undone.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            className="bg-(--color-surface-hover) border-none cursor-pointer text-(--color-text-tertiary) w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80"
+                            onClick={() => { if (!deleteMutation.isPending) setDeletingCampaign(null); }}
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+
+                    <div className="p-6 flex flex-col gap-4">
+                        <p className="text-[0.875rem] text-(--color-text) m-0 leading-relaxed">
+                            Delete <strong>{deletingCampaign?.name}</strong>
+                            {(deletingCampaign?.leadCount ?? 0) > 0 && (
+                                <> which has <strong>{deletingCampaign?.leadCount} lead{(deletingCampaign?.leadCount ?? 0) !== 1 ? 's' : ''}</strong></>
+                            )}
+                            ?
+                        </p>
+
+                        {(deletingCampaign?.leadCount ?? 0) > 0 && (
+                            <div className="rounded-xl p-3.5 flex flex-col gap-1.5" style={{ background: 'var(--color-surface-hover)', border: '1px solid var(--color-border)' }}>
+                                <label className="flex items-center gap-2.5 cursor-pointer m-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={deleteLeads}
+                                        onChange={e => setDeleteLeads(e.target.checked)}
+                                    />
+                                    <span className="text-[0.8125rem] font-semibold text-(--color-text)">
+                                        Also delete all {deletingCampaign?.leadCount} lead{(deletingCampaign?.leadCount ?? 0) !== 1 ? 's' : ''} in this campaign
+                                    </span>
+                                </label>
+                                <p className="text-[0.72rem] text-(--color-text-tertiary) m-0 pl-6 leading-relaxed">
+                                    If unchecked, the leads are kept and unassigned from this campaign.
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-2">
+                            <button
+                                className="btn btn-secondary"
+                                disabled={deleteMutation.isPending}
+                                onClick={() => setDeletingCampaign(null)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn-danger"
+                                disabled={deleteMutation.isPending}
+                                onClick={confirmDelete}
+                            >
+                                {deleteMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : null}
+                                {deleteMutation.isPending ? 'Deleting...' : 'Delete campaign'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
 
             {/* Import Leads Modal */}
             <Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportResult(null); }}>

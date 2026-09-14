@@ -15,6 +15,7 @@ import {
   Clock,
   TrendingUp,
   Users,
+  Kanban,
 } from "lucide-react";
 import {
   BarChart,
@@ -265,7 +266,8 @@ const DashboardPage: React.FC = () => {
             className="btn btn-secondary btn-sm"
             onClick={() => navigate("/tasks")}
           >
-            <CheckCircle2 size={16} /> Tasks
+            <Kanban size={16} /> Kanbans
+            {/* <CheckCircle2 size={16} /> */}
           </button>
           <button
             className="btn btn-secondary btn-sm"

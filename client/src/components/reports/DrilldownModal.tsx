@@ -155,7 +155,7 @@ const DrilldownModal: React.FC<DrilldownModalProps> = ({ isOpen, onClose, title,
             style={{
                 position: 'fixed',
                 inset: 0,
-                zIndex: 3000,
+                zIndex: 4950, // index.css scale: modal layer
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

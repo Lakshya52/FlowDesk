@@ -234,14 +234,31 @@ export const downloadCampaignSampleExcel = async (_req: AuthRequest, res: Respon
 
 export const deleteCampaign = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const campaign = await Campaign.findByIdAndDelete(req.params.id);
+        const tenantId3 = (req.user as any).tenantId?._id || (req.user as any).tenantId;
+        const campaign = await Campaign.findOneAndDelete({ _id: req.params.id, tenantId: tenantId3 });
 
         if (!campaign) {
             res.status(404).json({ success: false, message: 'Campaign not found' });
             return;
         }
 
-        const tenantId3 = (req.user as any).tenantId?._id || (req.user as any).tenantId;
+        // Optional cascade: ?deleteLeads=true removes the campaign's leads as well.
+        // Otherwise kept leads are unlinked (campaignId unset) so they don't point
+        // at a deleted campaign and stay visible under the "no campaign" filter.
+        const deleteLeads = req.query.deleteLeads === 'true' || (req.body as any)?.deleteLeads === true;
+        let deletedLeads = 0;
+        let keptLeads = 0;
+        if (deleteLeads) {
+            const r = await Lead.deleteMany({ campaignId: campaign._id, tenantId: tenantId3 });
+            deletedLeads = r.deletedCount ?? 0;
+        } else {
+            const r = await Lead.updateMany(
+                { campaignId: campaign._id, tenantId: tenantId3 },
+                { $unset: { campaignId: 1 } },
+            );
+            keptLeads = (r as any).modifiedCount ?? 0;
+        }
+
         emitCampaignDeleted(tenantId3, req.params.id as string);
 
         await ActivityLog.create({
@@ -249,10 +266,17 @@ export const deleteCampaign = async (req: AuthRequest, res: Response): Promise<v
             user: req.user!._id,
             entityType: EntityType.CAMPAIGN,
             entityId: campaign._id,
-            metadata: { name: campaign.name },
+            metadata: { name: campaign.name, deleteLeads, deletedLeads, keptLeads },
         });
 
-        res.json({ success: true, message: 'Campaign deleted successfully' });
+        res.json({
+            success: true,
+            message: deleteLeads
+                ? `Campaign deleted with ${deletedLeads} lead${deletedLeads !== 1 ? 's' : ''}`
+                : 'Campaign deleted successfully',
+            deletedLeads,
+            keptLeads,
+        });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

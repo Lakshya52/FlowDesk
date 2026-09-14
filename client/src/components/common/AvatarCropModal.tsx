@@ -84,7 +84,7 @@ const AvatarCropModal: React.FC<AvatarCropModalProps> = ({ open, imageUrl, onCan
     };
 
     return (
-        <Modal isOpen={open} onClose={onCancel} zIndex={3010}>
+        <Modal isOpen={open} onClose={onCancel} zIndex={4950}>
             <div
                 style={{
                     width: 'min(92vw, 440px)',

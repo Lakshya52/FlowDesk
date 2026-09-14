@@ -4,6 +4,8 @@ import {
     RefreshCw, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import Avatar from '../common/Avatar';
 import api from '../../lib/api';
 import { useCrmSocket } from '../../hooks/useCrmSocket';
 
@@ -21,11 +23,6 @@ const ENTITY_ICONS: Record<string, React.ReactNode> = {
     campaign: <Target size={14} />,
     lead: <PhoneCall size={14} />,
 };
-
-const AVATAR_COLORS = ['#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'];
-
-const getInitials = (name: string) =>
-    name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
 const formatDateShort = (d?: string) => {
     if (!d) return '';
@@ -46,6 +43,7 @@ const CrmLogs = () => {
     const [filterEntity, setFilterEntity] = useState('');
     const [searchAction, setSearchAction] = useState('');
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [manualRefreshing, setManualRefreshing] = useState(false);
 
     const queryParams: any = { limit: '100' };
     if (filterEntity) queryParams.entityType = filterEntity;
@@ -64,7 +62,26 @@ const CrmLogs = () => {
 
     const logs = data?.logs || [];
     const total = data?.total || 0;
-    const refreshing = isFetching && !isLoading;
+    const refreshing = (isFetching && !isLoading) || manualRefreshing;
+
+    const handleRefresh = async () => {
+        if (manualRefreshing) return;
+        setManualRefreshing(true);
+        try {
+            // refetchQueries doesn't throw on query errors, so inspect the
+            // cache state afterwards for a reliable toast.
+            await queryClient.refetchQueries({ queryKey: ["activity-logs"] });
+            const failed = queryClient.getQueryCache().findAll({
+                predicate: (q) => q.queryKey[0] === "activity-logs" && q.state.status === "error",
+            }).length > 0;
+            if (failed) toast.error('Refresh failed — showing cached logs');
+            else toast.success('Activity logs refreshed');
+        } catch {
+            toast.error('Failed to refresh activity logs');
+        } finally {
+            setManualRefreshing(false);
+        }
+    };
 
     const renderMetadataDetails = (log: ActivityLog) => {
         const m = log.metadata;
@@ -110,7 +127,7 @@ const CrmLogs = () => {
                     <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{total} total entries</p>
                 </div>
                 <button
-                    onClick={() => queryClient.invalidateQueries({ queryKey: ["activity-logs"] })}
+                    onClick={handleRefresh}
                     disabled={refreshing}
                     className="h-9 rounded-xl border border-(--color-border) cursor-pointer flex gap-2 items-center justify-center text-(--color-text-secondary) px-3 text-sm"
                     title="Refresh"
@@ -171,7 +188,7 @@ const CrmLogs = () => {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {logs.map((log, idx) => {
+                    {logs.map((log) => {
                         const isExpanded = expandedId === log._id;
                         const hasMeta = log.metadata && Object.keys(log.metadata).length > 0;
                         return (
@@ -183,13 +200,8 @@ const CrmLogs = () => {
                                 transition: 'box-shadow 0.15s',
                             }} onClick={() => hasMeta && setExpandedId(isExpanded ? null : log._id)}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                    <div style={{
-                                        width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                                        background: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-                                        color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: '0.72rem', fontWeight: 600, marginTop: 2,
-                                    }}>
-                                        {getInitials(log.user?.name || 'U')}
+                                    <div style={{ marginTop: 2, flexShrink: 0 }}>
+                                        <Avatar src={log.user?.avatar} name={log.user?.name || 'U'} size={36} />
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>

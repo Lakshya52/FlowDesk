@@ -81,7 +81,9 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
     };
 
     el.style.opacity = "0.85";
-    el.style.zIndex = "90";
+    // Scale bands: dragged event floats above the page (100), snap ghost
+    // is an elevated drag marker (20). Never off-scale one-offs.
+    el.style.zIndex = "100";
     el.style.boxShadow = "var(--shadow-xl)";
     el.style.transition =
       "transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)"; // snap spring
@@ -95,7 +97,7 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
     border-radius: 4px;
     border: 2px dashed ${event.calendar?.color || "#6366f1"}70;
     pointer-events: none;
-    z-index: 80;
+    z-index: 20;
     top: ${el.offsetTop}px;
     transition: top 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   `;

@@ -14,20 +14,20 @@ import React, {
 } from "react";
 import {
 	Plus,
-	Minus,
 	// Maximize,
-	Shrink,
 	MousePointer2,
 	Hand,
-	Undo2,
-	Redo2,
 	Loader2,
 	RefreshCcw,
-	Expand,
 	CheckCircle2,
 	Trash2,
 	AlertCircle,
-	Palette,
+	Brush,
+	Eraser,
+	Type,
+	AlignLeft,
+	AlignCenter,
+	AlignRight,
 	EllipsisVertical,
 	FileCode,
 	FileText,
@@ -58,6 +58,89 @@ interface Note {
 	connections?: string[];
 }
 
+// Freehand brush stroke in canvas (untransformed) coordinates. Width is in
+// canvas units so strokes zoom together with the board.
+interface Stroke {
+	_id: string;
+	points: { x: number; y: number }[];
+	color: string;
+	width: number;
+}
+
+type CanvasTool = "select" | "pan" | "brush" | "eraser" | "text";
+
+// Free-standing text box on the board. Fixed typography by design (no font
+// controls) — selection, moving and resizing all happen with the Select tool.
+type TextAlign = "left" | "center" | "right";
+
+interface TextItem {
+	_id: string;
+	x: number;
+	y: number;
+	width: number;
+	text: string;
+	fontSize: number;
+	align: TextAlign;
+}
+
+const TEXT_ALIGNMENTS: { value: TextAlign; Icon: typeof AlignLeft; label: string }[] = [
+	{ value: "left", Icon: AlignLeft, label: "Align left" },
+	{ value: "center", Icon: AlignCenter, label: "Align center" },
+	{ value: "right", Icon: AlignRight, label: "Align right" },
+];
+
+const TEXT_DEFAULT_WIDTH = 240;
+const TEXT_MIN_WIDTH = 80;
+const TEXT_MAX_WIDTH = 2000;
+
+// Eraser-shaped cursor so the tool doesn't read as "draw" (crosshair).
+// Falls back to crosshair if the data URI is unsupported.
+const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg transform='rotate(-45 14 14)'%3E%3Crect x='7' y='10' width='14' height='9' rx='2.5' fill='%23f1f5f9' stroke='%23475569' stroke-width='1.5'/%3E%3Crect x='7' y='10' width='5.5' height='9' fill='%23f472b6'/%3E%3C/g%3E%3C/svg%3E") 14 14, crosshair`;
+const TEXT_DEFAULT_FONT = 15;
+const TEXT_MIN_FONT = 8;
+const TEXT_MAX_FONT = 120;
+
+const BRUSH_COLORS = [
+	"#111827",
+	"#ef4444",
+	"#f97316",
+	"#eab308",
+	"#22c55e",
+	"#06b6d4",
+	"#6366f1",
+	"#d946ef",
+];
+
+const MIN_POINT_GAP = 2.5; // canvas units between recorded points (keeps payloads small)
+const MAX_STROKE_POINTS = 2000;
+
+/** SVG path for a point list; a lone point renders as a dot. */
+const strokePath = (points: { x: number; y: number }[]) => {
+	if (points.length === 0) return "";
+	if (points.length === 1) {
+		const p = points[0];
+		return `M ${p.x} ${p.y} L ${p.x + 0.01} ${p.y + 0.01}`;
+	}
+	return `M ${points[0].x} ${points[0].y}` + points.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("");
+};
+
+/** Distance from point p to segment ab (canvas units). Used by the eraser. */
+const pointSegDist = (
+	p: { x: number; y: number },
+	a: { x: number; y: number },
+	b: { x: number; y: number },
+) => {
+	const dx = b.x - a.x;
+	const dy = b.y - a.y;
+	const lenSq = dx * dx + dy * dy;
+	if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+	const t = Math.min(
+		1,
+		Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq),
+	);
+	return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+};
+
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface ConnectionLine {
@@ -72,21 +155,8 @@ interface ConnectionLine {
 
 const COLORS = ["#fef9c3", "#dcfce7", "#dbeafe", "#f3e8ff", "#fee2e2"];
 
-/** localStorage key for the canvas view state (zoom, pan, background color). */
+/** localStorage key for the canvas view state (zoom, pan). */
 const VIEW_STORAGE_KEY = "flowdesk_canvas_view";
-
-const CANVAS_BG_PRESETS: { label: string; value: string }[] = [
-	{ label: "Default", value: "" },
-	{ label: "White", value: "#ffffff" },
-	{ label: "Slate", value: "#0f172a" },
-	{ label: "Black", value: "#0a0a0a" },
-	{ label: "Indigo", value: "#1e1b4b" },
-	{ label: "Navy", value: "#172554" },
-	{ label: "Forest", value: "#14532d" },
-	{ label: "Teal", value: "#134e4a" },
-	{ label: "Olive", value: "#44403c" },
-	{ label: "Maroon", value: "#881337" },
-];
 
 /**
  * Small icon button used inside a note's unified header. Stops the event so
@@ -116,61 +186,6 @@ const NoteHeaderButton: React.FC<{
 		{children}
 	</button>
 );
-
-/**
- * Undo/Redo buttons for the top toolbar. Subscribes directly to the active
- * note's Tiptap editor (transaction/update events) so it always reflects the
- * editor's true canUndo/canRedo state and drives the undo/redo commands on it.
- */
-const ToolbarUndoRedo: React.FC<{ editor: Editor | null }> = ({ editor }) => {
-	// Force a re-render whenever the editor's history changes.
-	const [, setVersion] = useState(0);
-
-	useEffect(() => {
-		if (!editor) return;
-		const refresh = () => setVersion((v) => v + 1);
-		editor.on("transaction", refresh);
-		editor.on("update", refresh);
-		return () => {
-			editor.off("transaction", refresh);
-			editor.off("update", refresh);
-		};
-	}, [editor]);
-
-	const canUndo = !!editor?.can().undo();
-	const canRedo = !!editor?.can().redo();
-
-	return (
-		<div className="flex gap-1 rounded-full bg-(--color-bg-secondary) p-1">
-			<button
-				onClick={() => editor?.chain().focus().undo().run()}
-				disabled={!canUndo}
-				onMouseDown={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
-				}}
-				className="btn btn-xs btn-ghost h-9 w-9 rounded-full p-0"
-				style={{ opacity: canUndo ? 1 : 0.4 }}
-				title="Undo (Ctrl+Z)"
-			>
-				<Undo2 size={16} />
-			</button>
-			<button
-				onClick={() => editor?.chain().focus().redo().run()}
-				disabled={!canRedo}
-				onMouseDown={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
-				}}
-				className="btn btn-xs btn-ghost h-9 w-9 rounded-full p-0"
-				style={{ opacity: canRedo ? 1 : 0.4 }}
-				title="Redo (Ctrl+Y)"
-			>
-				<Redo2 size={16} />
-			</button>
-		</div>
-	);
-};
 
 /** Tiny autosave status shown in the note header while editing. */
 const SaveIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
@@ -350,6 +365,9 @@ const NoteWindow: React.FC<NoteWindowProps> = ({
 							>
 								<EllipsisVertical size={16} />
 							</NoteHeaderButton>
+							{/* Note menu uses z 1000 (canvas-internal), not the 50
+							    dropdown band: sibling notes stack unbounded via
+							    bring-to-front (+10/click), so 50 would sink under them. */}
 							{menuOpen && (
 								<div
 									onMouseDown={(e) => e.stopPropagation()}
@@ -666,6 +684,206 @@ const focusEditorAtPoint = (noteRoot: HTMLElement, x: number, y: number) => {
 
 const MemoNote = React.memo(NoteWindow);
 
+// Inline editor for canvas text boxes. Fixed typography by design — no font
+// controls. Enter commits, Shift+Enter adds a line, Escape cancels.
+const TextBoxEditor: React.FC<{
+	value: string;
+	onChange: (v: string) => void;
+	onCommit: () => void;
+	onCancel: () => void;
+}> = ({ value, onChange, onCommit, onCancel }) => {
+	const autoresize = (el: HTMLTextAreaElement | null) => {
+		if (!el) return;
+		el.style.height = "auto";
+		el.style.height = `${el.scrollHeight}px`;
+	};
+	return (
+		<textarea
+			autoFocus
+			ref={autoresize}
+			rows={1}
+			value={value}
+			placeholder=""
+			onChange={(e) => {
+				onChange(e.target.value);
+				autoresize(e.target);
+			}}
+			onBlur={onCommit}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" && !e.shiftKey) {
+					e.preventDefault();
+					(e.target as HTMLTextAreaElement).blur();
+				} else if (e.key === "Escape") {
+					e.stopPropagation();
+					onCancel();
+				}
+			}}
+			onMouseDown={(e) => e.stopPropagation()}
+			onTouchStart={(e) => e.stopPropagation()}
+			onDoubleClick={(e) => e.stopPropagation()}
+			style={{
+				width: "100%",
+				resize: "none",
+				overflow: "hidden",
+				background: "transparent",
+				border: "none",
+				outline: "none",
+				padding: 0,
+				margin: 0,
+				font: "inherit",
+				color: "inherit",
+				userSelect: "text",
+				WebkitUserSelect: "text",
+			}}
+		/>
+	);
+};
+
+// Circular zoom dial (see design): tick ring + live % readout. Grab the rim
+// and turn around the hub to zoom (clockwise in), double-click to reset.
+// Stops propagation so dial gestures never start board pans or drafts.
+const ZoomWheel: React.FC<{
+	size: number;
+	scale: number;
+	hovered: boolean;
+	onHoverChange: (hovered: boolean) => void;
+	onZoomAtCenter: (next: number) => void;
+	onReset: () => void;
+}> = ({ size, scale, hovered, onHoverChange, onZoomAtCenter, onReset }) => {
+	const [dragging, setDragging] = useState(false);
+	const dragRef = useRef<{ grabAngle: number; startFraction: number } | null>(null);
+	const wheelRef = useRef<HTMLDivElement | null>(null);
+
+	// Pointer angle around the hub in degrees (0° = east, clockwise positive
+	// to match SVG rotation). Null inside the hub dead zone, where tiny moves
+	// would swing the angle wildly.
+	const angleOf = (clientX: number, clientY: number): number | null => {
+		const rect = wheelRef.current?.getBoundingClientRect();
+		if (!rect) return null;
+		const dx = clientX - (rect.left + rect.width / 2);
+		const dy = clientY - (rect.top + rect.height / 2);
+		if (Math.hypot(dx, dy) < 15) return null;
+		return (Math.atan2(dy, dx) * 180) / Math.PI;
+	};
+
+	const c = size / 2;
+	const rOuter = size * 0.472;
+	const rInner = size * 0.428;
+	const TICKS = 120;
+	// Ring rotation follows zoom so turning the dial is visible, capped at a
+	// 120° sweep: 10% → 165°, 500% → 285°. The arc stays inside the visible
+	// top-left of the cropped wheel, and zooming in turns clockwise like a
+	// real knob. Tick 0 is the primary-colored pointer.
+	const fraction = Math.min(1, Math.max(0, (scale - 0.1) / (5 - 0.1)));
+	const deg = 165 + fraction * 120;
+	const ticks = [];
+	for (let i = 0; i < TICKS; i++) {
+		const a = (i / TICKS) * Math.PI * 2;
+		const inner = i === 0 ? rInner - size * 0.03 : rInner;
+		ticks.push({
+			x1: c + inner * Math.cos(a),
+			y1: c + inner * Math.sin(a),
+			x2: c + rOuter * Math.cos(a),
+			y2: c + rOuter * Math.sin(a),
+			pointer: i === 0,
+		});
+	}
+
+	return (
+		<div
+			ref={wheelRef}
+			onPointerDown={(e) => {
+				e.stopPropagation();
+				(e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+				const a = angleOf(e.clientX, e.clientY);
+				if (a === null) return;
+				dragRef.current = { grabAngle: a, startFraction: fraction };
+				setDragging(true);
+			}}
+			onPointerMove={(e) => {
+				const d = dragRef.current;
+				if (!d) return;
+				const a = angleOf(e.clientX, e.clientY);
+				if (a === null) return;
+				// Shortest signed arc from grab, in degrees; the 120° sweep
+				// spans the full zoom range, clockwise to zoom in.
+				const delta = ((((a - d.grabAngle) % 360) + 540) % 360) - 180;
+				const f = Math.min(1, Math.max(0, d.startFraction + delta / 120));
+				onZoomAtCenter(0.1 + f * (5 - 0.1));
+			}}
+			onPointerUp={() => {
+				dragRef.current = null;
+				setDragging(false);
+			}}
+			onPointerCancel={() => {
+				dragRef.current = null;
+				setDragging(false);
+			}}
+			onDoubleClick={(e) => {
+				e.stopPropagation();
+				onReset();
+			}}
+			onMouseDown={(e) => e.stopPropagation()}
+			onTouchStart={(e) => e.stopPropagation()}
+			onMouseEnter={() => onHoverChange(true)}
+			onMouseLeave={() => onHoverChange(false)}
+			title="Drag around to rotate • Double-click to reset"
+			style={{
+				width: size,
+				height: size,
+				borderRadius: "50%",
+				background: "var(--color-surface)",
+				border: "1px solid var(--color-border)",
+				boxShadow: "0 8px 28px rgba(0,0,0,0.16)",
+				cursor: dragging ? "grabbing" : "grab",
+				touchAction: "none",
+				userSelect: "none",
+				// Grow from the cropped corner so the visible quadrant scales up.
+				transform: hovered ? "scale(1.12)" : "scale(1)",
+				transformOrigin: "top left",
+				transition: "transform 0.25s ease",
+			}}
+		>
+			<svg width={size} height={size} aria-hidden>
+				<g transform={`rotate(${deg} ${c} ${c})`}>
+					{ticks.map((t, i) => (
+						<line
+							key={i}
+							x1={t.x1}
+							y1={t.y1}
+							x2={t.x2}
+							y2={t.y2}
+							stroke={
+								t.pointer
+									? "var(--color-primary)"
+									: "var(--color-text-tertiary)"
+							}
+							strokeWidth={
+								t.pointer
+									? Math.max(3, size * 0.016)
+									: Math.max(2.5, size * 0.013)
+							}
+							opacity={t.pointer ? 1 : 0.6}
+							strokeLinecap="round"
+						/>
+					))}
+				</g>
+				<text
+					x={c}
+					y={c + size * 0.048}
+					textAnchor="middle"
+					fontSize={size * 0.13}
+					fontWeight={800}
+					fill="var(--color-text)"
+					style={{ letterSpacing: "-0.02em", pointerEvents: "none" }}
+				>
+					{Math.round(scale * 100)}%
+				</text>
+			</svg>
+		</div>
+	);
+};
+
 const CanvasPage: React.FC = () => {
 	const [notes, setNotes] = useState<Note[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -699,18 +917,6 @@ const CanvasPage: React.FC = () => {
 			return { x: 0, y: 0 };
 		}
 	});
-	const [bgColor, setBgColor] = useState<string>(() => {
-		try {
-			const saved = JSON.parse(
-				localStorage.getItem(VIEW_STORAGE_KEY) || "{}",
-			);
-			return typeof saved.bgColor === "string" ? saved.bgColor : "";
-		} catch {
-			return "";
-		}
-	});
-	const [showBgMenu, setShowBgMenu] = useState(false);
-
 	const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
 	useEffect(() => {
@@ -730,8 +936,7 @@ const CanvasPage: React.FC = () => {
 	// Active Element References
 	const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
 	const [resizingNoteId, setResizingNoteId] = useState<string | null>(null);
-	const [isFullScreen, setIsFullScreen] = useState(false);
-	const [selectedTool, setSelectedTool] = useState<"select" | "pan">(
+	const [selectedTool, setSelectedTool] = useState<CanvasTool>(
 		"select",
 	);
 	const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -864,17 +1069,17 @@ const CanvasPage: React.FC = () => {
 		offsetRef.current = offset;
 	}, [offset]);
 
-	// Persist zoom/pan + background color so the view is restored next visit.
+	// Persist zoom/pan so the view is restored next visit.
 	useEffect(() => {
 		try {
 			localStorage.setItem(
 				VIEW_STORAGE_KEY,
-				JSON.stringify({ scale, offset, bgColor }),
+				JSON.stringify({ scale, offset }),
 			);
 		} catch {
 			/* storage unavailable – ignore */
 		}
-	}, [scale, offset, bgColor]);
+	}, [scale, offset]);
 
 	useEffect(() => {
 		const updateSize = () => {
@@ -888,10 +1093,217 @@ const CanvasPage: React.FC = () => {
 		return () => window.removeEventListener("resize", updateSize);
 	}, []);
 
+	// ── Brush strokes (freehand ink, persisted per user like notes) ──
+	const [strokes, setStrokes] = useState<Stroke[]>([]);
+	const strokesRef = useRef<Stroke[]>([]);
+	useEffect(() => {
+		strokesRef.current = strokes;
+	}, [strokes]);
+	const [brushColor, setBrushColor] = useState("#6366f1");
+	const [brushWidth, setBrushWidth] = useState(4);
+	// Live stroke being drawn (rendered immediately, saved on pointer-up).
+	const [liveStroke, setLiveStroke] = useState<{
+		points: { x: number; y: number }[];
+		color: string;
+		width: number;
+	} | null>(null);
+	// True while a stroke gesture is in progress (registers global pointer-up).
+	const [drawingActive, setDrawingActive] = useState(false);
+	// Mutable draw session; refs keep stable callbacks (e.g. handleMouseUp)
+	// correct without re-subscribing listeners mid-stroke.
+	const drawRef = useRef<{
+		active: boolean;
+		mode: "brush" | "erase";
+		color: string;
+		width: number;
+		points: { x: number; y: number }[];
+	} | null>(null);
+
+	const fetchStrokes = useCallback(async () => {
+		try {
+			const { data } = await api.get("/canvas/strokes");
+			if (Array.isArray(data)) setStrokes(data);
+		} catch (error) {
+			console.error("Failed to fetch strokes", error);
+		}
+	}, []);
+
+	// ── Text boxes (fixed typography; select/move/resize via Select tool) ──
+	const [texts, setTexts] = useState<TextItem[]>([]);
+	const textsRef = useRef<TextItem[]>([]);
+	useEffect(() => {
+		textsRef.current = texts;
+	}, [texts]);
+	// Selected texts (Select tool; marquee can hold several), text being
+	// edited, and the not-yet-saved draft placed with the Text tool.
+	const [selectedTextIds, setSelectedTextIds] = useState<string[]>([]);
+	const selectedTextIdsRef = useRef<string[]>([]);
+	useEffect(() => {
+		selectedTextIdsRef.current = selectedTextIds;
+	}, [selectedTextIds]);
+
+	// Members moved by the last text drag (for the mouseup save).
+	const moveTextIdsRef = useRef<string[]>([]);
+	// Marquee rubber-band in board-container px (null when inactive).
+	const [marquee, setMarquee] = useState<{
+		x0: number;
+		y0: number;
+		x1: number;
+		y1: number;
+	} | null>(null);
+	const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
+	const [editingTextId, setEditingTextId] = useState<string | null>(null);
+	const [editValue, setEditValue] = useState("");
+	const [draftText, setDraftText] = useState<{
+		x: number;
+		y: number;
+		width: number;
+	} | null>(null);
+	// Drag/resize bookkeeping for text boxes (mirrors the note pattern).
+	const [draggedTextId, setDraggedTextId] = useState<string | null>(null);
+	const [resizingTextId, setResizingTextId] = useState<string | null>(null);
+	const [isResizingText, setIsResizingText] = useState(false);
+
+	const fetchTexts = useCallback(async () => {
+		try {
+			const { data } = await api.get("/canvas/texts");
+			if (Array.isArray(data)) setTexts(data);
+		} catch (error) {
+			console.error("Failed to fetch texts", error);
+		}
+	}, []);
+
 	// Fetch notes on mount
 	useEffect(() => {
 		fetchNotes();
+		fetchStrokes();
+		fetchTexts();
+	}, [fetchStrokes, fetchTexts]);
+
+	// Open the editor for a saved text box, prefilled with its content.
+	const startTextEdit = useCallback(
+		(id: string) => {
+			const t = textsRef.current.find((x) => x._id === id);
+			if (!t) return;
+			setSelectedTextIds([id]);
+			setEditValue(t.text);
+			setEditingTextId(id);
+		},
+		[],
+	);
+
+	// Commit the editor: empty text removes the box (drafts vanish without
+	// a server call), otherwise POST for drafts / PUT for saved boxes.
+	const commitTextEdit = useCallback(async () => {
+		const value = editValue;
+		const editingId = editingTextId;
+		const draft = draftText;
+		setEditingTextId(null);
+		setDraftText(null);
+		const trimmed = value.trim();
+		if (!trimmed) {
+			if (editingId) {
+				const id = editingId;
+				setTexts((prev) => prev.filter((t) => t._id !== id));
+				setSelectedTextIds((prev) => prev.filter((x) => x !== id));
+				try {
+					await api.delete(`/canvas/texts/${id}`);
+				} catch (error) {
+					console.error("Failed to delete text", error);
+				}
+			}
+			return;
+		}
+		if (draft && !editingId) {
+			const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+			setTexts((prev) => [
+				...prev,
+				{ _id: tempId, x: draft.x, y: draft.y, width: draft.width, text: trimmed, fontSize: TEXT_DEFAULT_FONT, align: "left" },
+			]);
+			setSelectedTextIds([tempId]);
+			// Done typing → hand the user the Select tool with the new box selected.
+			setSelectedTool("select");
+			try {
+				const { data } = await api.post("/canvas/texts", {
+					x: draft.x,
+					y: draft.y,
+					width: draft.width,
+					text: trimmed,
+					fontSize: TEXT_DEFAULT_FONT,
+					align: "left",
+				});
+				setTexts((prev) => prev.map((t) => (t._id === tempId ? data : t)));
+				setSelectedTextIds([data._id]);
+			} catch (error) {
+				console.error("Failed to save text", error);
+				setTexts((prev) => prev.filter((t) => t._id !== tempId));
+				toast.error("Failed to save text");
+			}
+			return;
+		}
+		if (editingId) {
+			const id = editingId;
+			const prevText = textsRef.current.find((t) => t._id === id)?.text;
+			if (prevText === trimmed) return;
+			setTexts((prev) => prev.map((t) => (t._id === id ? { ...t, text: trimmed } : t)));
+			// Done typing → hand the user the Select tool with the box selected.
+			setSelectedTool("select");
+			try {
+				await api.put(`/canvas/texts/${id}`, { text: trimmed });
+			} catch (error) {
+				console.error("Failed to save text", error);
+				toast.error("Failed to save text");
+			}
+		}
+	}, [editValue, editingTextId, draftText]);
+
+	// Abandon the editor: drafts vanish, saved boxes keep their old text.
+	const cancelTextEdit = useCallback(() => {
+		setEditingTextId(null);
+		setDraftText(null);
 	}, []);
+
+	// Leaving the Text tool with an empty, uncommitted draft must not strand
+	// the blinking caret on the board — discard it. Runs only on actual tool
+	// transitions (tracked via ref), never while typing or clearing text.
+	const prevToolRef = useRef<CanvasTool>(selectedTool);
+	useEffect(() => {
+		if (prevToolRef.current !== selectedTool) {
+			prevToolRef.current = selectedTool;
+			if (selectedTool !== "text" && draftText && editValue.trim() === "") {
+				setDraftText(null);
+			}
+		}
+	}, [selectedTool, draftText, editValue]);
+
+	// Change a text box's alignment (optimistic, persisted).
+	const updateTextAlign = useCallback(async (id: string, align: TextAlign) => {
+		setTexts((prev) => prev.map((t) => (t._id === id ? { ...t, align } : t)));
+		if (id.startsWith("temp-")) return;
+		try {
+			await api.put(`/canvas/texts/${id}`, { align });
+		} catch (error) {
+			console.error("Failed to save text alignment", error);
+			toast.error("Failed to save alignment");
+		}
+	}, []);
+
+	// Delete a text box (Delete key while selected).
+	const deleteText = useCallback(
+		async (id: string) => {
+			setTexts((prev) => prev.filter((t) => t._id !== id));
+			setSelectedTextIds((prev) => prev.filter((x) => x !== id));
+			if (editingTextId === id) setEditingTextId(null);
+			if (id.startsWith("temp-")) return;
+			try {
+				await api.delete(`/canvas/texts/${id}`);
+			} catch (error) {
+				console.error("Failed to delete text", error);
+				toast.error("Failed to delete text");
+			}
+		},
+		[editingTextId],
+	);
 
 	/**
 	 * Initializes the canvas with the current user's saved notes
@@ -917,6 +1329,62 @@ const CanvasPage: React.FC = () => {
 			y: (clientY - rect.top - offsetRef.current.y) / scaleRef.current,
 		};
 	}, []);
+
+	// Persist a finished freehand stroke (optimistic add, swap in the real id).
+	const commitStroke = useCallback(
+		async (
+			points: { x: number; y: number }[],
+			color: string,
+			width: number,
+		) => {
+			if (points.length === 0) return;
+			const payload = {
+				points: points.slice(0, MAX_STROKE_POINTS),
+				color,
+				width,
+			};
+			const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+			setStrokes((prev) => [...prev, { _id: tempId, ...payload }]);
+			try {
+				const { data } = await api.post("/canvas/strokes", payload);
+				setStrokes((prev) =>
+					prev.map((s) => (s._id === tempId ? data : s)),
+				);
+			} catch (error) {
+				console.error("Failed to save stroke", error);
+				setStrokes((prev) => prev.filter((s) => s._id !== tempId));
+				toast.error("Failed to save drawing");
+			}
+		},
+		[],
+	);
+
+	// Delete every stroke touching point p (eraser). Optimistic remove;
+	// refetch on failure so a failed delete can't silently lose ink.
+	const eraseAt = useCallback(
+		(p: { x: number; y: number }) => {
+			const hit = new Set<string>();
+			for (const s of strokesRef.current) {
+				const r = s.width / 2 + 8;
+				const pts = s.points;
+				for (let i = 0; i < pts.length; i++) {
+					const a = pts[i];
+					const b = pts[Math.min(i + 1, pts.length - 1)];
+					if (pointSegDist(p, a, b) <= r) {
+						hit.add(s._id);
+						break;
+					}
+				}
+			}
+			if (hit.size === 0) return;
+			setStrokes((prev) => prev.filter((s) => !hit.has(s._id)));
+			hit.forEach((id) => {
+				if (id.startsWith("temp-")) return;
+				api.delete(`/canvas/strokes/${id}`).catch(() => fetchStrokes());
+			});
+		},
+		[fetchStrokes],
+	);
 
 	/**
 	 * Adds a directional connection from `sourceId` (right handle) to `targetId`
@@ -1178,6 +1646,65 @@ const CanvasPage: React.FC = () => {
 		[scale, zoomTowards],
 	);
 
+	// Begin a brush/eraser gesture. Returns false when the press belongs to
+	// a note or UI control so notes keep working under draw tools.
+	const beginDrawAt = (
+		clientX: number,
+		clientY: number,
+		target: EventTarget | null,
+	) => {
+		if (
+			(target as HTMLElement | null)?.closest?.(
+				"button, input, select, textarea, a, .canvas-note, .canvas-text, [contenteditable='true']",
+			)
+		) {
+			return false;
+		}
+		const p = screenToCanvas(clientX, clientY);
+		// Don't let keystrokes leak into a focused note editor mid-stroke.
+		(document.activeElement as HTMLElement | null)?.blur?.();
+		if (selectedTool === "brush") {
+			drawRef.current = {
+				active: true,
+				mode: "brush",
+				color: brushColor,
+				width: brushWidth,
+				points: [p],
+			};
+			setLiveStroke({ points: [p], color: brushColor, width: brushWidth });
+		} else {
+			drawRef.current = {
+				active: true,
+				mode: "erase",
+				color: "",
+				width: 0,
+				points: [],
+			};
+			eraseAt(p);
+		}
+		setDrawingActive(true);
+		mousePosRef.current = { x: clientX, y: clientY };
+		return true;
+	};
+
+	// Extend the active gesture with the latest pointer position.
+	const appendDrawAt = (clientX: number, clientY: number) => {
+		const d = drawRef.current;
+		if (!d?.active) return;
+		const p = screenToCanvas(clientX, clientY);
+		if (d.mode === "erase") {
+			eraseAt(p);
+			return;
+		}
+		const last = d.points[d.points.length - 1];
+		if (Math.hypot(p.x - last.x, p.y - last.y) < MIN_POINT_GAP) return;
+		d.points.push(p);
+		if (d.points.length > MAX_STROKE_POINTS) {
+			d.points.splice(0, d.points.length - MAX_STROKE_POINTS);
+		}
+		setLiveStroke({ points: [...d.points], color: d.color, width: d.width });
+	};
+
 	/**
 	 * Initializes interactions based on current tool mode or hotkey modifiers.
 	 * Determines whether to start panning the canvas or tracking for other behaviors.
@@ -1197,8 +1724,114 @@ const CanvasPage: React.FC = () => {
 			return;
 		}
 
+		// Brush/eraser claims empty-board presses; notes and UI keep theirs.
+		if (selectedTool === "brush" || selectedTool === "eraser") {
+			beginDrawAt(e.clientX, e.clientY, e.target);
+			return;
+		}
+
+		// Text tool drops a draft on empty board; notes/text/UI keep theirs.
+		if (selectedTool === "text" && e.button === 0) {
+			// Critical: block the mousedown default focus shift. Without this
+			// the browser yanks focus back to <body> right after the draft's
+			// autofocused editor mounts, its blur-commit fires on the empty
+			// value, and the draft is wiped within the same click.
+			e.preventDefault();
+			const el = e.target as HTMLElement | null;
+			if (
+				el?.closest?.(
+					"button, input, select, textarea, a, .canvas-note, .canvas-text, [contenteditable='true']",
+				)
+			)
+				return;
+			const p = screenToCanvas(e.clientX, e.clientY);
+			(document.activeElement as HTMLElement | null)?.blur?.();
+			cancelTextEdit();
+			setSelectedTextIds([]);
+			setEditValue("");
+			setDraftText({ x: p.x, y: p.y, width: TEXT_DEFAULT_WIDTH });
+			return;
+		}
+
+		// Select mode: background presses clear the text selection and arm
+		// the marquee (notes/text stop propagation, UI is guarded out, so a
+		// drag from here is always empty-board rubber-banding).
+		if (selectedTool === "select") {
+			setSelectedTextIds([]);
+			const el = e.target as HTMLElement | null;
+			if (
+				!el?.closest?.(
+					"button, input, select, textarea, a, [contenteditable='true']",
+				)
+			) {
+				const rect = containerRef.current?.getBoundingClientRect();
+				if (rect) {
+					marqueeStartRef.current = {
+						x: e.clientX - rect.left,
+						y: e.clientY - rect.top,
+					};
+				}
+			}
+		}
+
 		mousePosRef.current = { x: e.clientX, y: e.clientY };
 		startMousePosRef.current = { x: e.clientX, y: e.clientY };
+	};
+
+	// Grow the rubber band; returns true while marqueeing.
+	const updateMarquee = (clientX: number, clientY: number) => {
+		const start = marqueeStartRef.current;
+		if (!start || selectedTool !== "select") return false;
+		const rect = containerRef.current?.getBoundingClientRect();
+		if (!rect) return false;
+		const x = clientX - rect.left;
+		const y = clientY - rect.top;
+		if (
+			!marquee &&
+			Math.hypot(x - start.x, y - start.y) < 4
+		) {
+			return false;
+		}
+		setMarquee({ x0: start.x, y0: start.y, x1: x, y1: y });
+		return true;
+	};
+
+	// Marquee release: select every text box its rectangle touches.
+	const finishMarquee = () => {
+		const m = marquee;
+		marqueeStartRef.current = null;
+		if (!m) return false;
+		setMarquee(null);
+		const rect = containerRef.current?.getBoundingClientRect();
+		if (!rect) return true;
+		const x0 = Math.min(m.x0, m.x1);
+		const x1 = Math.max(m.x0, m.x1);
+		const y0 = Math.min(m.y0, m.y1);
+		const y1 = Math.max(m.y0, m.y1);
+		const hits: string[] = [];
+		document.querySelectorAll(".canvas-text").forEach((el) => {
+			const r = (el as HTMLElement).getBoundingClientRect();
+			const ex0 = r.left - rect.left;
+			const ex1 = r.right - rect.left;
+			const ey0 = r.top - rect.top;
+			const ey1 = r.bottom - rect.top;
+			if (ex0 <= x1 && ex1 >= x0 && ey0 <= y1 && ey1 >= y0) {
+				const id = (el as HTMLElement).getAttribute("data-text-id");
+				if (id) hits.push(id);
+			}
+		});
+		setSelectedTextIds(hits);
+		return true;
+	};
+
+	// Double-click a text box (Select tool) to edit its content.
+	const handleBoardDoubleClick = (e: React.MouseEvent) => {
+		if (selectedTool !== "select") return;
+		const el = (e.target as HTMLElement | null)?.closest?.(
+			".canvas-text",
+		) as HTMLElement | null;
+		const id = el?.getAttribute("data-text-id");
+		if (id) startTextEdit(id);
 	};
 
 	/**
@@ -1207,6 +1840,21 @@ const CanvasPage: React.FC = () => {
 	 * scaled by the current zoom level.
 	 */
 	const handleMouseMove = (e: React.MouseEvent) => {
+		// Active brush/eraser gesture owns the pointer until pointer-up.
+		if (drawRef.current?.active) {
+			appendDrawAt(e.clientX, e.clientY);
+			return;
+		}
+		// Marquee rubber-banding owns empty-board drags in Select mode.
+		if (
+			marqueeStartRef.current &&
+			!draggedNoteId &&
+			!draggedTextId &&
+			!isResizing &&
+			!isResizingText
+		) {
+			if (updateMarquee(e.clientX, e.clientY)) return;
+		}
 		if (isPanning) {
 			const dx = e.clientX - mousePosRef.current.x;
 			const dy = e.clientY - mousePosRef.current.y;
@@ -1242,6 +1890,37 @@ const CanvasPage: React.FC = () => {
 				),
 			);
 			mousePosRef.current = { x: e.clientX, y: e.clientY };
+		} else if (draggedTextId) {
+			// Text drag mirrors note drag: threshold first, then follow.
+			if (!isDraggingNode) {
+				const moveDist = Math.sqrt(
+					Math.pow(e.clientX - startMousePosRef.current.x, 2) +
+						Math.pow(e.clientY - startMousePosRef.current.y, 2),
+				);
+				if (moveDist > 3) {
+					setIsDraggingNode(true);
+					(
+						document.activeElement as HTMLElement | null
+					)?.blur?.();
+				}
+				return;
+			}
+
+			const dx = (e.clientX - mousePosRef.current.x) / scaleRef.current;
+			const dy = (e.clientY - mousePosRef.current.y) / scaleRef.current;
+			// Dragging a selected member moves the whole marquee group.
+			const sel = selectedTextIdsRef.current;
+			const moveIds =
+				sel.includes(draggedTextId) && sel.length > 0 ? sel : [draggedTextId];
+			moveTextIdsRef.current = moveIds;
+			setTexts((prev) =>
+				prev.map((t) =>
+					moveIds.includes(t._id)
+						? { ...t, x: t.x + dx, y: t.y + dy }
+						: t,
+				),
+			);
+			mousePosRef.current = { x: e.clientX, y: e.clientY };
 		} else if (isResizing && resizingNoteId) {
 			const dx = (e.clientX - mousePosRef.current.x) / scaleRef.current;
 			const dy = (e.clientY - mousePosRef.current.y) / scaleRef.current;
@@ -1257,6 +1936,9 @@ const CanvasPage: React.FC = () => {
 				),
 			);
 			mousePosRef.current = { x: e.clientX, y: e.clientY };
+		} else if (isResizingText && resizingTextId) {
+			// Corner drag scales the whole box (width + font) from the grab snapshot.
+			applyTextScale(textScaleFactor(e.clientX, e.clientY), resizingTextId);
 		}
 	};
 
@@ -1291,6 +1973,51 @@ const CanvasPage: React.FC = () => {
 				};
 
 				return;
+			}
+
+			// Single-finger draw/erase with brush tools (two fingers still pan/zoom).
+			if (selectedTool === "brush" || selectedTool === "eraser") {
+				beginDrawAt(touch.clientX, touch.clientY, e.target);
+				return;
+			}
+
+			// Single tap with the text tool drops a draft (notes/UI keep theirs).
+			if (selectedTool === "text") {
+				const el = e.target as HTMLElement | null;
+				if (
+					!el?.closest?.(
+						"button, input, select, textarea, a, .canvas-note, .canvas-text, [contenteditable='true']",
+					)
+				) {
+					const p = screenToCanvas(touch.clientX, touch.clientY);
+					(document.activeElement as HTMLElement | null)?.blur?.();
+					cancelTextEdit();
+					setSelectedTextIds([]);
+					setEditValue("");
+					setDraftText({ x: p.x, y: p.y, width: TEXT_DEFAULT_WIDTH });
+				}
+				return;
+			}
+
+			// Select mode: clear selections and arm the marquee (notes/text
+			// stop propagation, UI is guarded out, so a drag from here is
+			// empty-board rubber-banding).
+			if (selectedTool === "select") {
+				setSelectedTextIds([]);
+				const el = e.target as HTMLElement | null;
+				if (
+					!el?.closest?.(
+						"button, input, select, textarea, a, [contenteditable='true']",
+					)
+				) {
+					const rect = containerRef.current?.getBoundingClientRect();
+					if (rect) {
+						marqueeStartRef.current = {
+							x: touch.clientX - rect.left,
+							y: touch.clientY - rect.top,
+						};
+					}
+				}
 			}
 
 			mousePosRef.current = {
@@ -1352,6 +2079,23 @@ const CanvasPage: React.FC = () => {
 
 		if (movedDistance > 4) {
 			touchMovedRef.current = true;
+		}
+
+		// Active brush/eraser gesture owns the touch until touch-end.
+		if (drawRef.current?.active) {
+			appendDrawAt(touch.clientX, touch.clientY);
+			return;
+		}
+
+		// Marquee rubber-banding owns empty-board drags in Select mode.
+		if (
+			marqueeStartRef.current &&
+			!draggedNoteId &&
+			!draggedTextId &&
+			!isResizing &&
+			!isResizingText
+		) {
+			if (updateMarquee(touch.clientX, touch.clientY)) return;
 		}
 
 		if (isLinking) {
@@ -1440,6 +2184,51 @@ const CanvasPage: React.FC = () => {
 				x: touch.clientX,
 				y: touch.clientY,
 			};
+			return;
+		}
+
+		if (draggedTextId) {
+			if (!isDraggingNode) {
+				if (movedDistance > 4) {
+					setIsDraggingNode(true);
+					(
+						document.activeElement as HTMLElement | null
+					)?.blur?.();
+				} else {
+					return;
+				}
+			}
+
+			const dx =
+				(touch.clientX - mousePosRef.current.x) / scaleRef.current;
+
+			const dy =
+				(touch.clientY - mousePosRef.current.y) / scaleRef.current;
+
+			// Dragging a selected member moves the whole marquee group.
+			const sel = selectedTextIdsRef.current;
+			const moveIds =
+				sel.includes(draggedTextId) && sel.length > 0 ? sel : [draggedTextId];
+			moveTextIdsRef.current = moveIds;
+			setTexts((prev) =>
+				prev.map((t) =>
+					moveIds.includes(t._id)
+						? { ...t, x: t.x + dx, y: t.y + dy }
+						: t,
+				),
+			);
+
+			mousePosRef.current = {
+				x: touch.clientX,
+				y: touch.clientY,
+			};
+
+			return;
+		}
+
+		if (isResizingText && resizingTextId) {
+			// Corner drag scales the whole box (width + font) from the grab snapshot.
+			applyTextScale(textScaleFactor(touch.clientX, touch.clientY), resizingTextId);
 		}
 	};
 
@@ -1452,6 +2241,18 @@ const CanvasPage: React.FC = () => {
 		el.addEventListener("wheel", handleWheel, { passive: false });
 		return () => el.removeEventListener("wheel", handleWheel);
 	}, [handleWheel]);
+
+	// Spacebar-hold temporary pan (Figma-style): holding Space switches to
+	// pan, releasing it restores whatever tool was active. Refs (not state)
+	// so press/release pairs stay correct across re-renders.
+	const spacePrevTool = useRef<CanvasTool | null>(null);
+	const restoreAfterSpace = useCallback(() => {
+		if (spacePrevTool.current === null) return;
+		const prev = spacePrevTool.current;
+		spacePrevTool.current = null;
+		// Only restore if the user didn't pick another tool mid-hold.
+		setSelectedTool((cur) => (cur === "pan" ? prev : cur));
+	}, []);
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -1471,8 +2272,32 @@ const CanvasPage: React.FC = () => {
 			)
 				return;
 
+			// Hold Space for temporary pan; keyup (or window blur) restores.
+			if (e.code === "Space" && !e.repeat) {
+				e.preventDefault();
+				if (spacePrevTool.current === null && selectedTool !== "pan") {
+					spacePrevTool.current = selectedTool;
+					setSelectedTool("pan");
+				}
+				return;
+			}
+
 			if (e.key === "v" || e.key === "V") setSelectedTool("select");
 			if (e.key === "h" || e.key === "H") setSelectedTool("pan");
+			if (e.key === "b" || e.key === "B") setSelectedTool("brush");
+			if (e.key === "e" || e.key === "E") setSelectedTool("eraser");
+			if (e.key === "t" || e.key === "T") setSelectedTool("text");
+
+			// Delete selected text boxes (only with Select tool, never mid-edit).
+			if (
+				(e.key === "Delete" || e.key === "Backspace") &&
+				selectedTool === "select" &&
+				selectedTextIds.length > 0 &&
+				!editingTextId
+			) {
+				e.preventDefault();
+				selectedTextIds.forEach((id) => deleteText(id));
+			}
 
 			const rect = containerRef.current?.getBoundingClientRect();
 			if (!rect) return;
@@ -1496,17 +2321,50 @@ const CanvasPage: React.FC = () => {
 				setOffset({ x: 0, y: 0 });
 			}
 		};
+		const handleKeyUp = (e: KeyboardEvent) => {
+			if (e.code === "Space") {
+				e.preventDefault();
+				restoreAfterSpace();
+			}
+		};
+		// Losing the window mid-hold (Alt+Tab) must not strand the pan tool.
+		const handleBlur = () => restoreAfterSpace();
 		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [zoomTowards]);
+		window.addEventListener("keyup", handleKeyUp);
+		window.addEventListener("blur", handleBlur);
+		return () => {
+			window.removeEventListener("keydown", handleKeyDown);
+			window.removeEventListener("keyup", handleKeyUp);
+			window.removeEventListener("blur", handleBlur);
+		};
+	}, [zoomTowards, selectedTool, selectedTextIds, editingTextId, deleteText, restoreAfterSpace]);
 
 	/**
 	 * Completes dragging or resizing interactions and saves updated note properties
 	 * (position or dimensions) asynchronously to the backend database.
 	 */
 	const handleMouseUp = useCallback(async () => {
+		// Commit any in-progress brush stroke (eraser already applied live).
+		if (drawRef.current?.active) {
+			const d = drawRef.current;
+			drawRef.current = null;
+			setDrawingActive(false);
+			setLiveStroke(null);
+			if (d.mode === "brush") commitStroke(d.points, d.color, d.width);
+		}
+		// Marquee release selects every touched text box (clears the arm too).
+		finishMarquee();
 		const wasInteracting = isDraggingNode || isResizing;
 		const targetId = draggedNoteId || resizingNoteId;
+		const wasTextInteracting =
+			(isDraggingNode && draggedTextId) || (isResizingText && resizingTextId);
+		const textTargetIds =
+			moveTextIdsRef.current.length > 0
+				? moveTextIdsRef.current
+				: draggedTextId || resizingTextId
+					? [draggedTextId || resizingTextId as string]
+					: [];
+		moveTextIdsRef.current = [];
 
 		// Finalize any in-progress connection drag (no-op if not linking).
 		completeLink();
@@ -1515,8 +2373,11 @@ const CanvasPage: React.FC = () => {
 		setIsDraggingNode(false);
 		setIsPanning(false);
 		setIsResizing(false);
+		setIsResizingText(false);
 		setDraggedNoteId(null);
 		setResizingNoteId(null);
+		setDraggedTextId(null);
+		setResizingTextId(null);
 
 		pinchStartDistanceRef.current = null;
 		touchMovedRef.current = false;
@@ -1538,24 +2399,52 @@ const CanvasPage: React.FC = () => {
 				}
 			}
 		}
+
+		if (wasTextInteracting && textTargetIds.length > 0) {
+			await Promise.all(
+				textTargetIds
+					.filter((id) => !id.startsWith("temp-"))
+					.map(async (id) => {
+						const t = textsRef.current.find((x) => x._id === id);
+						if (!t) return;
+						try {
+							await api.put(`/canvas/texts/${id}`, {
+								x: t.x,
+								y: t.y,
+								width: t.width,
+								fontSize: t.fontSize,
+							});
+						} catch (error) {
+							console.error("Failed to save text properties", error);
+						}
+					}),
+			);
+		}
+
 	}, [
 		isDraggingNode,
 		isResizing,
 		draggedNoteId,
 		resizingNoteId,
+		draggedTextId,
+		resizingTextId,
+		isResizingText,
 		completeLink,
+		commitStroke,
+		marquee,
 	]);
 
 	useEffect(() => {
-		// Only register global listeners when actively dragging/resizing/panning/linking
-		if (!isDraggingNode && !isResizing && !isPanning && !isLinking) return;
+		// Only register global listeners when actively dragging/resizing/panning/linking/drawing/marqueeing,
+		// so an off-window release still finalizes (a stuck marquee would linger otherwise).
+		if (!isDraggingNode && !isResizing && !isResizingText && !isPanning && !isLinking && !drawingActive && !marquee) return;
 		window.addEventListener("mouseup", handleMouseUp);
 		window.addEventListener("touchend", handleMouseUp);
 		return () => {
 			window.removeEventListener("mouseup", handleMouseUp);
 			window.removeEventListener("touchend", handleMouseUp);
 		};
-	}, [handleMouseUp, isDraggingNode, isResizing, isPanning, isLinking]);
+	}, [handleMouseUp, isDraggingNode, isResizing, isResizingText, isPanning, isLinking, drawingActive, marquee]);
 
 	const addNoteAt = async (x: number, y: number) => {
 		const newNoteData = {
@@ -1737,19 +2626,32 @@ const CanvasPage: React.FC = () => {
 		}
 	}, []);
 
-	// Two-step clear-board confirmation (resets if abandoned).
+	// Two-step clear-board confirmation (resets if abandoned). The armed
+	// confirm lasts 3s — enough for a deliberate second click, short enough
+	// that a stray first click doesn't leave the red state lingering.
 	const [clearStep, setClearStep] = useState<0 | 1 | 2>(0);
 	const clearTimer = useRef<number | null>(null);
+	// ── Board-clear wipe animation ─────────────────────────────────────
+	// UX flow: user confirms clear → a light band sweeps across the board
+	// while notes fade out → the DELETE request commits once the sweep
+	// finishes. Server state is untouched until then, so a failed request
+	// simply fades the board back in instead of losing notes.
+	// Timing: WIPE_MS must stay slightly above both the sweep (0.65s in
+	// .canvas-wipe-bar) and the fade (0.55s on the transform container)
+	// defined in index.css, otherwise the board would vanish mid-sweep.
+	const [wiping, setWiping] = useState(false);
+	const wipeTimer = useRef<number | null>(null);
+	const WIPE_MS = 680;
 	const armClearReset = () => {
 		if (clearTimer.current) clearTimeout(clearTimer.current);
 		clearTimer.current = window.setTimeout(() => {
 			clearTimer.current = null;
 			setClearStep(0);
-		}, 5000);
+		}, 3000);
 	};
 
 	const handleClearBoard = async () => {
-		if (notes.length === 0) return;
+		if ((notes.length === 0 && strokes.length === 0 && texts.length === 0) || wiping) return;
 		if (clearStep < 2) {
 			setClearStep((s) => (s === 0 ? 1 : 2));
 			armClearReset();
@@ -1760,21 +2662,45 @@ const CanvasPage: React.FC = () => {
 			clearTimer.current = null;
 		}
 		setClearStep(0);
-		try {
-			await api.delete("/canvas");
-			editorsRef.current.clear();
-			pendingSavesRef.current = {};
-			pendingContentRef.current = {};
-			setNotes([]);
-			setNoteHeights({});
-			setSaveStatus({});
-			setFocusedNoteId(null);
-			setAutoFocusId(null);
-			toast.success("Board cleared");
-		} catch (error) {
-			console.error("Failed to clear board", error);
-			toast.error("Failed to clear board");
-		}
+		// Start the wipe; the delete commits inside the timer below so the
+		// user sees the full sweep before notes disappear for good.
+		setWiping(true);
+		wipeTimer.current = window.setTimeout(async () => {
+			wipeTimer.current = null;
+			try {
+				await api.delete("/canvas");
+				try {
+					await api.delete("/canvas/strokes");
+				} catch (strokeError) {
+					console.error("Failed to clear strokes", strokeError);
+				}
+				try {
+					await api.delete("/canvas/texts");
+				} catch (textError) {
+					console.error("Failed to clear texts", textError);
+				}
+				editorsRef.current.clear();
+				pendingSavesRef.current = {};
+				pendingContentRef.current = {};
+				setNotes([]);
+				setStrokes([]);
+				setTexts([]);
+				setSelectedTextIds([]);
+				setEditingTextId(null);
+				setDraftText(null);
+				setLiveStroke(null);
+				setNoteHeights({});
+				setSaveStatus({});
+				setFocusedNoteId(null);
+				setAutoFocusId(null);
+				toast.success("Board cleared");
+			} catch (error) {
+				console.error("Failed to clear board", error);
+				toast.error("Failed to clear board");
+			} finally {
+				setWiping(false);
+			}
+		}, WIPE_MS);
 	};
 
 	// Flush any pending autosave when leaving the page.
@@ -1788,6 +2714,10 @@ const CanvasPage: React.FC = () => {
 				clearTimeout(clearTimer.current);
 				clearTimer.current = null;
 			}
+			if (wipeTimer.current) {
+				clearTimeout(wipeTimer.current);
+				wipeTimer.current = null;
+			}
 			flushSave();
 		};
 	}, [flushSave]);
@@ -1796,6 +2726,21 @@ const CanvasPage: React.FC = () => {
 		setScale(1);
 		setOffset({ x: 0, y: 0 });
 	};
+
+	// Zoom-wheel hover grows the whole assembly: the crop box and the inner
+	// dial share one state + duration, so the orbs ride left smoothly as the
+	// box widens (flex reflows every animation frame).
+	const [wheelHovered, setWheelHovered] = useState(false);
+
+	// Zoom around the viewport center (used by the zoom wheel dial).
+	const zoomAtCenter = useCallback(
+		(next: number) => {
+			const rect = containerRef.current?.getBoundingClientRect();
+			if (!rect) return;
+			zoomTowards(next, rect.width / 2, rect.height / 2);
+		},
+		[zoomTowards],
+	);
 
 	// Stable per-note handlers so MemoNote's shallow prop comparison can skip
 	// re-rendering notes that didn't actually change.
@@ -1844,6 +2789,107 @@ const CanvasPage: React.FC = () => {
 		},
 		[selectedTool, isLinking],
 	);
+
+	// Text boxes only respond to the Select tool. Presses inside the inline
+	// editor or the mini toolbar stay local so typing never starts a drag.
+	const handleTextMouseDown = useCallback(
+		(e: React.MouseEvent, id: string) => {
+			if (selectedTool !== "select") return;
+			if ((e.target as HTMLElement | null)?.closest?.("textarea, input, button")) return;
+			e.stopPropagation();
+			if (isLinking) return;
+			// Preserve a marquee group when grabbing one of its members so the
+			// whole group moves; otherwise select just this box.
+			setSelectedTextIds((prev) => (prev.includes(id) ? prev : [id]));
+			setDraggedTextId(id);
+			mousePosRef.current = { x: e.clientX, y: e.clientY };
+			startMousePosRef.current = { x: e.clientX, y: e.clientY };
+		},
+		[selectedTool, isLinking],
+	);
+
+	const handleTextTouchStart = useCallback(
+		(e: React.TouchEvent, id: string) => {
+			if (e.touches.length !== 1) return;
+			if (selectedTool !== "select") return;
+			if ((e.target as HTMLElement | null)?.closest?.("textarea, input, button")) return;
+			e.stopPropagation();
+			if (isLinking) return;
+			const touch = e.touches[0];
+			touchMovedRef.current = false;
+			setSelectedTextIds((prev) => (prev.includes(id) ? prev : [id]));
+			setDraggedTextId(id);
+			mousePosRef.current = { x: touch.clientX, y: touch.clientY };
+			startMousePosRef.current = {
+				x: touch.clientX,
+				y: touch.clientY,
+			};
+		},
+		[selectedTool, isLinking],
+	);
+
+	// Grab snapshot for proportional text scaling (box + font grow together).
+	// sx/sy orient the handle: pulling outward grows (bottom-right drags
+	// down-right to enlarge).
+	const textResizeStartRef = useRef<{
+		width: number;
+		fontSize: number;
+		sx: number;
+		sy: number;
+	} | null>(null);
+
+	// Single bottom-left handle: drags scale width and font size together
+	// from the grab snapshot (dominant drag axis wins).
+	const handleTextResizeStart = useCallback(
+		(clientX: number, clientY: number, id: string, sx = 1, sy = 1) => {
+			const t = textsRef.current.find((x) => x._id === id);
+			textResizeStartRef.current = {
+				width: t?.width ?? TEXT_DEFAULT_WIDTH,
+				fontSize: t?.fontSize || TEXT_DEFAULT_FONT,
+				sx,
+				sy,
+			};
+			setSelectedTextIds((prev) => (prev.includes(id) ? prev : [id]));
+			setResizingTextId(id);
+			setIsResizingText(true);
+			mousePosRef.current = { x: clientX, y: clientY };
+		},
+		[],
+	);
+
+	// Scale factor from a corner drag: dominant axis over grab width,
+	// clamped so neither width nor font size can leave its bounds.
+	const textScaleFactor = (clientX: number, clientY: number) => {
+		const snap = textResizeStartRef.current;
+		if (!snap) return 1;
+		const dx = (clientX - mousePosRef.current.x) / scaleRef.current;
+		const dy = (clientY - mousePosRef.current.y) / scaleRef.current;
+		// Orient deltas so outward pulls are positive for this handle.
+		const hx = (snap.sx ?? 1) * dx;
+		const hy = (snap.sy ?? 1) * dy;
+		const delta = Math.abs(hx) >= Math.abs(hy) ? hx : hy;
+		const k = (snap.width + delta) / snap.width;
+		return Math.min(
+			Math.max(
+				k,
+				TEXT_MIN_WIDTH / snap.width,
+				TEXT_MIN_FONT / snap.fontSize,
+				0.1,
+			),
+			TEXT_MAX_WIDTH / snap.width,
+			TEXT_MAX_FONT / snap.fontSize,
+		);
+	};
+
+	const applyTextScale = (k: number, id: string) => {
+		const snap = textResizeStartRef.current;
+		if (!snap) return;
+		const width = snap.width * k;
+		const fontSize = Math.round(snap.fontSize * k * 10) / 10;
+		setTexts((prev) =>
+			prev.map((t) => (t._id === id ? { ...t, width, fontSize } : t)),
+		);
+	};
 
 	// When an editing session started (to tell a fresh double-click open apart
 	/**
@@ -1936,21 +2982,28 @@ const CanvasPage: React.FC = () => {
 			ref={containerRef}
 			className="overflow-hidden select-none touch-none"
 			style={{
-				position: isFullScreen ? "fixed" : "absolute",
+				position: "absolute",
 				inset: 0,
-				zIndex: isFullScreen ? 2000 : 10,
-				background: bgColor || "var(--color-bg)",
+				zIndex: 10,
+				background: "var(--color-bg)",
 				cursor: isPanning
 					? "grabbing"
 					: isLinking
 						? "crosshair"
-						: selectedTool === "pan"
-							? "grab"
-							: "auto",
+						: selectedTool === "brush"
+							? "crosshair"
+							: selectedTool === "eraser"
+								? ERASER_CURSOR
+								: selectedTool === "text"
+								? "text"
+								: selectedTool === "pan"
+									? "grab"
+									: "auto",
 			}}
 			onMouseDown={handleMouseDown}
 			onMouseMove={handleMouseMove}
 			onMouseUp={handleMouseUp}
+			onDoubleClick={handleBoardDoubleClick}
 			onMouseLeave={handleMouseUp}
 			onTouchStart={handleTouchStart}
 			onTouchMove={handleTouchMove}
@@ -1979,7 +3032,9 @@ const CanvasPage: React.FC = () => {
 				}}
 			/>
 
-			{/* Transform Container */}
+			{/* Transform Container (notes + connection lines live here).
+			    During a wipe it fades out via opacity only — transform is left
+			    alone so pan/zoom position is preserved if the clear fails. */}
 			<div
 				ref={canvasRef}
 				className="absolute origin-top-left will-change-transform"
@@ -1987,9 +3042,12 @@ const CanvasPage: React.FC = () => {
 					transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
 					//   transition: isPanning ? "none" : "transform 0.05s linear",
 					transition:
-						isPanning || isDraggingNode || isResizing
-							? "none"
-							: "transform 0.05s linear",
+						wiping
+							? "opacity 0.55s ease" // keep in sync with WIPE_MS above
+							: isPanning || isDraggingNode || isResizing || isResizingText
+								? "none"
+								: "transform 0.05s linear",
+					opacity: wiping ? 0 : 1,
 				}}
 			>
 				{/* Connection Lines */}
@@ -2111,6 +3169,229 @@ const CanvasPage: React.FC = () => {
 						onContentChange={updateNoteContent}
 					/>
 				))}
+				{/* Freehand ink layer (above notes, never intercepts pointer input) */}
+				{(strokes.length > 0 || liveStroke) && (
+					<svg
+						className="pointer-events-none absolute overflow-visible"
+						style={{ left: 0, top: 0, width: 8, height: 8, zIndex: 0 }}
+						aria-hidden
+					>
+						{strokes.map((s) => (
+							<path
+								key={s._id}
+								d={strokePath(s.points)}
+								fill="none"
+								stroke={s.color}
+								strokeWidth={s.width}
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+						))}
+						{liveStroke && liveStroke.points.length > 0 && (
+							<path
+								d={strokePath(liveStroke.points)}
+								fill="none"
+								stroke={liveStroke.color}
+								strokeWidth={liveStroke.width}
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+						)}
+					</svg>
+				)}
+				{/* Text boxes (above ink; Select moves/resizes, double-click edits).
+				    Fixed z 1000 like other board chrome so text stays above notes. */}
+				{texts.map((t) => {
+					const isSelected = selectedTextIds.includes(t._id);
+					const isEditing = editingTextId === t._id;
+					return (
+						<div
+							key={t._id}
+							data-text-id={t._id}
+							className="canvas-text"
+							onMouseDown={(e) => handleTextMouseDown(e, t._id)}
+							onTouchStart={(e) => handleTextTouchStart(e, t._id)}
+							onDoubleClick={() => {
+								if (selectedTool === "select") startTextEdit(t._id);
+							}}
+							style={{
+								position: "absolute",
+								left: t.x,
+								top: t.y,
+								// Hug the text when just viewing; fixed width while
+								// editing so there is room to type. max-content is
+								// intrinsic (ignores the zero-size transformed
+								// ancestor), unlike auto shrink-wrap which collapses
+								// to one character per line. Stored width caps wrapping.
+								display: isEditing ? "block" : "inline-block",
+								width: isEditing ? t.width : "max-content",
+								maxWidth: isEditing ? undefined : t.width,
+								zIndex: 1000,
+								padding: 8,
+								borderRadius: 0,
+								fontSize: t.fontSize || TEXT_DEFAULT_FONT,
+								fontWeight: 500,
+								lineHeight: 1.5,
+								textAlign: t.align || "left",
+								color: "var(--color-text)",
+								whiteSpace: "pre-wrap",
+								wordBreak: "break-word",
+								outline: isSelected
+									? "1.5px solid var(--color-primary)"
+									: "1px solid transparent",
+								background: isSelected
+									? "color-mix(in srgb, var(--color-primary) 6%, transparent)"
+									: "transparent",
+								cursor: selectedTool === "select" ? "move" : "default",
+							}}
+						>
+							{isEditing ? (
+								<TextBoxEditor
+									value={editValue}
+									onChange={setEditValue}
+									onCommit={commitTextEdit}
+									onCancel={cancelTextEdit}
+								/>
+							) : t.text ? (
+								<>{t.text}</>
+							) : (
+								<span style={{ opacity: 0.4 }}>
+									Empty text — double-click to edit
+								</span>
+							)}
+							{isSelected && !isEditing && (
+								<>
+									<div
+										style={{
+											position: "absolute",
+											top: -34,
+											right: 0,
+											display: "flex",
+											gap: 4,
+											background: "var(--color-surface)",
+											border: "1px solid var(--color-border)",
+											borderRadius: 999,
+											padding: 3,
+											boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+										}}
+										onMouseDown={(e) => e.stopPropagation()}
+										onTouchStart={(e) => e.stopPropagation()}
+									>
+										{TEXT_ALIGNMENTS.map(({ value, Icon, label }) => {
+											const active = (t.align || "left") === value;
+											return (
+												<button
+													key={value}
+													onClick={() => updateTextAlign(t._id, value)}
+													title={label}
+													style={{
+														border: "none",
+														cursor: "pointer",
+														display: "flex",
+														padding: 4,
+														borderRadius: 6,
+														background: active
+															? "var(--color-primary-light)"
+															: "none",
+														color: active
+															? "var(--color-primary)"
+															: "var(--color-text-secondary)",
+													}}
+												>
+													<Icon size={13} />
+												</button>
+											);
+										})}
+										<div
+											style={{
+												width: 1,
+												alignSelf: "stretch",
+												background: "var(--color-border)",
+												margin: "2px 0",
+											}}
+										/>
+										<button
+											onClick={() => deleteText(t._id)}
+											title="Delete text"
+											style={{
+												border: "none",
+												background: "none",
+												cursor: "pointer",
+												color: "var(--color-error)",
+												display: "flex",
+												padding: 4,
+											}}
+										>
+											<Trash2 size={13} />
+										</button>
+									</div>
+									<div
+										title="Resize text"
+										onMouseDown={(e) => {
+											e.stopPropagation();
+											handleTextResizeStart(e.clientX, e.clientY, t._id, 1, 1);
+										}}
+										onTouchStart={(e) => {
+											if (e.touches.length !== 1) return;
+											e.stopPropagation();
+											const touch = e.touches[0];
+											handleTextResizeStart(touch.clientX, touch.clientY, t._id, 1, 1);
+										}}
+										style={{
+											position: "absolute",
+											right: -7,
+											bottom: -7,
+											width: 13,
+											height: 13,
+											borderRadius: 0,
+											background: "var(--color-primary)",
+											border: "2px solid #fff",
+											cursor: "nwse-resize",
+											boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+										}}
+									/>
+								</>
+							)}
+						</div>
+					);
+				})}
+				{draftText && (
+					// Draft while typing: deliberately chromeless — no box, no
+					// placeholder. While still empty, a blinking caret block
+					// marks the spot so the draft is findable on the grid.
+					<div
+						className="canvas-text"
+						style={{
+							position: "absolute",
+							left: draftText.x,
+							top: draftText.y,
+							width: draftText.width,
+							zIndex: 1000,
+							padding: 8,
+							borderRadius: 8,
+							fontSize: 15,
+							fontWeight: 500,
+							lineHeight: 1.5,
+							color: "var(--color-text)",
+							outline: "none",
+							background: "transparent",
+						}}
+					>
+						{editValue === "" && (
+							<span
+								className="canvas-draft-caret"
+								aria-hidden
+								style={{ position: "absolute", left: 8, top: 8 }}
+							/>
+						)}
+						<TextBoxEditor
+							value={editValue}
+							onChange={setEditValue}
+							onCommit={commitTextEdit}
+							onCancel={cancelTextEdit}
+						/>
+					</div>
+				)}
 			</div>
 
 			{loading && (
@@ -2122,179 +3403,285 @@ const CanvasPage: React.FC = () => {
 				</div>
 			)}
 
-			{/* Clear board: two explicit confirmations, then delete-all */}
-			{notes.length > 0 && (
+			{/* Marquee rubber band (Select-tool drag on empty board). z 2000
+			    app-overlays band: the transform container scopes inner note
+			    layers, so this always paints above notes; ties with loading
+			    and wipe overlays, neither of which co-occurs with a drag. */}
+			{marquee && (
 				<div
-					className="absolute z-[1000]"
+					className="pointer-events-none absolute"
 					style={{
-						bottom: isMobile ? 60 : 78,
-						right: isMobile ? 12 : 24,
+						left: Math.min(marquee.x0, marquee.x1),
+						top: Math.min(marquee.y0, marquee.y1),
+						width: Math.abs(marquee.x1 - marquee.x0),
+						height: Math.abs(marquee.y1 - marquee.y0),
+						zIndex: 2000,
+						border: "1px solid var(--color-primary)",
+						background:
+							"color-mix(in srgb, var(--color-primary) 8%, transparent)",
+						borderRadius: 2,
 					}}
+					aria-hidden
+				/>
+			)}
+
+			{/* Wipe sweep: light band passes over the fading board on clear.
+			    z 2000 (app-overlays band) sits above notes/clear-button —
+			    whose note layers grow unbounded — and ties with the loading
+			    overlay, which never co-occurs; pointer-events-none so it
+			    never steals input. */}
+			{wiping && (
+				<div
+					className="pointer-events-none absolute inset-0 overflow-hidden"
+					style={{ zIndex: 2000 }}
+					aria-hidden
 				>
-					<button
-						onClick={handleClearBoard}
-						title={
-							clearStep === 0
-								? "Delete all notes"
-								: clearStep === 1
-									? "Click again to confirm"
-									: `Really delete all ${notes.length} notes?`
-						}
-						className={
-							clearStep === 0
-								? "btn btn-ghost btn-xs"
-								: clearStep === 1
-									? "btn btn-secondary btn-xs"
-									: "btn btn-xs"
-						}
-						style={
-							clearStep === 0
-								? { opacity: 0.75 }
-								: clearStep === 1
-									? {
-											border: "1px solid #f59e0b",
-											color: "#b45309",
-											background: "#fffbeb",
-										}
-									: {
-											background: "#ef4444",
-											color: "#fff",
-											fontWeight: 700,
-										}
-						}
-					>
-						<Trash2 size={14} />
-						{clearStep === 0
-							? "Clear All"
-							: clearStep === 1
-								? "Sure?"
-								: `Really... Delete ${notes.length} notes?`}
-					</button>
+					<div className="canvas-wipe-bar" />
 				</div>
 			)}
 
-			{/* Controls */}
-			<div
-				className={`canvas-controls absolute flex items-center rounded-xl border border-border bg-surface shadow-lg ${
-					isMobile ? "gap-2 p-1.5" : "gap-3 p-2"
-				}`}
-				style={{
-					bottom: isMobile ? 12 : 24,
-					right: isMobile ? 12 : 24,
-					color: "var(--color-text)",
-				}}
-			>
-				<button
-					className="btn btn-secondary btn-xs"
-					onClick={() => {
-						const rect =
-							containerRef.current?.getBoundingClientRect();
-						if (rect)
-							zoomTowards(
-								Math.max(scale - 0.2, 0.1),
-								rect.width / 2,
-								rect.height / 2,
-							);
+			{/* Brush settings: colors + width, visible while the brush is active */}
+			{selectedTool === "brush" && (
+				<div
+					className="absolute z-[1000] rounded-xl border border-border bg-surface shadow-lg"
+					style={{
+						// Sits above the bottom-right zoom wheel cluster.
+						bottom: isMobile ? 180 : 210,
+						right: isMobile ? 12 : 24,
+						padding: 12,
+						width: 196,
 					}}
 				>
-					<Minus size={16} />
-				</button>
-
-				<span className="w-10 text-center text-[0.8rem] font-semibold">
-					{Math.round(scale * 100)}%
-				</span>
-
-				<button
-					className="btn btn-secondary btn-xs"
-					onClick={() => {
-						const rect =
-							containerRef.current?.getBoundingClientRect();
-						if (rect)
-							zoomTowards(
-								Math.min(scale + 0.2, 5),
-								rect.width / 2,
-								rect.height / 2,
-							);
-					}}
-				>
-					<Plus size={16} />
-				</button>
-				<div className="h-5 w-px bg-border" />
-				<button
-					className="btn btn-secondary btn-xs"
-					onClick={resetView}
-					title="Reset View"
-				>
-					<RefreshCcw size={16} />
-				</button>
-				<div className="h-5 w-px bg-border" />
-				<div className="relative flex">
-					<button
-						className="btn btn-secondary btn-xs"
-						onClick={() => setShowBgMenu((v) => !v)}
-						title="Canvas Background Color"
-						aria-label="Canvas Background Color"
+					<div
+						style={{
+							fontSize: "0.7rem",
+							fontWeight: 700,
+							color: "var(--color-text-tertiary)",
+							textTransform: "uppercase",
+							letterSpacing: "0.05em",
+							marginBottom: 8,
+						}}
 					>
-						<Palette size={16} />
-					</button>
-					{showBgMenu && (
-						<div
-							className="absolute right-0 z-[1020] cursor-default rounded-xl border border-border bg-surface p-2.5 text-text shadow-lg"
+						Brush
+					</div>
+					<div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+						{BRUSH_COLORS.map((c) => (
+							<button
+								key={c}
+								onClick={() => setBrushColor(c)}
+								title={c}
+								style={{
+									width: 24,
+									height: 24,
+									borderRadius: "50%",
+									background: c,
+									border:
+										brushColor === c
+											? "2px solid var(--color-primary)"
+											: "1px solid var(--color-border)",
+									cursor: "pointer",
+									padding: 0,
+								}}
+							/>
+						))}
+						<input
+							type="color"
+							value={brushColor}
+							onChange={(e) => setBrushColor(e.target.value)}
+							title="Custom color"
 							style={{
-								bottom: "calc(100% + 8px)",
-								width: 186,
+								width: 24,
+								height: 24,
+								padding: 0,
+								border: "1px dashed var(--color-border)",
+								borderRadius: "50%",
+								cursor: "pointer",
+								background: "none",
+							}}
+						/>
+					</div>
+					<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+						<input
+							type="range"
+							min={2}
+							max={24}
+							value={brushWidth}
+							onChange={(e) => setBrushWidth(Number(e.target.value))}
+							title={`Brush width (${brushWidth}px)`}
+							style={{ flex: 1, cursor: "pointer", accentColor: "var(--color-primary)" }}
+						/>
+						<div
+							style={{
+								width: 28,
+								height: 28,
+								borderRadius: "50%",
+								background: "var(--color-surface-hover)",
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								flexShrink: 0,
 							}}
 						>
-							<div className="flex flex-col gap-2.5">
-								<span className="text-[11px] font-bold uppercase tracking-[0.04em] opacity-70">
-									Background
-								</span>
-								<div className="flex flex-wrap gap-1.5">
-									{CANVAS_BG_PRESETS.map((preset) => (
-										<button
-											key={preset.label}
-											title={preset.label}
-											onClick={() =>
-												setBgColor(preset.value)
-											}
-											className="h-[22px] w-[22px] cursor-pointer rounded-full"
-											style={{
-												border:
-													bgColor === preset.value
-														? "2px solid var(--color-primary)"
-														: "2px solid var(--color-border)",
-												background:
-													preset.value ||
-													"var(--color-surface-hover)",
-												boxShadow: preset.value
-													? "inset 0 0 0 1px rgba(255,255,255,0.25)"
-													: "none",
-											}}
-										/>
-									))}
-								</div>
-								<label className="flex cursor-pointer items-center gap-2 text-xs">
-									Custom
-									<input
-										type="color"
-										value={bgColor || "#ffffff"}
-										onChange={(e) =>
-											setBgColor(e.target.value)
-										}
-										className="h-6 w-9 cursor-pointer border-0 bg-transparent p-0"
-									/>
-								</label>
-							</div>
+							<div
+								style={{
+									width: Math.min(brushWidth, 22),
+									height: Math.min(brushWidth, 22),
+									borderRadius: "50%",
+									background: brushColor,
+								}}
+							/>
 						</div>
-					)}
+					</div>
 				</div>
+			)}
+
+			{/* Bottom-right cluster: clear + reset orbs + zoom wheel.
+			    The wheel is cropped by the viewport corner like the design. */}
+			<div
+				className="absolute"
+				style={{
+					right: 0,
+					bottom: 0,
+					zIndex: 1000,
+					display: "flex",
+					alignItems: "flex-end",
+				}}
+			>
+				{(notes.length > 0 || strokes.length > 0 || texts.length > 0) && (
+					<div
+						className="group"
+						style={{
+							display: "flex",
+							alignItems: "center",
+							gap: 8,
+							margin: isMobile
+								? "0 10px 12px 12px"
+								: "0 14px 24px 24px",
+						}}
+					>
+						<span
+							className={clearStep > 0 ? undefined : "hidden group-hover:block"}
+							style={{
+								fontSize: "0.78rem",
+								fontWeight: 600,
+								whiteSpace: "nowrap",
+								padding: "8px 14px",
+								borderRadius: 999,
+								background: "var(--color-surface)",
+								boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+								...(clearStep === 0
+									? {
+											border: "1px solid var(--color-border)",
+											color: "var(--color-text-secondary)",
+										}
+									: clearStep === 1
+										? {
+												border: "1px solid #f59e0b",
+												color: "#b45309",
+											}
+										: {
+												border: "1px solid #ef4444",
+												color: "#ef4444",
+											}),
+							}}
+						>
+							{clearStep === 0
+								? "Clear All"
+								: clearStep === 1
+									? "Sure?"
+									: `Really... Clear board?`}
+						</span>
+						<button
+							onClick={handleClearBoard}
+							disabled={wiping}
+							title={
+								clearStep === 0
+									? "Delete all notes and drawings"
+									: clearStep === 1
+										? "Click again to confirm"
+										: `Really delete ${notes.length} notes, ${strokes.length} drawings and ${texts.length} texts?`
+							}
+							style={{
+								width: isMobile ? 40 : 44,
+								height: isMobile ? 40 : 44,
+								borderRadius: "50%",
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								background: "var(--color-surface)",
+								border: "1px solid var(--color-border)",
+								boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+								cursor: "pointer",
+								flexShrink: 0,
+								...(clearStep === 0
+									? { opacity: 0.75, color: "var(--color-text-secondary)" }
+									: clearStep === 1
+										? {
+												border: "1px solid #f59e0b",
+												color: "#b45309",
+												background: "#fffbeb",
+											}
+										: {
+												background: "#ef4444",
+												border: "1px solid #ef4444",
+												color: "#fff",
+											}),
+							}}
+						>
+							<Trash2 size={18} />
+						</button>
+					</div>
+				)}
 				<button
-					className={`btn ${isFullScreen ? "btn-primary" : "btn-secondary"} btn-xs`}
-					onClick={() => setIsFullScreen(!isFullScreen)}
-					title={isFullScreen ? "Exit Full Screen" : "Full Screen"}
+					onClick={resetView}
+					title="Reset View"
+					style={{
+						width: isMobile ? 40 : 44,
+						height: isMobile ? 40 : 44,
+						borderRadius: "50%",
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						background: "var(--color-surface)",
+						border: "1px solid var(--color-border)",
+						boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+						color: "var(--color-text-secondary)",
+						cursor: "pointer",
+						margin: isMobile ? "0 10px 12px 0" : "0 14px 24px 0",
+					}}
 				>
-					{isFullScreen ? <Shrink size={16} /> : <Expand size={16} />}
+					<RefreshCcw size={18} />
 				</button>
+				<div
+					style={{
+						width: wheelHovered
+							? isMobile
+								? 112
+								: 150
+							: isMobile
+								? 100
+								: 135,
+						height: wheelHovered
+							? isMobile
+								? 112
+								: 150
+							: isMobile
+								? 100
+								: 135,
+						overflow: "hidden",
+						position: "relative",
+						transition: "width 0.25s ease, height 0.25s ease",
+					}}
+				>
+					<ZoomWheel
+						size={isMobile ? 140 : 190}
+						scale={scale}
+						hovered={wheelHovered}
+						onHoverChange={setWheelHovered}
+						onZoomAtCenter={zoomAtCenter}
+						onReset={resetView}
+					/>
+				</div>
 			</div>
 
 			{/* Top Tools: main pill + dedicated formatting row while editing */}
@@ -2348,12 +3735,51 @@ const CanvasPage: React.FC = () => {
 						>
 							<Hand size={16} />
 						</button>
+            {/* brush */}
+						<button
+							onClick={() => setSelectedTool("brush")}
+							className={`btn btn-xs ${selectedTool === "brush" ? "btn-primary" : "btn-ghost"}`}
+							style={{
+								borderRadius: 20,
+								width: 36,
+								height: 36,
+								padding: 0,
+							}}
+							title="Brush Tool (B)"
+						>
+							<Brush size={16} />
+						</button>
+            {/* eraser */}
+						<button
+							onClick={() => setSelectedTool("eraser")}
+							className={`btn btn-xs ${selectedTool === "eraser" ? "btn-primary" : "btn-ghost"}`}
+							style={{
+								borderRadius: 20,
+								width: 36,
+								height: 36,
+								padding: 0,
+							}}
+							title="Eraser Tool (E)"
+						>
+							<Eraser size={16} />
+						</button>
+            {/* text */}
+						<button
+							onClick={() => setSelectedTool("text")}
+							className={`btn btn-xs ${selectedTool === "text" ? "btn-primary" : "btn-ghost"}`}
+							style={{
+								borderRadius: 20,
+								width: 36,
+								height: 36,
+								padding: 0,
+							}}
+							title="Text Tool (T)"
+						>
+							<Type size={16} />
+						</button>
 					</div>
 
 					<div className="mx-1 h-6 w-px bg-border" />
-
-          {/* Undo / Redo (live-wired to whichever note is focused) */}
-          <ToolbarUndoRedo editor={focusedEditor} />
 
 					<button
 						onClick={addNote}
@@ -2393,6 +3819,9 @@ const CanvasPage: React.FC = () => {
 			{!isMobile && (
 				<CanvasNavigator
 					notes={notes}
+					connections={connectionLines}
+					strokes={strokes}
+					texts={texts}
 					scale={scale}
 					offset={offset}
 					containerWidth={containerSize.width}

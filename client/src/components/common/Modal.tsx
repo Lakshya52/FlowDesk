@@ -12,7 +12,7 @@ const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   children,
-  zIndex = 3000,
+  zIndex = 4950, // index.css scale: 4950 modal layer (above sidebar 4900, below toasts 5000)
   backdropBlur = true,
 }) => {
   useEffect(() => {

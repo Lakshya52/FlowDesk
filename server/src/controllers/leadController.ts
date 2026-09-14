@@ -217,6 +217,14 @@ export const updateLead = async (
 		for (const field of protectedFields) {
 			delete sanitizedBody[field];
 		}
+		if (sanitizedBody.campaignId === '') sanitizedBody.campaignId = null;
+		if (sanitizedBody.campaignId) {
+			const target = await Campaign.findOne({ _id: sanitizedBody.campaignId, tenantId: lead.tenantId });
+			if (!target) {
+				res.status(400).json({ success: false, message: 'Campaign not found' });
+				return;
+			}
+		}
 		Object.assign(lead, sanitizedBody);
 
 		const body = req.body;

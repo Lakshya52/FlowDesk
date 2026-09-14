@@ -911,6 +911,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                     padding: 0;
                     overflow-wrap: anywhere;
                     word-break: break-word;
+                    /* Editable text must show the I-beam even inside parents
+                       that force another cursor (e.g. canvas notes use
+                       cursor-default for drag affordance). */
+                    cursor: text;
                 }
                 .tiptap {
                     border: none !important;

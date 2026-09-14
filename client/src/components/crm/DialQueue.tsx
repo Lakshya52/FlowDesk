@@ -10,6 +10,7 @@ import {
 	keepPreviousData,
 } from "@tanstack/react-query";
 import api from "../../lib/api";
+import Modal from "../common/Modal";
 import { useAuthStore } from "../../store/authStore";
 import toast from "react-hot-toast";
 import { useCrmSocket } from "../../hooks/useCrmSocket";
@@ -788,14 +789,21 @@ const handlePincodeChange = async (value: string) => {
 		if (!selectedLead || !editForm) return;
 		setUpdatingLead(true);
 		try {
+			// "" means "No campaign" — send null so the lead is unassigned
+			// instead of failing ObjectId validation server-side.
+			const payload = {
+				...editForm,
+				campaignId: editForm.campaignId || null,
+			};
 			const { data } = await api.put(
 				`/leads/${selectedLead._id}`,
-				editForm,
+				payload,
 			);
 			if (data.success) {
 				setSelectedLead(data.lead);
 				setIsEditingLead(false);
 				queryClient.invalidateQueries({ queryKey: ["leads"] });
+				queryClient.invalidateQueries({ queryKey: ["campaigns"] });
 			}
 		} catch (err: unknown) {
 			const apiErr = err as {
@@ -1570,38 +1578,23 @@ const handlePincodeChange = async (value: string) => {
 				handleScheduleFollowup={handleScheduleFollowup}
 				getInitials={getInitials}
 				getCampaignName={getCampaignName}
+				campaigns={campaigns}
 				formatDate={formatDate}
 				formatDateShort={formatDateShort}
 				formatDuration={formatDuration}
 			/>
 
-			{showImportModal && (
-				<div
-					className="p-4 sm:p-6"
-					style={{
-						position: "fixed",
-						inset: 0,
-						backgroundColor: "rgba(0,0,0,0.4)",
-						zIndex: 50,
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "center",
-					}}
-					onClick={() => {
-						setShowImportModal(false);
-						setImportResult(null);
-						setImportStep("campaign");
-						setImportCampaignId("");
-					}}
-				>
+			<Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportResult(null); setImportStep("campaign"); setImportCampaignId(""); }} zIndex={4950}>
 					<div
-						className="card animate-fade-in w-full max-w-120 mx-4"
+						className="card animate-fade-in w-full"
 						style={{
+							maxWidth: "min(480px, calc(100vw - 32px))",
 							padding: 0,
 							overflow: "hidden",
 							borderRadius: 16,
+							maxHeight: "90vh",
+							overflowY: "auto",
 						}}
-						onClick={(e) => e.stopPropagation()}
 					>
 						<div
 							style={{
@@ -2082,30 +2075,16 @@ const handlePincodeChange = async (value: string) => {
 							</div>
 						)}
 					</div>
-				</div>
-			)}
+			</Modal>
 
-			{showCreateForm && (
-				<div
-					className="p-4 sm:p-6"
-					style={{
-						position: "fixed",
-						inset: 0,
-						backgroundColor: "rgba(0,0,0,0.4)",
-						zIndex: 50,
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "center",
-					}}
-					onClick={() => setShowCreateForm(false)}
-				>
+			<Modal isOpen={showCreateForm} onClose={() => setShowCreateForm(false)} zIndex={4950}>
 					<div
-						className="card animate-fade-in w-full max-w-130 mx-4 p-4 sm:p-7"
+						className="card animate-fade-in w-full p-4 sm:p-7"
 						style={{
+							maxWidth: "min(520px, calc(100vw - 32px))",
 							maxHeight: "90vh",
 							overflowY: "auto",
 						}}
-						onClick={(e) => e.stopPropagation()}
 					>
 						<div
 							style={{
@@ -2669,36 +2648,18 @@ const handlePincodeChange = async (value: string) => {
 							</button>
 						</div>
 					</div>
-				</div>
-			)}
+			</Modal>
 
-			{/* Create Project Modal on Closed Won */}
-			{showProjectModal && (
-				<div
-					style={{
-						position: "fixed",
-						top: 0,
-						left: 0,
-						right: 0,
-						bottom: 0,
-						background: "rgba(0,0,0,0.5)",
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "center",
-						zIndex: 100,
-					}}
-					onClick={handleCancelProject}
-				>
+			{/* Create Project Modal on Closed Won (can open above the lead modal, hence +10) */}
+			<Modal isOpen={showProjectModal} onClose={handleCancelProject} zIndex={4960}>
 					<div
 						className="card animate-fade-in"
 						style={{
-							width: "100%",
-							maxWidth: 560,
+							width: "min(560px, calc(100vw - 32px))",
 							padding: 28,
 							maxHeight: "90vh",
 							overflow: "auto",
 						}}
-						onClick={(e) => e.stopPropagation()}
 					>
 						<div
 							style={{
@@ -3107,8 +3068,7 @@ const handlePincodeChange = async (value: string) => {
 							</div>
 						</form>
 					</div>
-				</div>
-			)}
+			</Modal>
 		</div>
 	);
 };

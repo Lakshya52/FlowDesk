@@ -11,8 +11,47 @@ interface Note {
     [key: string]: any;
 }
 
+interface NavigatorConnection {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+}
+
+interface NavigatorStroke {
+    points: { x: number; y: number }[];
+    color: string;
+    width: number;
+}
+
+interface NavigatorText {
+    _id?: string;
+    x: number;
+    y: number;
+    width: number;
+    fontSize: number;
+    text: string;
+}
+
+/** Rough text-box height for the map (content width + wrapped lines). */
+const estimateTextHeight = (text: string, width: number, fontSize: number) => {
+    const contentW = Math.max(width - 16, 20);
+    const avgChar = Math.max(fontSize * 0.55, 1);
+    let lines = 0;
+    for (const para of (text || " ").split("\n")) {
+        lines += Math.max(1, Math.ceil((para.length * avgChar) / contentW));
+    }
+    return lines * fontSize * 1.5 + 16;
+};
+
 interface CanvasNavigatorProps {
     notes: Note[];
+    /** Precomputed connection endpoints in canvas coords (mirrors the main board lines). */
+    connections?: NavigatorConnection[];
+    /** Freehand strokes to mirror on the map. */
+    strokes?: NavigatorStroke[];
+    /** Text boxes to mirror on the map. */
+    texts?: NavigatorText[];
     scale: number;
     offset: { x: number; y: number };
     containerWidth: number;
@@ -37,7 +76,7 @@ const clamp = (v: number, min: number, max: number) =>
  * hardcoded light-mode colors.
  */
 const CanvasNavigator: React.FC<CanvasNavigatorProps> = ({
-    notes, scale, offset, containerWidth, containerHeight, onOffsetChange,
+    notes, connections = [], strokes = [], texts = [], scale, offset, containerWidth, containerHeight, onOffsetChange,
     className = '', style,
 }) => {
     const mapRef = useRef<HTMLDivElement>(null);
@@ -66,6 +105,13 @@ const CanvasNavigator: React.FC<CanvasNavigatorProps> = ({
 
     const allItems = [
         ...notes.map(n => ({ x: n.x, y: n.y, w: n.width || 300, h: n.height || 220 })),
+        ...strokes.flatMap(s => s.points.map(p => ({ x: p.x, y: p.y, w: 0, h: 0 }))),
+        ...texts.map(t => ({
+            x: t.x,
+            y: t.y,
+            w: t.width,
+            h: estimateTextHeight(t.text, t.width, t.fontSize || 15),
+        })),
         { x: viewportX1, y: viewportY1, w: Math.max(viewportX2 - viewportX1, 1), h: Math.max(viewportY2 - viewportY1, 1) }
     ];
 
@@ -105,6 +151,9 @@ const CanvasNavigator: React.FC<CanvasNavigatorProps> = ({
     }, [dx, dy, fitScale, minX, minY, safeScale, vw, vh, onOffsetChange]);
 
     const handlePointerDown = (e: React.PointerEvent) => {
+        // Keep map gestures local: without this, presses bubble to the board
+        // and arm the Select-tool marquee behind the minimap.
+        e.stopPropagation();
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         draggingRef.current = true;
         centerOnNavPoint(e.clientX, e.clientY);
@@ -152,6 +201,8 @@ const CanvasNavigator: React.FC<CanvasNavigatorProps> = ({
                     onPointerMove={handlePointerMove}
                     onPointerUp={endDrag}
                     onPointerCancel={endDrag}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     className="relative cursor-grab touch-none outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-primary"
                     style={{
                         width: NAV_WIDTH,
@@ -161,6 +212,60 @@ const CanvasNavigator: React.FC<CanvasNavigatorProps> = ({
                         backgroundSize: '10px 10px',
                     }}
                 >
+                    {/* Connection lines + ink strokes (under notes, above map surface) */}
+                    {(connections.length > 0 || strokes.length > 0) && (
+                        <svg
+                            className="pointer-events-none absolute inset-0"
+                            width={NAV_WIDTH}
+                            height={NAV_HEIGHT}
+                            aria-hidden
+                        >
+                            {connections.map((c, i) => {
+                                // Same horizontal bezier as the main board:
+                                // M x1 y1 C mx y1, mx y2, x2 y2
+                                const x1 = toNavX(c.x1);
+                                const y1 = toNavY(c.y1);
+                                const x2 = toNavX(c.x2);
+                                const y2 = toNavY(c.y2);
+                                const mx = x1 + (x2 - x1) * 0.5;
+                                return (
+                                    <path
+                                        key={i}
+                                        d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                                        fill="none"
+                                        stroke="var(--color-text-secondary)"
+                                        strokeWidth={1}
+                                        opacity={0.7}
+                                        strokeLinecap="round"
+                                    />
+                                );
+                            })}
+                            {strokes.map((s, i) => {
+                                if (s.points.length === 0) return null;
+                                const d =
+                                    s.points.length === 1
+                                        ? `M ${toNavX(s.points[0].x)} ${toNavY(s.points[0].y)} l 0.5 0.5`
+                                        : `M ${toNavX(s.points[0].x)} ${toNavY(s.points[0].y)}` +
+                                          s.points
+                                              .slice(1)
+                                              .map((p) => ` L ${toNavX(p.x)} ${toNavY(p.y)}`)
+                                              .join("");
+                                return (
+                                    <path
+                                        key={`s-${i}`}
+                                        d={d}
+                                        fill="none"
+                                        stroke={s.color}
+                                        strokeWidth={Math.max(1, s.width * fitScale)}
+                                        opacity={0.85}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    />
+                                );
+                            })}
+                        </svg>
+                    )}
+
                     {notes.map(note => (
                         <div
                             key={note.id || note._id}
@@ -175,6 +280,24 @@ const CanvasNavigator: React.FC<CanvasNavigatorProps> = ({
                             }}
                         />
                     ))}
+
+                    {texts.map((t, i) => {
+                        const h = estimateTextHeight(t.text, t.width, t.fontSize || 15);
+                        return (
+                            <div
+                                key={t._id || `text-${i}`}
+                                className="pointer-events-none absolute rounded-[3px] opacity-80 shadow-sm"
+                                style={{
+                                    left: toNavX(t.x),
+                                    top: toNavY(t.y),
+                                    width: Math.max(4, t.width * fitScale),
+                                    height: Math.max(3, h * fitScale),
+                                    background: "var(--color-surface)",
+                                    border: "1px solid rgba(0,0,0,0.2)",
+                                }}
+                            />
+                        );
+                    })}
 
                     {/* Viewport window */}
                     <div

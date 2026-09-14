@@ -68,6 +68,7 @@ interface LeadDetailModalProps {
 	handleScheduleFollowup: () => void;
 	getInitials: (name: string) => string;
 	getCampaignName: (id: any) => string;
+	campaigns: { _id: string; name: string }[];
 	formatDate: (d?: string) => string;
 	formatDateShort: (d?: string) => string;
 	formatDuration: (s: number) => string;
@@ -165,6 +166,7 @@ export default function LeadDetailModal({
 	handleScheduleFollowup,
 	getInitials,
 	getCampaignName,
+	campaigns,
 	formatDate,
 	formatDateShort,
 	formatDuration,
@@ -307,6 +309,10 @@ export default function LeadDetailModal({
 
 	const startEditing = () => {
 		setUpdatingLead(true)
+		const currentCampaignId =
+			typeof selectedLead.campaignId === "string"
+				? selectedLead.campaignId
+				: (selectedLead.campaignId as any)?._id ?? "";
 		setEditForm({
 			name: selectedLead.name,
 			phone: selectedLead.phone,
@@ -323,6 +329,7 @@ export default function LeadDetailModal({
 			companyPan: selectedLead.companyPan,
 			companyGst: selectedLead.companyGst,
 			priority: selectedLead.priority,
+			campaignId: currentCampaignId,
 		});
 		setIsEditingLead(true);
 	};
@@ -570,6 +577,34 @@ export default function LeadDetailModal({
 													<option value="low">Low</option>
 												</select>
 											</div>
+											<div className="sm:col-span-3">
+												<label className="block text-[0.65rem] sm:text-[0.7rem] text-(--color-text-tertiary) mb-0.5">
+													Campaign
+												</label>
+												<select
+													className="input w-full px-2 py-1.5 text-xs sm:text-sm rounded-md"
+													value={editForm.campaignId || ""}
+													onChange={(e) =>
+														setEditForm((prev) => ({
+															...prev,
+															campaignId:
+																e.target.value,
+														}))
+													}
+												>
+													<option value="">
+														No campaign
+													</option>
+													{campaigns.map((c) => (
+														<option
+															key={c._id}
+															value={c._id}
+														>
+															{c.name}
+														</option>
+													))}
+												</select>
+											</div>
 										</div>
 										<div className="flex gap-2 m-3 mt-1">
 											<button
@@ -807,7 +842,7 @@ export default function LeadDetailModal({
 													createPortal(
 														<div
 															ref={statusDropdownRef}
-															className="fixed z-[3010] bg-(--color-surface) border border-(--color-border) rounded-lg shadow-lg max-h-50 overflow-y-auto"
+															className="fixed z-[4960] bg-(--color-surface) border border-(--color-border) rounded-lg shadow-lg max-h-50 overflow-y-auto"
 															style={{
 																top: statusDropdownPos.top,
 																left: statusDropdownPos.left,

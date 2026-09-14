@@ -3637,7 +3637,7 @@ export default function ChatsPage() {
         </div>
 
         {/* MODAL: Forward Message */}
-        <Modal isOpen={forwardingMessage !== null} onClose={() => { setForwardingMessage(null); setForwardSuccessConvIds([]); }} zIndex={3030}>
+        <Modal isOpen={forwardingMessage !== null} onClose={() => { setForwardingMessage(null); setForwardSuccessConvIds([]); }} zIndex={4950}>
           <div
             className="card"
             style={{

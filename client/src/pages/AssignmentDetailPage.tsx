@@ -998,7 +998,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             {/* Edit Project modal — rendered at page root (NOT inside .card) so
                 .card:hover transform doesn't break position:fixed, and zIndex sits
                 above the sidebar (4900). */}
-            <Modal isOpen={isEditingProject} onClose={() => setIsEditingProject(false)} zIndex={5200}>
+            <Modal isOpen={isEditingProject} onClose={() => setIsEditingProject(false)} zIndex={4950}>
                 <div className="card w-full" role="dialog" aria-modal="true" aria-label="Edit project" style={{ width: 'min(720px, calc(100vw - 32px))', maxHeight: '90vh', overflowY: 'auto', padding: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '20px 24px 16px', borderBottom: '1px solid var(--color-border)', position: 'sticky', top: 0, background: 'var(--color-surface)', zIndex: 2, borderRadius: '16px 16px 0 0' }}>
                         <div>
@@ -2395,7 +2395,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             }
 
             {/* Manage Team Modal */}
-            <Modal isOpen={showTeamModal} onClose={() => setShowTeamModal(false)} zIndex={3010}>
+            <Modal isOpen={showTeamModal} onClose={() => setShowTeamModal(false)} zIndex={4950}>
                 <div className="card animate-fade-in w-full min-w-[30dvw] p-6  " style={{
                     background: "color-mix(in srgb, var(--color-surface) 85%, transparent)",
                 }} >

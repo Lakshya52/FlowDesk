@@ -72,7 +72,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({
 			style={{
 				position: "fixed",
 				inset: 0,
-				zIndex: 5500,
+				zIndex: 4970, // index.css scale: modal layer 4950 + extras; stays below toasts (5000)
 				display: "flex",
 				alignItems: "center",
 				justifyContent: "center",

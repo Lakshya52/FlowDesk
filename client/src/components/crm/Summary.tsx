@@ -7,6 +7,7 @@ import {
 import { ChevronLeft, ChevronRight, Download, FileText, AlertCircle, Inbox, TrendingUp, TrendingDown, Users, RefreshCw, MapPin, LogIn, CheckCircle, XCircle, CalendarDays, User } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import { useCrmSocket } from '../../hooks/useCrmSocket';
@@ -92,6 +93,7 @@ const Summary = () => {
   const [scope, setScope] = useState<Scope>('weekly');
   const [refDate, setRefDate] = useState(() => new Date());
   const [exporting, setExporting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
   const { user } = useAuthStore();
 
@@ -163,6 +165,30 @@ const Summary = () => {
 
   const handleScopeChange = (s: Scope) => { setScope(s); setRefDate(new Date()); };
 
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      // Await both sections (refetchQueries doesn't throw on query errors,
+      // so inspect the cache state afterwards for a reliable toast).
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['crm-summary'] }),
+        queryClient.refetchQueries({ queryKey: ['field-visit-reports'] }),
+      ]);
+      const failed = queryClient.getQueryCache().findAll({
+        predicate: (q) =>
+          (q.queryKey[0] === 'crm-summary' || q.queryKey[0] === 'field-visit-reports') &&
+          q.state.status === 'error',
+      }).length > 0;
+      if (failed) toast.error('Refresh failed — showing cached data');
+      else toast.success('Summary refreshed');
+    } catch {
+      toast.error('Failed to refresh summary');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -233,8 +259,8 @@ const Summary = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => queryClient.invalidateQueries({ queryKey: ["crm-summary"] })} disabled={loading} className="btn btn-secondary px-3 py-2" title="Refresh data">
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <button onClick={handleRefresh} disabled={loading || refreshing} className="btn btn-secondary px-3 py-2" title="Refresh data">
+            <RefreshCw size={14} className={(loading || refreshing) ? 'animate-spin' : ''} />
           </button>
           <button onClick={handleExport} disabled={exporting} className="btn btn-primary">
             <Download size={14} />

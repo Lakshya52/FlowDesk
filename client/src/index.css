@@ -205,6 +205,63 @@ body {
   }
 }
 
+/* Board-clear wipe (see handleClearBoard in CanvasPage.tsx): a soft light
+ * band sweeps left → right across the canvas while notes fade underneath.
+ * One-shot 0.65s sweep — keep WIPE_MS in CanvasPage above this duration so
+ * the delete commits after the band exits. Overlay unmounts with it. */
+@keyframes canvasWipeSweep {
+  from {
+    left: -35%;
+  }
+
+  to {
+    left: 105%;
+  }
+}
+
+.canvas-wipe-bar {
+  position: absolute;
+  top: -10%;
+  bottom: -10%;
+  left: -35%;
+  width: 32%;
+  transform: skewX(-12deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(99, 102, 241, 0.22),
+    rgba(255, 255, 255, 0.6),
+    rgba(99, 102, 241, 0.22),
+    transparent
+  );
+  animation: canvasWipeSweep 0.65s ease-in-out forwards;
+  pointer-events: none;
+}
+
+/* Empty text-draft anchor: the draft is deliberately chromeless (no box,
+ * no placeholder), so a lone native caret is easy to lose on the dotted
+ * grid. This block mimics a blinking caret at the click point until the
+ * user types the first character. */
+@keyframes canvasCaretBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+.canvas-draft-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: var(--color-primary);
+  vertical-align: text-bottom;
+  animation: canvasCaretBlink 1.05s steps(1) infinite;
+}
+
 @keyframes pulse-dot {
 
   0%,

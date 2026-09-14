@@ -1337,7 +1337,7 @@ const CreateCompanyModal = ({
     };
 
     return (
-        <Modal isOpen={true} onClose={() => { setShowCreate(false); resetForm(); }} zIndex={3030}>
+        <Modal isOpen={true} onClose={() => { setShowCreate(false); resetForm(); }} zIndex={4950}>
             <div
                 className="card animate-fade-in"
                 style={{
@@ -1724,7 +1724,7 @@ const CreateCompanyModal = ({
 
 const ContactModal = ({ 
     setShowContactForm, editingContact, contactForm, setContactForm, handleSave }: any) => (
-    <Modal isOpen={true} onClose={() => setShowContactForm(false)} zIndex={3030}>
+    <Modal isOpen={true} onClose={() => setShowContactForm(false)} zIndex={4950}>
         <div className="card" style={{ padding: 24, width: 550 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h3 style={{ fontSize: "1.2rem", fontWeight: 600 }}>{editingContact ? "Edit Contact" : "Add Contact"}</h3>
@@ -1845,7 +1845,7 @@ const ImportModal = ({
     };
 
     return (
-        <Modal isOpen={true} onClose={() => { setShowImport(false); setImportResult(null); }} zIndex={3030}>
+        <Modal isOpen={true} onClose={() => { setShowImport(false); setImportResult(null); }} zIndex={4950}>
             <div className="card" style={{ padding: 24, width: 500 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                     <h3 style={{ fontSize: "1.2rem", fontWeight: 600 }}>Import Companies</h3>
