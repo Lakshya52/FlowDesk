@@ -369,6 +369,9 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     const handleUpdateProject = async () => {
         setSaving(true);
         try {
+            // Spawned instances must never carry recurrence — force it off even if
+            // stale form state still holds blueprint values.
+            const isInstance = !!assignment?.parentAssignmentId;
             const payload = {
                 ...editProjectForm,
                 dueDate: editProjectForm.noDueDate ? null : editProjectForm.dueDate,
@@ -391,6 +394,24 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                     editProjectForm.recurringDueDays !== ''
                         ? Number(editProjectForm.recurringDueDays)
                         : null,
+                // Spawned instances must never carry recurrence — force it off last
+                // so stale blueprint values in the form can't leak through.
+                ...(isInstance
+                    ? {
+                        isRecurring: false,
+                        recurringPattern: 'daily',
+                        recurringStartDate: null,
+                        recurringTime: '00:00',
+                        recurringEndDate: null,
+                        recurringNoEndDate: true,
+                        recurringWeekdays: null,
+                        recurringDayOfMonth: null,
+                        recurringMaxInstances: null,
+                        recurringDueDays: null,
+                        recurringNotifyOnSpawn: false,
+                        recurringPaused: false,
+                    }
+                    : {}),
             };
             const { data } = await api.put(`/assignments/${id}`, payload);
             setAssignment(data.assignment);
@@ -403,6 +424,11 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
     };
 
     const startEditingProject = () => {
+        // Recurring instances are read-only for project details — inform instead of opening the editor.
+        if (assignment?.parentAssignmentId) {
+            toast.error('You cannot edit this project because it is a recurring instance. Please edit the blueprint instead.');
+            return;
+        }
         setEditProjectForm({
             title: assignment.title,
             description: assignment.description || '',
@@ -969,6 +995,319 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                 fileName={previewFile?.name || ''}
             />
 
+            {/* Edit Project modal — rendered at page root (NOT inside .card) so
+                .card:hover transform doesn't break position:fixed, and zIndex sits
+                above the sidebar (4900). */}
+            <Modal isOpen={isEditingProject} onClose={() => setIsEditingProject(false)} zIndex={5200}>
+                <div className="card w-full" role="dialog" aria-modal="true" aria-label="Edit project" style={{ width: 'min(720px, calc(100vw - 32px))', maxHeight: '90vh', overflowY: 'auto', padding: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '20px 24px 16px', borderBottom: '1px solid var(--color-border)', position: 'sticky', top: 0, background: 'var(--color-surface)', zIndex: 2, borderRadius: '16px 16px 0 0' }}>
+                        <div>
+                            <h2 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0 }}>Edit Project</h2>
+                            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>Update title, dates, client and recurrence.</p>
+                        </div>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setIsEditingProject(false)} title="Close"><X size={18} /></button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 24 }}>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="sm:col-span-2" style={{ minWidth: 0 }}>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Title *</label>
+                                <input
+                                    autoFocus
+                                    className="input"
+                                    style={{ fontSize: '1rem', fontWeight: 600, width: '100%' }}
+                                    value={editProjectForm.title}
+                                    onChange={e => setEditProjectForm({ ...editProjectForm, title: e.target.value })}
+                                    placeholder="Project Title"
+                                />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Priority</label>
+                                <select
+                                    className="select"
+                                    style={{ width: '100%' }}
+                                    value={editProjectForm.priority}
+                                    onChange={e => setEditProjectForm({ ...editProjectForm, priority: e.target.value })}
+                                >
+                                    {Object.entries(PRIORITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                            <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Description</label>
+                            <textarea
+                                className="input"
+                                rows={3}
+                                style={{ width: '100%', resize: 'vertical' }}
+                                value={editProjectForm.description}
+                                onChange={e => setEditProjectForm({ ...editProjectForm, description: e.target.value })}
+                                placeholder="Project Description"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div style={{ position: 'relative', minWidth: 0 }}>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Client / Company</label>
+                                <input
+                                    className="input"
+                                    style={{ width: '100%' }}
+                                    placeholder="Search or add company..."
+                                    value={companySearch}
+                                    onChange={e => {
+                                        setCompanySearch(e.target.value);
+                                        setShowCompanyDropdown(true);
+                                        if (!e.target.value) setEditProjectForm({ ...editProjectForm, clientName: '', companyId: '' });
+                                    }}
+                                    onFocus={() => setShowCompanyDropdown(true)}
+                                    onBlur={() => setTimeout(() => setShowCompanyDropdown(false), 150)}
+                                />
+                                {showCompanyDropdown && (companySearch.trim() || filteredCompanies.length > 0) && (
+                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, marginTop: 4, maxHeight: 220, overflowY: 'auto', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.35)', padding: 4 }}>
+                                        {filteredCompanies.length > 0 ? (
+                                            filteredCompanies.map(c => (
+                                                <div
+                                                    key={c._id}
+                                                    onMouseDown={e => e.preventDefault()}
+                                                    style={{ padding: '7px 10px', cursor: 'pointer', fontSize: '0.875rem', borderRadius: 8 }}
+                                                    className="hover-bg"
+                                                    onClick={() => {
+                                                        setEditProjectForm({ ...editProjectForm, clientName: c.name, companyId: c._id });
+                                                        setCompanySearch(c.name);
+                                                        setShowCompanyDropdown(false);
+                                                    }}
+                                                >
+                                                    {c.name}
+                                                    {c.parentCompanyId && <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginLeft: 6 }}>(Subsidiary)</span>}
+                                                </div>
+                                            ))
+                                        ) : companySearch ? (
+                                            <div
+                                                onMouseDown={e => e.preventDefault()}
+                                                style={{ padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--color-primary-light)', borderRadius: 8 }}
+                                                className="hover-bg"
+                                                onClick={() => handleQuickAddCompany(companySearch)}
+                                            >
+                                                <Plus size={16} color="var(--color-primary)" />
+                                                <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-primary)' }}>
+                                                    Add <strong>"{companySearch}"</strong> as new company
+                                                </div>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                )}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Start Date</label>
+                                <input
+                                    className="input"
+                                    style={{ width: '100%' }}
+                                    type="date"
+                                    value={editProjectForm.startDate}
+                                    onChange={e => setEditProjectForm({ ...editProjectForm, startDate: e.target.value })}
+                                />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Due Date</label>
+                                <input
+                                    className={`input ${!editProjectForm.dueDate ? 'opacity-50' : ''}`}
+                                    style={{ width: '100%' }}
+                                    type="date"
+                                    disabled={editProjectForm.noDueDate}
+                                    value={editProjectForm.dueDate}
+                                    onChange={e => setEditProjectForm({ ...editProjectForm, dueDate: e.target.value })}
+                                />
+                                <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <input
+                                        type="checkbox"
+                                        id="editNoDueDateTop"
+                                        checked={editProjectForm.noDueDate}
+                                        onChange={e => setEditProjectForm({ ...editProjectForm, noDueDate: e.target.checked })}
+                                    />
+                                    <label htmlFor="editNoDueDateTop" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>No due date</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Recurring blueprint settings — hidden for spawned instances (parentAssignmentId).
+                            Instances are standalone projects; editing them must not show or alter recurrence. */}
+                        {!assignment?.parentAssignmentId && (
+                        <div className="card" style={{ padding: '12px 16px', background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: editProjectForm.isRecurring ? 12 : 0 }}>
+                                <input
+                                    type="checkbox"
+                                    id="editIsRecurringTop"
+                                    checked={editProjectForm.isRecurring}
+                                    onChange={e => setEditProjectForm({ ...editProjectForm, isRecurring: e.target.checked })}
+                                />
+                                <label htmlFor="editIsRecurringTop" style={{ fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}>Recurring Project Blueprint</label>
+                            </div>
+
+                            {editProjectForm.isRecurring && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Pattern</label>
+                                            <select
+                                                className="select"
+                                                value={editProjectForm.recurringPattern}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringPattern: e.target.value })}
+                                            >
+                                                <option value="daily">Daily</option>
+                                                <option value="weekly">Weekly</option>
+                                                <option value="monthly">Monthly</option>
+                                                <option value="yearly">Yearly</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Anchor Start Date</label>
+                                            <input
+                                                className="input"
+                                                type="date"
+                                                value={editProjectForm.recurringStartDate}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringStartDate: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Spawn Time</label>
+                                            <input
+                                                className="input"
+                                                type="time"
+                                                value={editProjectForm.recurringTime}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringTime: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>End Date</label>
+                                            <input
+                                                className={`input ${editProjectForm.recurringNoEndDate ? 'opacity-50' : ''}`}
+                                                style={{ width: '100%' }}
+                                                type="date"
+                                                disabled={editProjectForm.recurringNoEndDate}
+                                                value={editProjectForm.recurringEndDate}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringEndDate: e.target.value })}
+                                            />
+                                            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    id="editRecurringNoEndDateTop"
+                                                    checked={editProjectForm.recurringNoEndDate}
+                                                    onChange={e => setEditProjectForm({ ...editProjectForm, recurringNoEndDate: e.target.checked })}
+                                                />
+                                                <label htmlFor="editRecurringNoEndDateTop" style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>No end date</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {editProjectForm.recurringPattern === 'weekly' && (
+                                        <div>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Repeat On</label>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                {WEEKDAY_LABELS.map((label, idx) => {
+                                                    const selected = editProjectForm.recurringWeekdays.includes(idx);
+                                                    return (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => setEditProjectForm({
+                                                                ...editProjectForm,
+                                                                recurringWeekdays: selected
+                                                                    ? editProjectForm.recurringWeekdays.filter((d: number) => d !== idx)
+                                                                    : [...editProjectForm.recurringWeekdays, idx],
+                                                            })}
+                                                            style={{
+                                                                padding: '4px 10px',
+                                                                borderRadius: 6,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 600,
+                                                                border: '1px solid var(--color-border)',
+                                                                background: selected ? 'var(--color-primary)' : 'var(--color-bg)',
+                                                                color: selected ? '#fff' : 'var(--color-text-secondary)',
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            {label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {editProjectForm.recurringPattern === 'monthly' && (
+                                        <div>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Day of Month</label>
+                                            <input
+                                                className="input"
+                                                type="number"
+                                                min="1"
+                                                max="31"
+                                                value={editProjectForm.recurringDayOfMonth}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringDayOfMonth: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Max Instances</label>
+                                            <input
+                                                className="input"
+                                                type="number"
+                                                min="1"
+                                                placeholder="Unlimited"
+                                                value={editProjectForm.recurringMaxInstances}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringMaxInstances: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 4 }}>Due Date After Spawn (days)</label>
+                                            <input
+                                                className="input"
+                                                type="number"
+                                                min="0"
+                                                placeholder="Leave Blank for Same day"
+                                                value={editProjectForm.recurringDueDays}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringDueDays: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <input
+                                                type="checkbox"
+                                                id="editRecurringNotifyOnSpawnTop"
+                                                checked={editProjectForm.recurringNotifyOnSpawn}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringNotifyOnSpawn: e.target.checked })}
+                                            />
+                                            <label htmlFor="editRecurringNotifyOnSpawnTop" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Notify team on each spawn</label>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <input
+                                                type="checkbox"
+                                                id="editRecurringPausedTop"
+                                                checked={editProjectForm.recurringPaused}
+                                                onChange={e => setEditProjectForm({ ...editProjectForm, recurringPaused: e.target.checked })}
+                                            />
+                                            <label htmlFor="editRecurringPausedTop" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Paused</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--color-border)', padding: '16px 24px', position: 'sticky', bottom: 0, background: 'var(--color-surface)', borderRadius: '0 0 16px 16px' }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setIsEditingProject(false)}>Cancel</button>
+                        <button className="btn btn-primary btn-sm" onClick={handleUpdateProject} disabled={saving}>
+                            {saving ? 'Saving...' : 'Save Changes'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
             {comments ? null : null}
             {/* Back button */}
             <button className="btn btn-ghost btn-sm" style={{ marginBottom: 16 }} onClick={() => navigate('/assignments')}>
@@ -979,8 +1318,11 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
             <div className="card p-4 md:p-6 mb-5">
                 <div className="flex flex-col md:flex-row justify-between items-stretch md:items-start mb-4 gap-3 md:gap-0">
                     <div style={{ flex: 1 }}>
-                        {isEditingProject ? (
-                            <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+                        {/* Legacy inline edit modal disabled — replaced by top-level <Modal> above.
+                            It was nested inside .card:hover (transform) which broke position:fixed,
+                            clipped the header and collapsed the title field. */}
+                        {(false && isEditingProject) ? (
+                            <div style={{ display: 'none' }}>
                                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} onClick={() => setIsEditingProject(false)} />
                                 <div className="card" role="dialog" aria-modal="true" aria-label="Edit project" style={{ position: 'relative', width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto', padding: 24 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -1272,7 +1614,22 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         <span className="badge" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>Recurring Blueprint</span>
                                     )}
                                     {assignment.parentAssignmentId && (
+                                        <>
                                         <span className="badge" style={{ background: '#f0fdf4', color: '#16a34a' }}>Recurring Instance</span>
+                                        <button
+                                            type="button"
+                                            className="btn btn-ghost btn-sm"
+                                            title="Open the original blueprint"
+                                            onClick={() => {
+                                                const parent = assignment.parentAssignmentId;
+                                                const parentId = typeof parent === 'string' ? parent : parent?._id;
+                                                if (parentId) navigate(`/assignments/${parentId}`);
+                                                else toast.error('Blueprint not available for this instance.');
+                                            }}
+                                        >
+                                            <Eye size={14} /> View Blueprint
+                                        </button>
+                                        </>
                                     )}
                                     <span className={`badge badge-${assignment.priority}`}>{PRIORITY_LABELS[assignment.priority]}</span>
                                 </div>
@@ -1292,7 +1649,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                                             <div style={{ fontSize: '1.25rem' }}>{assignment.recurringPaused ? '⏸️' : '📋'}</div>
                                             <div style={{ fontSize: '0.8125rem', color: assignment.recurringPaused ? '#92400e' : 'var(--color-primary)', fontWeight: 500 }}>
-                                                This is a <b>Recurring Blueprint</b>. Tasks added here are copied to each new instance created on the <b style={{ textTransform: 'capitalize' }}>{assignment.recurringPattern}</b> schedule.
+                                                This is a <b>Recurring Blueprint</b>. Tasks added here are copied to each new instance created on the <b style={{ textTransform: 'capitalize' }}>{assignment.recurringPattern}</b> schedule. So do not add tasks here.
                                                 <div style={{ marginTop: 4, fontSize: '0.75rem', opacity: 0.9 }}>
                                                     Spawn time: <b>{assignment.recurringTime || '00:00'}</b>
                                                     {assignment.recurringPattern === 'weekly' && Array.isArray(assignment.recurringWeekdays) && assignment.recurringWeekdays.length > 0 && (
@@ -1354,12 +1711,12 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                             <button className="btn btn-ghost btn-sm" onClick={startEditingProject} title="Edit Project Details">
                                 <Edit2 size={18} />
                             </button>
-                            <select className="select" style={{ width: 140 }} value={assignment.status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateStatus(e.target.value)}>
-                                {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                            </select>
                             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-error)' }} onClick={handleDelete} title="Delete Project">
                                 <Trash2 size={18} />
                             </button>
+                            <select className="select" style={{ width: 140 }} value={assignment.status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateStatus(e.target.value)}>
+                                {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                            </select>
                         </div>
                     )}
                 </div>
@@ -1422,7 +1779,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         const currentIds = assignment.team?.map((tm: any) => tm._id || tm) || [];
                                         handleUpdateTeam(currentIds.filter((tid: string) => tid !== m._id));
                                     }else{
-                                        setManageTeamErrorMsg("You can not delete yourself from the project");
+                                        setManageTeamErrorMsg("You can not remove yourself from the project");
                                         setTimeout(() => setManageTeamErrorMsg(""), 3000);
                                     }
                                 }}

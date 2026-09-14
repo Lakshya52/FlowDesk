@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Markdown from "react-markdown";
-import { WhatsNewEntry, markVersionSeen } from "../../lib/whatsnew";
+import { WhatsNewEntry } from "../../lib/whatsnew";
 
 interface WhatsNewModalProps {
 	open: boolean;
@@ -54,9 +54,17 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({
 
 	if (!open) return null;
 
+	// NOTE: do NOT mark entry.version here. AppLayout's onClose advances
+	// localStorage to the RUNNING app version. Marking entry.version caused
+	// an infinite loop when the app was ahead of GitHub (e.g. app 4.2.1,
+	// latest release 4.2.0 → localStorage stuck at 4.2.0).
 	const handleContinue = () => {
-		markVersionSeen(entry.version);
 		onClose();
+	};
+
+	const handleAllReleases = () => {
+		onClose();
+		navigate("/release");
 	};
 
 	return (
@@ -327,7 +335,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({
 					}}
 				>
 					<button
-						onClick={() => navigate("/release")}
+						onClick={handleAllReleases}
 						style={{
 							display: "flex",
 							alignItems: "center",

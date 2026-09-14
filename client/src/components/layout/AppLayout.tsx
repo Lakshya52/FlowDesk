@@ -4,7 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import WhatsNewModal from '../common/WhatsNewModal';
-import { WhatsNewEntry, fetchWhatsNewEntry, hasNewVersion, markVersionSeen } from '../../lib/whatsnew';
+import { WhatsNewEntry, compareVersions, fetchWhatsNewEntry, getLastSeenVersion, hasNewVersion, markVersionSeen } from '../../lib/whatsnew';
 import packageJson from '../../../package.json';
 
 const AppLayout: React.FC = () => {
@@ -22,8 +22,17 @@ const AppLayout: React.FC = () => {
     // and show the modal if the version is newer (or this is the first run).
     const [whatsNewEntry, setWhatsNewEntry] = React.useState<WhatsNewEntry | null>(null);
 
+    const currentVersion = packageJson.version;
+
+    const handleWhatsNewClose = React.useCallback(() => {
+        // Always advance to the RUNNING version, not entry.version.
+        // Otherwise app 4.2.1 + GitHub latest 4.2.0 would mark 4.2.0 seen
+        // and repeat the modal on every launch.
+        markVersionSeen(currentVersion);
+        setWhatsNewEntry(null);
+    }, [currentVersion]);
+
     React.useEffect(() => {
-        const currentVersion = packageJson.version;
         // Always mark the current version on first-ever run so existing
         // users don't see a stale changelog. New versions will override.
         if (!localStorage.getItem("flowdesk-last-seen-version")) {
@@ -35,10 +44,24 @@ const AppLayout: React.FC = () => {
 
         let cancelled = false;
         fetchWhatsNewEntry(currentVersion).then((entry) => {
-            if (!cancelled && entry) setWhatsNewEntry(entry);
+            if (cancelled) return;
+            if (!entry) {
+                // No changelog for this version (e.g. app ahead of GitHub).
+                // Advance silently so we don't refetch/show on every launch.
+                markVersionSeen(currentVersion);
+                return;
+            }
+            const last = getLastSeenVersion();
+            if (last && compareVersions(entry.version, last) <= 0) {
+                // Fallback entry the user already saw (e.g. running 4.2.1,
+                // GitHub latest is 4.2.0, lastSeen is 4.2.0). Don't re-show.
+                markVersionSeen(currentVersion);
+                return;
+            }
+            setWhatsNewEntry(entry);
         });
         return () => { cancelled = true; };
-    }, []);
+    }, [currentVersion]);
 
     React.useEffect(() => {
         const handleResize = () => {
@@ -167,11 +190,13 @@ const AppLayout: React.FC = () => {
                     </div>
                 </main>
             </div>
-            <WhatsNewModal
-                open={!!whatsNewEntry}
-                entry={whatsNewEntry!}
-                onClose={() => setWhatsNewEntry(null)}
-            />
+            {whatsNewEntry && (
+                <WhatsNewModal
+                    open={!!whatsNewEntry}
+                    entry={whatsNewEntry}
+                    onClose={handleWhatsNewClose}
+                />
+            )}
         </div>
     );
 };

@@ -128,42 +128,53 @@ function toEntry(r: GhRelease): WhatsNewEntry {
 // Fetching — reuses the same backend proxy the Releases page uses.
 // The backend caches for 5 min, so repeated calls in the same session are free.
 
-let _cache: { version: string; entry: WhatsNewEntry } | null = null;
+let _releasesCache: { at: number; releases: GhRelease[] } | null = null;
+const RELEASES_CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function fetchNonDraftReleases(): Promise<GhRelease[]> {
+  if (
+    _releasesCache &&
+    Date.now() - _releasesCache.at < RELEASES_CACHE_TTL_MS
+  ) {
+    return _releasesCache.releases;
+  }
+  const { data } = await api.get("/releases");
+  const releases = (data.releases ?? []) as GhRelease[];
+  const nonDraft = releases.filter((r) => !r.draft && !r.prerelease);
+  _releasesCache = { at: Date.now(), releases: nonDraft };
+  return nonDraft;
+}
 
 /**
  * Fetch the release whose tag matches `targetVersion` (e.g. the current
  * package.json version).  Falls back to the latest published non-draft
  * release if an exact match isn't found.
+ *
+ * NOTE: callers must `markVersionSeen(currentVersion)` — NOT
+ * `markVersionSeen(entry.version)` — otherwise a fallback entry for an
+ * older version leaves localStorage behind and the modal repeats forever
+ * (e.g. app 4.2.1 + GitHub latest 4.2.0).
  */
 export async function fetchWhatsNewEntry(
   targetVersion: string,
 ): Promise<WhatsNewEntry | null> {
-  // Fast-path: already fetched for this version this session
-  if (_cache?.version === targetVersion) return _cache.entry;
-
   try {
-    const { data } = await api.get("/releases");
-    const releases = (data.releases ?? []) as GhRelease[];
-
-    const nonDraft = releases.filter(
-      (r) => !r.draft && !r.prerelease,
-    );
+    const nonDraft = await fetchNonDraftReleases();
 
     // Try exact version match first
     const exact = nonDraft.find(
       (r) => parseVersion(r.tag_name) === targetVersion,
     );
     if (exact) {
-      const entry = toEntry(exact);
-      _cache = { version: targetVersion, entry };
-      return entry;
+      return toEntry(exact);
     }
 
-    // Fallback: latest release (first in array from API = newest)
+    // Fallback: latest release (first in array from API = newest).
+    // The caller (AppLayout) decides whether this stale entry is still
+    // worth showing (entry.version > lastSeen) or should be skipped
+    // silently while still advancing localStorage to targetVersion.
     if (nonDraft.length > 0) {
-      const entry = toEntry(nonDraft[0]);
-      _cache = { version: targetVersion, entry };
-      return entry;
+      return toEntry(nonDraft[0]);
     }
 
     return null;
