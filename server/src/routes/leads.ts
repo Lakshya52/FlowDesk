@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import {
     getLeads, getLead, createLead, updateLead, deleteLead,
-    addNote, recordCall, importExcel, downloadSampleExcel,
+    addNote, updateNote, deleteNote, recordCall, importExcel, downloadSampleExcel,
     getUpcomingFollowups, updateMeetingStatus, getLeadCounts, getLeadStats,
     getLeadFilterOptions,
 } from '../controllers/leadController';
@@ -28,6 +28,8 @@ router.post('/', createLead);
 router.put('/:id', updateLead);
 router.delete('/:id', authorize('admin'), deleteLead);
 router.post('/:id/notes',  addNote);
+router.put('/:id/notes/:noteId', updateNote);
+router.delete('/:id/notes/:noteId', deleteNote);
 router.post('/:id/call', recordCall);
 router.patch('/:id/meeting-status', updateMeetingStatus);
 

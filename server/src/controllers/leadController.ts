@@ -348,6 +348,135 @@ export const addNote = async (
 	}
 };
 
+export const updateNote = async (
+	req: AuthRequest,
+	res: Response,
+): Promise<void> => {
+	try {
+		const { text } = req.body;
+
+		if (!text || !text.trim()) {
+			res.status(400).json({
+				success: false,
+				message: "Note text is required",
+			});
+			return;
+		}
+
+		const lead = await Lead.findById(req.params.id);
+
+		if (!lead) {
+			res.status(404).json({ success: false, message: "Lead not found" });
+			return;
+		}
+
+		const note = (lead.notes as any).id(req.params.noteId);
+
+		if (!note) {
+			res.status(404).json({ success: false, message: "Note not found" });
+			return;
+		}
+
+		const isOwner =
+			note.createdBy?.toString() === req.user!._id.toString();
+
+		if (!isOwner) {
+			res.status(403).json({
+				success: false,
+				message: "You can only edit your own notes",
+			});
+			return;
+		}
+
+		note.text = text.trim();
+		await lead.save();
+
+		const populated = await Lead.findById(lead._id)
+			.populate("campaignId", "name")
+			.populate("notes.createdBy", "name email avatar");
+
+		await ActivityLog.create({
+			action: "Note edited on lead",
+			user: req.user!._id,
+			entityType: EntityType.LEAD,
+			entityId: lead._id,
+			metadata: {
+				name: lead.name,
+				notePreview:
+					text.trim().slice(0, 80) +
+					(text.trim().length > 80 ? "..." : ""),
+				phone: lead.phone,
+				company: lead.companyName,
+			},
+		});
+
+		const tenantId = getTenantId(req.user);
+		emitLeadUpdated(tenantId, populated);
+
+		res.json({ success: true, lead: populated });
+	} catch (error: any) {
+		res.status(400).json({ success: false, message: error.message });
+	}
+};
+
+export const deleteNote = async (
+	req: AuthRequest,
+	res: Response,
+): Promise<void> => {
+	try {
+		const lead = await Lead.findById(req.params.id);
+
+		if (!lead) {
+			res.status(404).json({ success: false, message: "Lead not found" });
+			return;
+		}
+
+		const note = (lead.notes as any).id(req.params.noteId);
+
+		if (!note) {
+			res.status(404).json({ success: false, message: "Note not found" });
+			return;
+		}
+
+		const isOwner =
+			note.createdBy?.toString() === req.user!._id.toString();
+
+		if (!isOwner) {
+			res.status(403).json({
+				success: false,
+				message: "You can only delete your own notes",
+			});
+			return;
+		}
+
+		note.deleteOne();
+		await lead.save();
+
+		const populated = await Lead.findById(lead._id)
+			.populate("campaignId", "name")
+			.populate("notes.createdBy", "name email avatar");
+
+		await ActivityLog.create({
+			action: "Note deleted from lead",
+			user: req.user!._id,
+			entityType: EntityType.LEAD,
+			entityId: lead._id,
+			metadata: {
+				name: lead.name,
+				phone: lead.phone,
+				company: lead.companyName,
+			},
+		});
+
+		const tenantId = getTenantId(req.user);
+		emitLeadUpdated(tenantId, populated);
+
+		res.json({ success: true, lead: populated });
+	} catch (error: any) {
+		res.status(400).json({ success: false, message: error.message });
+	}
+};
+
 export const recordCall = async (
 	req: AuthRequest,
 	res: Response,

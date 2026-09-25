@@ -693,6 +693,43 @@ const handlePincodeChange = async (value: string) => {
 		}
 	};
 
+	const handleUpdateNote = async (noteId: string, text: string) => {
+		if (!text.trim() || !selectedLead) return;
+		try {
+			const { data } = await api.put(
+				`/leads/${selectedLead._id}/notes/${noteId}`,
+				{ text: text.trim() },
+			);
+			if (data.success) {
+				setSelectedLead(data.lead);
+				queryClient.invalidateQueries({ queryKey: ["leads"] });
+				toast.success("Note updated");
+			}
+		} catch (err: any) {
+			console.error("Failed to update note", err);
+			toast.error(err.response?.data?.message || "Failed to update note");
+			throw err;
+		}
+	};
+
+	const handleDeleteNote = async (noteId: string) => {
+		if (!selectedLead) return;
+		try {
+			const { data } = await api.delete(
+				`/leads/${selectedLead._id}/notes/${noteId}`,
+			);
+			if (data.success) {
+				setSelectedLead(data.lead);
+				queryClient.invalidateQueries({ queryKey: ["leads"] });
+				toast.success("Note deleted");
+			}
+		} catch (err: any) {
+			console.error("Failed to delete note", err);
+			toast.error(err.response?.data?.message || "Failed to delete note");
+			throw err;
+		}
+	};
+
 	const handleScheduleFollowup = async () => {
 		if (!selectedLead || !followupDate) return;
 		setSchedulingFollowup(true);
@@ -1575,6 +1612,9 @@ const handlePincodeChange = async (value: string) => {
 				handleStatusChange={handleStatusChange}
 				handleToggleCall={handleToggleCall}
 				handleAddNote={handleAddNote}
+				handleUpdateNote={handleUpdateNote}
+				handleDeleteNote={handleDeleteNote}
+				currentUserId={currentUser?._id}
 				handleScheduleFollowup={handleScheduleFollowup}
 				getInitials={getInitials}
 				getCampaignName={getCampaignName}

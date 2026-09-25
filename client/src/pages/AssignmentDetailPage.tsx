@@ -2043,7 +2043,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                                         });
                                                     })()}
                                                     <button
-                                                        className="reply-btn"
+                                                        className="reply-btn absolute top-1/2 translateY(-50%) flex bg-(--color-surface) border border-(--color-border) rounded-[50%] "
                                                         onClick={() => setReplyTo(msg)}
                                                         style={{
                                                             position: 'absolute',

@@ -191,7 +191,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const updated = conversations.map(c => {
             if (c.type === 'direct') {
                 // Find if the status update is for the OTHER participant in this direct chat
-                const otherParticipant = c.participants.find(p => p._id === userId && p._id !== currentUserId);
+                const otherParticipant = c.participants.find(p => p?._id === userId && p?._id !== currentUserId);
                 if (otherParticipant) {
                     return { ...c, isOnline: status === 'online' };
                 }
@@ -283,13 +283,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
             if (c._id !== conversationId || !c.lastMessage) return c;
             if (patch.messageId && c.lastMessage._id !== patch.messageId) return c;
             let last = c.lastMessage;
-            if (patch.deliveredTo && String(last.sender._id) !== String(patch.deliveredTo.user)) {
+            const lastSenderId = (last as any)?.sender?._id;
+            if (patch.deliveredTo && (lastSenderId == null || String(lastSenderId) !== String(patch.deliveredTo.user))) {
                 const already = last.deliveredTo?.some(d => String(d.user) === String(patch.deliveredTo!.user));
                 if (!already) {
                     last = { ...last, deliveredTo: [...(last.deliveredTo || []), patch.deliveredTo] };
                 }
             }
-            if (patch.readBy && String(last.sender._id) !== String(patch.readBy.user)) {
+            if (patch.readBy && (lastSenderId == null || String(lastSenderId) !== String(patch.readBy.user))) {
                 const already = last.readBy?.some(r => String(r.user) === String(patch.readBy!.user));
                 if (!already) {
                     last = { ...last, readBy: [...(last.readBy || []), patch.readBy] };

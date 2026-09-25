@@ -65,6 +65,9 @@ interface LeadDetailModalProps {
 	handleStatusChange: (id: string, status: Lead["status"]) => void;
 	handleToggleCall: () => void;
 	handleAddNote: () => void;
+	handleUpdateNote: (noteId: string, text: string) => Promise<void>;
+	handleDeleteNote: (noteId: string) => Promise<void>;
+	currentUserId?: string;
 	handleScheduleFollowup: () => void;
 	getInitials: (name: string) => string;
 	getCampaignName: (id: any) => string;
@@ -163,6 +166,9 @@ export default function LeadDetailModal({
 	handleStatusChange,
 	handleToggleCall,
 	handleAddNote,
+	handleUpdateNote,
+	handleDeleteNote,
+	currentUserId,
 	handleScheduleFollowup,
 	getInitials,
 	getCampaignName,
@@ -171,9 +177,11 @@ export default function LeadDetailModal({
 	formatDateShort,
 	formatDuration,
 }: LeadDetailModalProps) {
-	if (!selectedLead) return null;
-
+	/* ── All hooks must run unconditionally, before any early return ── */
 	const [mounted, setMounted] = useState(false);
+	const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+	const [editingText, setEditingText] = useState("");
+	const [noteBusyId, setNoteBusyId] = useState<string | null>(null);
 	const [dragOffset, setDragOffset] = useState(0);
 	const [isExiting, setIsExiting] = useState(false);
 	const [expandedMobile, setExpandedMobile] = useState(false);
@@ -188,22 +196,83 @@ export default function LeadDetailModal({
 	const dragOffsetRef = useRef(0);
 	const cardRef = useRef<HTMLDivElement>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
+	const touchStartY = useRef(0);
+	const isDraggingRef = useRef(false);
 
 	useEffect(() => {
 		requestAnimationFrame(() => setMounted(true));
 	}, []);
 
-	const priorityColor =
-		PRIORITY_COLORS[selectedLead.priority] || "var(--color-text-tertiary)";
-
 	const closeModal = () => {
-		
+
 		setIsEditingLead(false)
 		setUpdatingLead(false)
 		setSelectedLead(null);
 		setIsCalling(false);
 		setIsEditingLead(false);
 		setNewNote(""); // test passed
+		setEditingNoteId(null);
+		setEditingText("");
+		setNoteBusyId(null);
+	};
+
+	/* Reset note-editing state when switching leads */
+	useEffect(() => {
+		setEditingNoteId(null);
+		setEditingText("");
+		setNoteBusyId(null);
+	}, [selectedLead?._id]);
+
+	const startEditingNote = (noteId: string, currentText: string) => {
+		setEditingNoteId(noteId);
+		setEditingText(currentText);
+	};
+
+	const cancelEditingNote = () => {
+		setEditingNoteId(null);
+		setEditingText("");
+	};
+
+	const saveEditingNote = async () => {
+		if (!editingNoteId || !editingText.trim() || noteBusyId) return;
+		setNoteBusyId(editingNoteId);
+		try {
+			await handleUpdateNote(editingNoteId, editingText.trim());
+			setEditingNoteId(null);
+			setEditingText("");
+		} catch {
+			/* error toast handled by parent */
+		} finally {
+			setNoteBusyId(null);
+		}
+	};
+
+	const confirmDeleteNote = async (noteId: string) => {
+		if (noteBusyId) return;
+		const ok = window.confirm("Delete this note? This cannot be undone.");
+		if (!ok) return;
+		setNoteBusyId(noteId);
+		try {
+			await handleDeleteNote(noteId);
+			if (editingNoteId === noteId) {
+				setEditingNoteId(null);
+				setEditingText("");
+			}
+		} catch {
+			/* error toast handled by parent */
+		} finally {
+			setNoteBusyId(null);
+		}
+	};
+
+	/* Owner-only: a note can be edited/deleted solely by the user who created it */
+	const canModifyNote = (note: { createdBy?: any }) => {
+		if (!currentUserId) return true;
+		const ownerId =
+			typeof note.createdBy === "string"
+				? note.createdBy
+				: (note.createdBy?._id ?? "");
+		return String(ownerId) === String(currentUserId);
 	};
 
 	const animateClose = () => {
@@ -254,9 +323,6 @@ export default function LeadDetailModal({
 	}, [statusDropdownOpen]);
 
 	/* Touch handlers on the card for drag-to-dismiss (mobile only) */
-	const touchStartY = useRef(0);
-	const isDraggingRef = useRef(false);
-
 	useEffect(() => {
 		const el = cardRef.current;
 		if (!el) return;
@@ -306,6 +372,12 @@ export default function LeadDetailModal({
 			el.removeEventListener("touchend", onEnd);
 		};
 	}, []);
+
+	/* ── Early return AFTER all hooks so hook order stays stable ── */
+	if (!selectedLead) return null;
+
+	const priorityColor =
+		PRIORITY_COLORS[selectedLead.priority] || "var(--color-text-tertiary)";
 
 	const startEditing = () => {
 		setUpdatingLead(true)
@@ -1116,91 +1188,189 @@ export default function LeadDetailModal({
 
 						{/* ═══ COLUMN 3: Notes ═══ */}
 						{!updatingLead &&
-						<div
-							className="lg:col-span-2 xl:col-span-1 border border-(--color-border) rounded-xl overflow-hidden flex flex-col"
-							style={{
-								borderColor:
-									"color-mix(in srgb, var(--color-primary) 20%, transparent)",
-							}}
-						>
-							<div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-(--color-border)">
-								<div className="flex items-center gap-2">
-									<MessageSquare
-										size={14}
-										className="text-(--color-primary)"
+							<div
+								className="lg:col-span-2 xl:col-span-1 border border-(--color-border) rounded-xl overflow-hidden flex flex-col"
+								style={{
+									borderColor:
+										"color-mix(in srgb, var(--color-primary) 20%, transparent)",
+								}}
+							>
+								<div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-(--color-border)">
+									<div className="flex items-center gap-2">
+										<MessageSquare
+											size={14}
+											className="text-(--color-primary)"
+										/>
+										<span className="text-(--color-text) font-semibold text-xs sm:text-sm">
+											Notes ({selectedLead.notes.length})
+										</span>
+									</div>
+								</div>
+								<div className="overflow-y-auto max-h-55 sm:max-h-[50dvh] p-3 sm:p-4">
+									{selectedLead.notes.length === 0 ? (
+										<p className="text-(--color-text-tertiary) text-xs sm:text-sm text-center mt-6 sm:mt-10">
+											No notes yet. Add the first note below.
+										</p>
+									) : (
+										<div className="flex flex-col gap-3 sm:gap-4">
+											{[...selectedLead.notes]
+												.reverse()
+												.map((note, idx) => {
+													const isEditing =
+														editingNoteId === note._id;
+													const isBusy =
+														noteBusyId === note._id;
+													const canModify =
+														canModifyNote(note);
+													return (
+														<div
+															key={note._id}
+															className="flex gap-2 sm:gap-3 relative group"
+														>
+															{idx !==
+																selectedLead.notes
+																	.length -
+																	1 && (
+																<div className="absolute left-2.5 sm:left-3 top-7 sm:top-8 bottom-0 w-0.5 bg-(--color-border)" />
+															)}
+															<div className="flex items-center justify-center rounded-full w-6 h-6 sm:w-7 sm:h-7 bg-(--color-primary-light) text-(--color-primary) text-[0.55rem] sm:text-[0.65rem] font-semibold border-2 border-(--color-bg) z-10 shrink-0">
+																{getInitials(
+																	note.createdBy
+																		?.name || "U",
+																)}
+															</div>
+															<div className="flex-1 min-w-0">
+																<div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
+																	<span className="text-(--color-text) font-semibold text-[0.7rem] sm:text-[0.78rem] truncate max-w-30 sm:max-w-none">
+																		{note.createdBy
+																			?.name ||
+																			"Unknown"}
+																	</span>
+																	<span className="text-(--color-text-tertiary) text-[0.55rem] sm:text-[0.62rem] shrink-0">
+																		{formatDateShort(
+																			note.createdAt,
+																		)}
+																	</span>
+																	{canModify &&
+																		!isEditing && (
+																			<span className="ml-auto flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+																				<button
+																					type="button"
+																					title="Edit note"
+																					disabled={isBusy}
+																					onClick={() =>
+																						startEditingNote(
+																							note._id,
+																							note.text,
+																						)
+																					}
+																					className="bg-(--color-primary-light) border-none cursor-pointer text-(--color-primary) w-6 h-6 rounded-md flex items-center justify-center hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+																				>
+																					<Pen size={11} />
+																				</button>
+																				<button
+																					type="button"
+																					title="Delete note"
+																					disabled={isBusy}
+																					onClick={() =>
+																						confirmDeleteNote(
+																							note._id,
+																						)
+																					}
+																					className="bg-(--color-danger-light) border-none cursor-pointer text-(--color-danger) w-6 h-6 rounded-md flex items-center justify-center hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+																				>
+																					<Trash2
+																						size={11}
+																					/>
+																				</button>
+																			</span>
+																		)}
+																</div>
+																{isEditing ? (
+																	<div className="flex flex-col gap-1.5">
+																		<textarea
+																			className="input w-full px-2 py-1.5 text-[0.72rem] sm:text-[0.8rem] rounded-lg resize-none min-h-15 max-h-30"
+																			rows={2}
+																			autoFocus
+																			value={editingText}
+																			disabled={isBusy}
+																			onChange={(e) =>
+																				setEditingText(
+																					e.target.value,
+																				)
+																			}
+																			onKeyDown={(e) => {
+																				if (
+																					e.key ===
+																						"Enter" &&
+																					(e.ctrlKey ||
+																						e.metaKey)
+																				) {
+																					e.preventDefault();
+																					saveEditingNote();
+																				} else if (
+																					e.key ===
+																					"Escape"
+																				) {
+																					cancelEditingNote();
+																				}
+																			}}
+																		/>
+																		<div className="flex gap-1.5">
+																			<button
+																				type="button"
+																				className="btn btn-secondary px-2.5 py-1 rounded-md text-[0.68rem] sm:text-[0.75rem] font-semibold"
+																				disabled={isBusy}
+																				onClick={cancelEditingNote}
+																			>
+																				Cancel
+																			</button>
+																			<button
+																				type="button"
+																				className="btn btn-primary px-2.5 py-1 rounded-md text-[0.68rem] sm:text-[0.75rem] font-semibold"
+																				disabled={
+																					!editingText.trim() ||
+																					isBusy
+																				}
+																				onClick={saveEditingNote}
+																			>
+																				{isBusy
+																					? "Saving..."
+																					: "Save"}
+																			</button>
+																		</div>
+																	</div>
+																) : (
+																	<p className="text-(--color-text-secondary) text-[0.75rem] sm:text-[0.82rem] leading-5 sm:leading-6 m-0 whitespace-pre-wrap wrap-break-word">
+																		{note.text}
+																	</p>
+																)}
+															</div>
+														</div>
+													);
+												})}
+										</div>
+									)}
+								</div>
+								<div className="flex gap-2 p-2.5 sm:p-3 border-t border-(--color-border) mt-auto">
+									<textarea
+										id="note-input"
+										className="input flex-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[0.72rem] sm:text-[0.8rem] rounded-lg resize-none min-h-13 sm:min-h-15 max-h-25 sm:max-h-30"
+										placeholder="Add a note..."
+										rows={2}
+										value={newNote}
+										onChange={(e) => setNewNote(e.target.value)}
 									/>
-									<span className="text-(--color-text) font-semibold text-xs sm:text-sm">
-										Notes ({selectedLead.notes.length})
-									</span>
+									<button
+										className="btn btn-primary px-3 sm:px-4 rounded-lg font-semibold text-[0.75rem] sm:text-[0.82rem]"
+										disabled={!newNote.trim()}
+										onClick={handleAddNote}
+									>
+										Add
+									</button>
 								</div>
 							</div>
-							<div className="overflow-y-auto max-h-55 sm:max-h-[50dvh] p-3 sm:p-4">
-								{selectedLead.notes.length === 0 ? (
-									<p className="text-(--color-text-tertiary) text-xs sm:text-sm text-center mt-6 sm:mt-10">
-										No notes yet. Add the first note below.
-									</p>
-								) : (
-									<div className="flex flex-col gap-3 sm:gap-4">
-										{[...selectedLead.notes]
-											.reverse()
-											.map((note, idx) => (
-												<div
-													key={note._id}
-													className="flex gap-2 sm:gap-3 relative"
-												>
-													{idx !==
-														selectedLead.notes
-															.length -
-															1 && (
-														<div className="absolute left-2.5 sm:left-3 top-7 sm:top-8 bottom-0 w-0.5 bg-(--color-border)" />
-													)}
-													<div className="flex items-center justify-center rounded-full w-6 h-6 sm:w-7 sm:h-7 bg-(--color-primary-light) text-(--color-primary) text-[0.55rem] sm:text-[0.65rem] font-semibold border-2 border-(--color-bg) z-10 shrink-0">
-														{getInitials(
-															note.createdBy
-																?.name || "U",
-														)}
-													</div>
-													<div className="flex-1 min-w-0">
-														<div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
-															<span className="text-(--color-text) font-semibold text-[0.7rem] sm:text-[0.78rem] truncate max-w-30 sm:max-w-none">
-																{note.createdBy
-																	?.name ||
-																	"Unknown"}
-															</span>
-															<span className="text-(--color-text-tertiary) text-[0.55rem] sm:text-[0.62rem] shrink-0">
-																{formatDateShort(
-																	note.createdAt,
-																)}
-															</span>
-														</div>
-														<p className="text-(--color-text-secondary) text-[0.75rem] sm:text-[0.82rem] leading-5 sm:leading-6 m-0 whitespace-pre-wrap wrap-break-word">
-															{note.text}
-														</p>
-													</div>
-												</div>
-											))}
-									</div>
-								)}
-							</div>
-							<div className="flex gap-2 p-2.5 sm:p-3 border-t border-(--color-border)">
-								<textarea
-									id="note-input"
-									className="input flex-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[0.72rem] sm:text-[0.8rem] rounded-lg resize-none min-h-13 sm:min-h-15 max-h-25 sm:max-h-30"
-									placeholder="Add a note..."
-									rows={2}
-									value={newNote}
-									onChange={(e) => setNewNote(e.target.value)}
-								/>
-								<button
-									className="btn btn-primary px-3 sm:px-4 rounded-lg font-semibold text-[0.75rem] sm:text-[0.82rem]"
-									disabled={!newNote.trim()}
-									onClick={handleAddNote}
-								>
-									Add
-								</button>
-							</div>
-						</div>
-}
+						}
 					</div>
 				</div>
 			</div>

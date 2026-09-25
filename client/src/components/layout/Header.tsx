@@ -107,7 +107,10 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
 
       const isDifferentChat =
         message.conversation !== state.activeConversationId;
-      const isFromOthers = message.sender._id !== user?._id;
+      const isFromOthers =
+        message.sender?._id != null &&
+        user?._id != null &&
+        String(message.sender._id) !== String(user._id);
       if (isFromOthers && isDifferentChat) {
         // Play notification chime!
         try {

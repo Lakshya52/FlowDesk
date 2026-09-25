@@ -9,6 +9,32 @@ import { uploadToGridFS, deleteFromGridFS } from '../utils/gridfs';
 import { createNotification } from '../services/notificationService';
 import { NotificationType } from '../models/Notification';
 
+/* ------------------------------------------------------------------ */
+/* Defensive normalization: populate() yields `null` when the referenced */
+/* user was deleted. The chat UI dereferences `sender._id` / `sender.name` */
+/* unconditionally, so a single deleted user crashes every participant's */
+/* sidebar render (TypeError: Cannot read properties of null). Never let */
+/* a null sender or null participant leak to the client.                */
+/* ------------------------------------------------------------------ */
+const DELETED_USER_FALLBACK = {
+    _id: 'deleted',
+    name: 'Deleted User',
+    email: '',
+    avatar: '',
+};
+
+function normalizeMessageSender(msgObj: any): any {
+    if (!msgObj) return msgObj;
+    if (!msgObj.sender) {
+        msgObj.sender = { ...DELETED_USER_FALLBACK };
+    }
+    const pm: any = (msgObj as any).parentMessage;
+    if (pm && typeof pm === 'object' && !pm.sender) {
+        pm.sender = { name: 'Deleted User' };
+    }
+    return msgObj;
+}
+
 export const getConversations = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user!._id;
@@ -27,6 +53,8 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
                 .populate('attachments');
 
             let lastMessageObj = lastMessage ? (lastMessage as any).toObject() : null;
+            // Deleted sender → populate gives null → would crash sidebar render.
+            lastMessageObj = normalizeMessageSender(lastMessageObj);
 
             // Count unread messages (current user is not in readBy)
             const unreadCount = await Message.countDocuments({
@@ -39,24 +67,57 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
             let avatar = conv.avatar;
             let isOnline = false;
 
+            // Participants may contain null entries when a user was deleted
+            // (populate → null). A null entry is NEVER the requester (they
+            // exist) — so for a DIRECT chat it must be the *other* user.
+            // Filtering nulls blindly turns every deleted-user DM into a
+            // fake self-chat (all titled with your own name).
+            const rawParticipants = ((conv.participants as any[]) || []);
+            const safeParticipants = rawParticipants.filter(Boolean);
+            const deletedCount = rawParticipants.length - safeParticipants.length;
+
             if (conv.type === ConversationType.DIRECT) {
-                // Find the other participant (if self-chat, use self)
-                const otherParticipant = conv.participants.find(p => p._id.toString() !== userId.toString()) || conv.participants[0];
+                const otherParticipant = safeParticipants.find(p => p._id?.toString() !== userId.toString());
                 if (otherParticipant) {
-                    name = (otherParticipant as any).name;
+                    name = (otherParticipant as any).name ?? 'Deleted User';
                     avatar = (otherParticipant as any).avatar;
-                    isOnline = activeUsers.has((otherParticipant._id).toString());
+                    const otherId = (otherParticipant as any)._id;
+                    if (otherId) isOnline = activeUsers.has(otherId.toString());
+                } else if (deletedCount > 0) {
+                    // DM whose other side was deleted — show it as such,
+                    // don't fall back to self.
+                    name = 'Deleted User';
+                    avatar = undefined;
+                    isOnline = false;
+                } else {
+                    // Genuine self-chat (only participant is self).
+                    const self = safeParticipants[0];
+                    if (self) {
+                        name = (self as any).name ?? name;
+                        avatar = (self as any).avatar ?? avatar;
+                        isOnline = true;
+                    }
                 }
             }
 
 
+
+            // Keep array length stable so the client can tell self-chat
+            // (len 1) apart from deleted-user DM (self + placeholder).
+            const responseParticipants = [
+                ...safeParticipants,
+                ...Array.from({ length: Math.max(0, deletedCount) }, (_, i) => ({
+                    ...DELETED_USER_FALLBACK,
+                    _id: `deleted:${conv._id}:${i}`,
+                })),
+            ];
 
             return {
                 _id: conv._id,
                 type: conv.type,
                 name,
                 avatar,
-                participants: conv.participants,
+                participants: responseParticipants,
                 createdBy: conv.createdBy,
                 admins: conv.admins,
                 createdAt: conv.createdAt,
@@ -146,7 +207,7 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
         // Convert messages to plain objects
         const decryptedMessages = messages.map((msg: any) => {
             const msgObj = msg.toObject ? (msg as any).toObject() : msg;
-            return msgObj;
+            return normalizeMessageSender(msgObj);
         });
 
         // Notify other participants in the conversation that messages were read
@@ -203,7 +264,9 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
                     .populate('sender', 'name email avatar')
                     .populate('attachments');
 
-
+                const lastMessageObj = normalizeMessageSender(
+                    lastMessage ? (lastMessage as any).toObject() : lastMessage,
+                );
 
                 const unreadCount = await Message.countDocuments({
                     conversation: existing._id,
@@ -211,19 +274,46 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
                     'readBy.user': { $ne: userId }
                 });
 
-                const otherParticipant = existing.participants.find(p => p._id.toString() !== userId.toString()) || existing.participants[0];
-                const isOnline = activeUsers.has(otherParticipant._id.toString());
+                const rawExisting = ((existing.participants as any[]) || []);
+                const safeExistingParticipants = rawExisting.filter(Boolean);
+                const deletedExistingCount = rawExisting.length - safeExistingParticipants.length;
+                const otherParticipant = safeExistingParticipants.find(p => p._id?.toString() !== userId.toString());
+                let existingName: string;
+                let existingAvatar: string | undefined;
+                let existingOnline = false;
+                if (otherParticipant) {
+                    existingName = (otherParticipant as any)?.name ?? 'Deleted User';
+                    existingAvatar = (otherParticipant as any)?.avatar;
+                    const otherId = (otherParticipant as any)?._id;
+                    existingOnline = otherId ? activeUsers.has(otherId.toString()) : false;
+                } else if (deletedExistingCount > 0) {
+                    existingName = 'Deleted User';
+                    existingAvatar = undefined;
+                    existingOnline = false;
+                } else {
+                    const self = safeExistingParticipants[0];
+                    existingName = (self as any)?.name ?? 'Self';
+                    existingAvatar = (self as any)?.avatar;
+                    existingOnline = true;
+                }
+                const isOnline = existingOnline;
 
                 res.status(200).json({
                     conversation: {
                         _id: existing._id,
                         type: existing.type,
-                        name: (otherParticipant as any).name,
-                        avatar: (otherParticipant as any).avatar,
-                        participants: existing.participants,
+                        name: existingName,
+                        avatar: existingAvatar,
+                        participants: [
+                            ...safeExistingParticipants,
+                            ...Array.from({ length: Math.max(0, deletedExistingCount) }, (_, i) => ({
+                                ...DELETED_USER_FALLBACK,
+                                _id: `deleted:${existing._id}:${i}`,
+                            })),
+                        ],
                         createdAt: existing.createdAt,
                         updatedAt: existing.updatedAt,
-                        lastMessage,
+                        lastMessage: lastMessageObj,
                         unreadCount,
                         isOnline
                     }
@@ -254,11 +344,14 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
         let formattedAvatar = populated.avatar;
         let isOnline = false;
 
+        const safePopulatedParticipants = ((populated.participants as any[]) || []).filter(Boolean);
+
         if (populated.type === ConversationType.DIRECT) {
-            const otherParticipant = populated.participants.find(p => p._id.toString() !== userId.toString()) || populated.participants[0];
-            formattedName = (otherParticipant as any).name;
-            formattedAvatar = (otherParticipant as any).avatar;
-            isOnline = activeUsers.has(otherParticipant._id.toString());
+            const otherParticipant = safePopulatedParticipants.find(p => p._id?.toString() !== userId.toString()) || safePopulatedParticipants[0];
+            formattedName = (otherParticipant as any)?.name ?? formattedName;
+            formattedAvatar = (otherParticipant as any)?.avatar ?? formattedAvatar;
+            const otherId = (otherParticipant as any)?._id;
+            if (otherId) isOnline = activeUsers.has(otherId.toString());
         }
 
         const formattedResult = {
@@ -266,7 +359,7 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
             type: populated.type,
             name: formattedName,
             avatar: formattedAvatar,
-            participants: populated.participants,
+            participants: safePopulatedParticipants,
             createdBy: populated.createdBy,
             admins: populated.admins,
             createdAt: populated.createdAt,
@@ -372,9 +465,11 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
+        const safePopulated: any = normalizeMessageSender((populated as any).toObject ? (populated as any).toObject() : populated);
+
         // Emit new message event to all participants' personal rooms
         conversation.participants.forEach(pId => {
-            io.to(`user_${pId.toString()}`).emit('new_chat_message', populated);
+            io.to(`user_${pId.toString()}`).emit('new_chat_message', safePopulated);
         });
 
         // Notify the sender which participants received the message on their live
@@ -404,7 +499,7 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
             await Promise.all(mentionPromises);
         }
 
-        res.status(201).json({ message: populated });
+        res.status(201).json({ message: safePopulated });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -709,9 +804,11 @@ export const forwardMessage = async (req: AuthRequest, res: Response): Promise<v
             return;
         }
 
+        const safeForwarded: any = normalizeMessageSender((populated as any).toObject ? (populated as any).toObject() : populated);
+
         // Emit new message event to all participants of target conversation
         targetConversation.participants.forEach(pId => {
-            io.to(`user_${pId.toString()}`).emit('new_chat_message', populated);
+            io.to(`user_${pId.toString()}`).emit('new_chat_message', safeForwarded);
         });
 
         // Notify the forwarder which participants received it on their live socket
@@ -724,7 +821,7 @@ export const forwardMessage = async (req: AuthRequest, res: Response): Promise<v
             });
         });
 
-        res.status(201).json({ message: populated });
+        res.status(201).json({ message: safeForwarded });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -776,15 +873,17 @@ export const editMessage = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
+        const safeEdited: any = normalizeMessageSender((populated as any).toObject ? (populated as any).toObject() : populated);
+
         // Notify all participants of the conversation
         const conversation = await Conversation.findById(message.conversation);
         if (conversation) {
             conversation.participants.forEach(pId => {
-                io.to(`user_${pId.toString()}`).emit('message_edited', populated);
+                io.to(`user_${pId.toString()}`).emit('message_edited', safeEdited);
             });
         }
 
-        res.json({ message: populated });
+        res.json({ message: safeEdited });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }

@@ -42,9 +42,67 @@ import {
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
-// Cache for instant image previews â€” capped to prevent memory leaks
+// Cache for instant image previews — capped to prevent memory leaks
 const MAX_PREVIEW_CACHE_SIZE = 50;
 const localPreviewCache = new Map<string, string>();
+
+// Real participant ids for E2EE: drops missing entries and the
+// `deleted:<conv>:<i>` placeholders the server sends for deleted users.
+function realParticipantIds(participants: any[] | undefined): string[] {
+  return (participants ?? [])
+    .map((p) => p?._id)
+    .filter(
+      (id): id is string => !!id && !String(id).startsWith("deleted"),
+    );
+}
+
+// Display name/avatar that doesn't trust the server title blindly.
+// Old server builds return your own name when the other side is deleted
+// (null participant filtered → fallback to self). Derive from participants
+// + lastMessage sender (old server strips nulls, so a deleted DM looks like
+// [self] — identical to self-chat — except its lastMessage is from someone
+// who is no longer in participants).
+function getDirectDisplay(
+  c: any,
+  currentUserId: string | undefined,
+): { name: string; avatar?: string; isDeletedOther: boolean } {
+  const raw = (c?.participants ?? []) as any[];
+  const reals = raw.filter(
+    (p) => p?._id && !String(p._id).startsWith("deleted"),
+  );
+  const other = reals.find(
+    (p) => currentUserId && String(p._id) !== String(currentUserId),
+  );
+  if (other) return { name: other.name ?? c?.name, avatar: other.avatar, isDeletedOther: false };
+  if (c?.type !== "direct") return { name: c?.name, avatar: c?.avatar, isDeletedOther: false };
+  const hasDeletedPlaceholder = raw.some(
+    (p) => !p || (p._id && String(p._id).startsWith("deleted")),
+  );
+  if (hasDeletedPlaceholder || raw.length >= 2 || reals.length === 0) {
+    // Genuine self-chat has exactly 1 raw entry which is self.
+    const isSelfChat =
+      raw.length <= 1 &&
+      reals.length === 1 &&
+      currentUserId &&
+      String(reals[0]._id) === String(currentUserId);
+    if (!isSelfChat) return { name: "Deleted User", avatar: undefined, isDeletedOther: true };
+  }
+  // Old-server fallback: participants look like self-chat ([self]) but the
+  // last message is from a deleted sender (null / deleted placeholder).
+  // Your screenshot is exactly this: title "Lakshya", preview
+  // "Deleted User: yo 2". A true self-chat's lastMessage would be from you.
+  const lmSender: any = (c as any)?.lastMessage?.sender;
+  const lmId = lmSender?._id;
+  const lmName = lmSender?.name;
+  const lmIsDeleted =
+    !lmId || String(lmId).startsWith("deleted") || lmName === "Deleted User";
+  const lmIsSelf =
+    !!lmId && !!currentUserId && String(lmId) === String(currentUserId);
+  if ((c as any)?.lastMessage && lmIsDeleted && !lmIsSelf) {
+    return { name: "Deleted User", avatar: undefined, isDeletedOther: true };
+  }
+  return { name: c?.name, avatar: c?.avatar, isDeletedOther: false };
+}
 
 function addToPreviewCache(key: string, url: string) {
   if (localPreviewCache.size >= MAX_PREVIEW_CACHE_SIZE) {
@@ -87,6 +145,20 @@ function DeleteConfirm({
     >
       <span style={{ color: "var(--color-text-secondary)" }}>{label}</span>
       <button
+        onClick={onCancel}
+        style={{
+          border: "1px solid var(--color-border)",
+          background: "none",
+          color: "var(--color-text-secondary)",
+          borderRadius: 6,
+          padding: "2px 8px",
+          cursor: "pointer",
+          fontSize: "10px",
+        }}
+      >
+        No
+      </button>
+      <button
         onClick={onConfirm}
         style={{
           border: "none",
@@ -100,20 +172,6 @@ function DeleteConfirm({
         }}
       >
         Yes
-      </button>
-      <button
-        onClick={onCancel}
-        style={{
-          border: "1px solid var(--color-border)",
-          background: "none",
-          color: "var(--color-text-secondary)",
-          borderRadius: 6,
-          padding: "2px 8px",
-          cursor: "pointer",
-          fontSize: "10px",
-        }}
-      >
-        No
       </button>
     </div>
   );
@@ -302,8 +360,9 @@ export default function ChatsPage() {
           });
         }
       } else if (
-        message.sender._id !== user?._id &&
+        message.sender?._id != null &&
         user?._id &&
+        String(message.sender._id) !== String(user._id) &&
         message.conversation
       ) {
         // Message arrived for a non-active conversation — this device still
@@ -336,7 +395,7 @@ export default function ChatsPage() {
           conv &&
           (await ensureConversationKeys(
             message.conversation,
-            conv.participants.map((p) => p._id),
+            realParticipantIds(conv.participants),
           ))
         ) {
           plain = await decryptContent(message.conversation, message.content, message.iv!);
@@ -475,7 +534,7 @@ export default function ChatsPage() {
           setMessages((prev) =>
             prev.map((m) => {
               if (m._id !== messageId) return m;
-              if (String(m.sender._id) === deliveredToUserId) return m;
+              if (m.sender?._id != null && String(m.sender._id) === String(deliveredToUserId)) return m;
               const alreadyDelivered = m.deliveredTo?.some(
                 (d) => d.user === deliveredToUserId,
               );
@@ -518,7 +577,7 @@ export default function ChatsPage() {
         if (conversationId === currentConvRef.current) {
           setMessages((prev) =>
             prev.map((m) => {
-              if (String(m.sender._id) === deliveredToUserId) return m;
+              if (m.sender?._id != null && String(m.sender._id) === String(deliveredToUserId)) return m;
               const alreadyDelivered = m.deliveredTo?.some(
                 (d) => d.user === deliveredToUserId,
               );
@@ -610,7 +669,7 @@ export default function ChatsPage() {
         if (conv) {
           await ensureConversationKeys(
             activeConversationId,
-            conv.participants.map((p) => p._id),
+            realParticipantIds(conv.participants),
           );
           fetchedMsgs = await Promise.all(
             fetchedMsgs.map(async (m) => {
@@ -640,7 +699,7 @@ export default function ChatsPage() {
         }
 
         if (conv?.type === "direct" && user) {
-          const other = conv.participants.find((p) => p._id !== user._id);
+          const other = conv.participants.find((p) => p?._id !== user._id);
           setActiveChatUserId(other?._id ?? null);
         } else {
           setActiveChatUserId(null);
@@ -780,7 +839,8 @@ export default function ChatsPage() {
     const matchingMentions: string[] = [];
     if (currentConv) {
       currentConv.participants.forEach((p: any) => {
-        if (messageInput.includes(`@${p.name}`)) matchingMentions.push(p._id);
+        if (p?.name && p?._id && messageInput.includes(`@${p.name}`))
+          matchingMentions.push(p._id);
       });
     }
 
@@ -789,7 +849,7 @@ export default function ChatsPage() {
       if (currentConv) {
         const ok = await ensureConversationKeys(
           activeConversationId,
-          currentConv.participants.map((p: any) => p._id),
+          realParticipantIds(currentConv.participants),
         );
         if (!ok) {
           toast.error(`Encryption key not ready — ${getLastError() || "unknown reason"}`);
@@ -888,7 +948,7 @@ export default function ChatsPage() {
       if (currentConv) {
         const ok = await ensureConversationKeys(
           activeConversationId,
-          currentConv.participants.map((p: any) => p._id),
+          realParticipantIds(currentConv.participants),
         );
         if (!ok) {
           toast.error(`Encryption key not ready — ${getLastError() || "unknown reason"}`);
@@ -1099,7 +1159,7 @@ export default function ChatsPage() {
       const targetConv =
         useChatStore.getState().conversations.find((c) => c._id === finalConversationId);
       const participants =
-        targetConv?.participants.map((p) => p._id) ??
+        realParticipantIds(targetConv?.participants) ??
         (forwardingMessage ? [] : []);
       const ok = await ensureConversationKeys(finalConversationId, participants as string[]);
       if (!ok) {
@@ -1195,14 +1255,14 @@ export default function ChatsPage() {
   };
 
   const filteredConversations = conversations.filter((c) =>
-    matchesNameStart(c.name, searchQuery),
+    matchesNameStart(getDirectDisplay(c, user?._id).name, searchQuery),
   );
 
   const matchingExternalUsers = searchQuery.trim()
     ? users.filter((u) => {
         const inConversations = conversations.some(
           (c) =>
-            c.type === "direct" && c.participants.some((p) => p._id === u._id),
+            c.type === "direct" && c.participants.some((p) => p?._id === u._id),
         );
         return (
           !inConversations &&
@@ -1234,7 +1294,7 @@ export default function ChatsPage() {
         }
         await ensureConversationKeys(
           c._id,
-          c.participants.map((p) => p._id),
+          realParticipantIds(c.participants),
         );
         out[c._id] = await decryptContent(c._id, lm.content ?? "", lm.iv);
       }
@@ -1279,8 +1339,9 @@ export default function ChatsPage() {
 
   const isMessageRead = useCallback((msg: MessageSnippet): boolean => {
     if (!msg.readBy || msg.readBy.length === 0) return false;
+    if (msg.sender?._id == null) return false;
     return msg.readBy.some((r) => {
-      return String(r.user) !== String(msg.sender._id);
+      return String(r.user) !== String(msg.sender?._id);
     });
   }, []);
 
@@ -1288,8 +1349,9 @@ export default function ChatsPage() {
   // device (but hasn't read it yet). Only relevant for messages we sent.
   const isMessageDelivered = useCallback((msg: MessageSnippet): boolean => {
     if (!msg.deliveredTo || msg.deliveredTo.length === 0) return false;
+    if (msg.sender?._id == null) return false;
     return msg.deliveredTo.some((d) => {
-      return String(d.user) !== String(msg.sender._id);
+      return String(d.user) !== String(msg.sender?._id);
     });
   }, []);
 
@@ -1506,9 +1568,11 @@ export default function ChatsPage() {
                   >
                     {filteredConversations.map((c) => {
                       const isActive = c._id === activeConversationId;
-                      const showOnline = c.type === "direct" && c.isOnline;
+                      const showOnline =
+                        c.type === "direct" && c.isOnline && !getDirectDisplay(c, user?._id).isDeletedOther;
                       const latestMsg = c.lastMessage;
                       const isHovered = hoveredConvId === c._id;
+                      const display = getDirectDisplay(c, user?._id);
 
                       return (
                         <div
@@ -1539,7 +1603,7 @@ export default function ChatsPage() {
                           }}
                         >
                           <div style={{ position: "relative", flexShrink: 0 }}>
-                            <Avatar src={c.avatar} name={c.name} size={40} />
+                            <Avatar src={display.avatar} name={display.name} size={40} />
                             {showOnline && (
                               <span
                                 style={{
@@ -1577,7 +1641,7 @@ export default function ChatsPage() {
                                   maxWidth: "75%",
                                 }}
                               >
-                                {c.name}
+                                {display.name}
                               </h4>
                               {latestMsg && (
                                 <span
@@ -1619,7 +1683,10 @@ export default function ChatsPage() {
                               >
                                 {latestMsg ? (
                                   <>
-                                    {latestMsg.sender._id === user?._id ? (
+                                    {latestMsg.sender?._id != null &&
+                                    user?._id != null &&
+                                    String(latestMsg.sender._id) ===
+                                      String(user._id) ? (
                                       <>
                                         You:&nbsp;
                                         {snippetTexts[c._id] ??
@@ -1630,7 +1697,7 @@ export default function ChatsPage() {
                                       </>
                                     ) : (
                                       <>
-                                        {`${latestMsg.sender.name}: `}
+                                        {`${latestMsg.sender?.name ?? "Deleted User"}: `}
                                         {snippetTexts[c._id] ??
                                           (latestMsg.iv && !latestMsg.isDeleted
                                             ? "Encrypted message"
@@ -1644,7 +1711,10 @@ export default function ChatsPage() {
                                 )}
                               </p>
                               {latestMsg &&
-                                latestMsg.sender._id === user?._id && (
+                                latestMsg.sender?._id != null &&
+                                user?._id != null &&
+                                String(latestMsg.sender._id) ===
+                                  String(user._id) && (
                                   <span
                                     style={{
                                       marginLeft: "auto",
@@ -1887,8 +1957,8 @@ export default function ChatsPage() {
                     </button>
                   )}
                   <Avatar
-                    src={activeConv.avatar}
-                    name={activeConv.name}
+                    src={getDirectDisplay(activeConv, user?._id).avatar}
+                    name={getDirectDisplay(activeConv, user?._id).name}
                     size={38}
                   />
                   <div>
@@ -1900,7 +1970,7 @@ export default function ChatsPage() {
                         color: "var(--color-text)",
                       }}
                     >
-                      {activeConv.name}
+                      {getDirectDisplay(activeConv, user?._id).name}
                     </h3>
                     <p
                       style={{
@@ -1936,7 +2006,7 @@ export default function ChatsPage() {
                 <div style={{ position: "relative" }}>
                   {pendingDeleteConv ? (
                     <DeleteConfirm
-                      label="Delete this chat?"
+                      label="Delete this chat? this can't be undone"
                       onConfirm={handleDeleteConversation}
                       onCancel={() => setPendingDeleteConv(false)}
                     />
@@ -2035,7 +2105,10 @@ export default function ChatsPage() {
                   </div>
                 ) : (
                   messages.map((msg, idx) => {
-                    const isMe = msg.sender._id === user?._id;
+                    const isMe =
+                      msg.sender?._id != null &&
+                      user?._id != null &&
+                      String(msg.sender._id) === String(user._id);
                     const prevMsg = idx > 0 ? messages[idx - 1] : null;
                     const isNewDate =
                       !prevMsg ||
@@ -2095,8 +2168,8 @@ export default function ChatsPage() {
                           {!isMe && isGroup && (
                             <div style={{ flexShrink: 0, marginBottom: 4 }}>
                               <Avatar
-                                src={msg.sender.avatar}
-                                name={msg.sender.name}
+                                src={msg.sender?.avatar}
+                                name={msg.sender?.name ?? "Deleted User"}
                                 size={28}
                               />
                             </div>
@@ -2350,7 +2423,7 @@ export default function ChatsPage() {
                           <div
                             style={{ position: "relative", maxWidth: "70%" }}
                           >
-                            {/* Sender name â€” group chats, received messages only */}
+                            {/* Sender name — group chats, received messages only */}
                             {!isMe && isGroup && (
                               <p
                                 style={{
@@ -2360,7 +2433,7 @@ export default function ChatsPage() {
                                   margin: "0 0 3px 4px",
                                 }}
                               >
-                                {msg.sender.name}
+                                {msg.sender?.name ?? "Deleted User"}
                               </p>
                             )}
 
@@ -2380,7 +2453,8 @@ export default function ChatsPage() {
                                 <span
                                   style={{ fontWeight: 600, display: "block" }}
                                 >
-                                  {msg.parentMessage.sender.name}
+                                  {msg.parentMessage.sender?.name ??
+                                    "Deleted User"}
                                 </span>
                                 <span
                                   style={{
@@ -2914,7 +2988,7 @@ export default function ChatsPage() {
                                     }}
                                     title={msg.reactions
                                       .filter((r) => r.emoji === emoji)
-                                      .map((r) => r.user.name)
+                                      .map((r) => r.user?.name ?? "Deleted User")
                                       .join(", ")}
                                   >
                                     <span>{emoji}</span>
@@ -3153,12 +3227,14 @@ export default function ChatsPage() {
                     {activeConv.participants
                       .filter(
                         (p: any) =>
-                          p._id !== user?._id &&
-                          p.name.toLowerCase().includes(mentionFilter),
+                          p?._id !== user?._id &&
+                          (p?.name ?? "")
+                            .toLowerCase()
+                            .includes(mentionFilter),
                       )
                       .map((p: any) => (
                         <div
-                          key={p._id}
+                          key={p?._id ?? p?.name ?? Math.random().toString()}
                           onClick={() => selectMention(p)}
                           style={{
                             display: "flex",
@@ -3176,7 +3252,7 @@ export default function ChatsPage() {
                             e.currentTarget.style.background = "transparent";
                           }}
                         >
-                          <Avatar src={p.avatar} name={p.name} size={24} />
+                          <Avatar src={p?.avatar} name={p?.name ?? "?"} size={24} />
                           <span
                             style={{
                               fontSize: "12px",
@@ -3184,7 +3260,7 @@ export default function ChatsPage() {
                               color: "var(--color-text)",
                             }}
                           >
-                            {p.name}
+                            {p?.name ?? "Deleted User"}
                           </span>
                         </div>
                       ))}
@@ -3339,7 +3415,7 @@ export default function ChatsPage() {
                           color: "var(--color-text)",
                         }}
                       >
-                        Replying to {replyingTo.sender.name}
+                        Replying to {replyingTo.sender?.name ?? "Deleted User"}
                       </span>
                       <span
                         style={{
@@ -3788,7 +3864,7 @@ export default function ChatsPage() {
                     const existingConversation = conversations.find(
                       (c) =>
                         c.type === "direct" &&
-                        c.participants.some((p) => p._id === u._id),
+                        c.participants.some((p) => p?._id === u._id),
                     );
 
                     return (
