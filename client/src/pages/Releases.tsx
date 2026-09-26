@@ -23,6 +23,8 @@ interface ReleaseData {
 // Releases are proxied through our own backend (/api/releases) which caches
 // for 5 minutes — browsers must never call api.github.com directly, or the
 // whole office shares GitHub's 60 req/hour unauthenticated limit.
+// File bytes also stream through /api/releases/assets/:id so no github.com
+// URL ever reaches the browser (see releaseController.ts).
 
 // code - first call the API.
 async function fetchAllReleases(): Promise<Record<string, unknown>[]> {
@@ -95,7 +97,14 @@ const osIcons: Record<string, string> = {
   Android: "/AndroidIcon.svg",
 }
 
-function buildDownloads(assets: { name: string; browser_download_url: string }[], version: string): OsDownloads[] {
+// Download URLs stay on our own API domain — the numeric asset id is the
+// only thing the browser sends; GitHub is contacted server-side only.
+function proxyAssetUrl(assetId: number | string): string {
+  const base = String(api.defaults.baseURL ?? "").replace(/\/+$/, "")
+  return `${base}/releases/assets/${assetId}`
+}
+
+function buildDownloads(assets: { id: number | string; name: string }[], version: string): OsDownloads[] {
   const map = new Map<string, DownloadLink[]>()
 
   for (const asset of assets) {
@@ -103,7 +112,7 @@ function buildDownloads(assets: { name: string; browser_download_url: string }[]
     const cat = categorizeAsset(asset.name, version)
     if (!cat) continue
     if (!map.has(cat.os)) map.set(cat.os, [])
-    map.get(cat.os)!.push({ label: cat.label, url: asset.browser_download_url })
+    map.get(cat.os)!.push({ label: cat.label, url: proxyAssetUrl(asset.id) })
   }
 
   return Array.from(map.entries()).map(([os, links]) => ({
@@ -250,7 +259,7 @@ export default function Releases() {
       .map((r) => {
         const tag = r.tag_name as string
         const version = parseVersion(tag)
-        const assets = (r.assets as { name: string; browser_download_url: string }[]) || []
+        const assets = (r.assets as { id: number; name: string }[]) || []
         return {
           version,
           isLatest: false, // assigned after sorting below

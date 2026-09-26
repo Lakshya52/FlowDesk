@@ -1,0 +1,31 @@
+FLOWDESK - SOFTWARE LICENSE AGREEMENT
+
+Copyright (c) 2026 FlowDesk. All rights reserved.
+
+This software and all associated files, documentation, and assets
+(the "Software") are the confidential and proprietary property of
+the copyright holder.
+
+1. GRANT OF USE. The Software may be used solely by authorized
+   personnel of the licensing organization, and solely for that
+   organization's internal business purposes, unless otherwise
+   agreed in a separate written agreement.
+
+2. RESTRICTIONS. Without prior written permission from the copyright
+   holder, you may not copy, modify, merge, publish, distribute,
+   sublicense, rent, lease, sell, or create derivative works from
+   the Software, in whole or in part.
+
+3. CONFIDENTIALITY. You shall not disclose the Software, or any part
+   of it, to any third party.
+
+4. NO WARRANTY. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+   ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+   WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE
+   FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+   WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+By clicking "I Agree" and installing the Software, you agree to
+these terms. If you do not agree, click "Cancel" to exit Setup.

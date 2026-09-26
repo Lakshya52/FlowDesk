@@ -3,44 +3,256 @@
 <head>
     <meta charset="UTF-8">
     <title>Loading FlowDesk...</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
     <style>
+        /* Reset (what the Tailwind preflight was doing for this page) */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
         body {
-            margin: 0;
-            padding: 0;
+            background: transparent;
+            overflow: hidden;
+            font-family: "Manrope", -apple-system, "BlinkMacSystemFont", "Segoe UI", sans-serif;
+        }
+
+        /* #parent: h-[400px] w-[600px] bg-[#9F80FF] text-white p-[30px] flex items-center justify-between */
+        .splash {
+            height: 400px;
+            width: 600px;
+            background-color: #9F80FF;
+            color: #ffffff;
+            padding: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* left column: h-full w-[170px] flex flex-col justify-between */
+        .splash-left {
+            height: 100%;
+            width: 170px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #0a0a0a;
-            color: #fafafa;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            justify-content: space-between;
         }
-        .loader {
-            width: 48px;
-            height: 48px;
-            border: 5px solid #171717;
-            border-bottom-color: #6366f1;
-            border-radius: 50%;
-            display: inline-block;
-            box-sizing: border-box;
-            animation: rotation 1s linear infinite;
+
+        /* brand block: flex flex-col gap-2 */
+        .splash-brand {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
-        .text {
-            margin-top: 20px;
-            font-size: 14px;
-            font-weight: 500;
-            letter-spacing: 0.5px;
-            opacity: 0.8;
+
+        /* h1: manrope-bold text-[32px] */
+        .splash-title {
+            font-family: "Manrope", sans-serif;
+            font-optical-sizing: auto;
+            font-weight: 800;
+            font-style: normal;
+            font-size: 32px;
         }
-        @keyframes rotation {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+
+        /* tagline: manrope-semi-bold */
+        .splash-tag {
+            font-family: "Manrope", sans-serif;
+            font-optical-sizing: auto;
+            font-weight: 600;
+            font-style: normal;
+            font-size: 12px;
+        }
+
+        /* status block: flex flex-col w-full gap-2 */
+        .splash-status {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            gap: 8px;
+        }
+
+        /* label row: flex justify-between manrope-semi-bold */
+        .splash-row {
+            display: flex;
+            justify-content: space-between;
+            font-family: "Manrope", sans-serif;
+            font-optical-sizing: auto;
+            font-weight: 600;
+            font-style: normal;
+            font-size: 12px;
+        }
+
+        /* Animated ellipsis: the label text stays static ("Starting"),
+           the dots blink via CSS so no JS timer is needed. */
+        .dots::after {
+            content: "";
+            animation: blinkDots 1.2s steps(1) infinite;
+        }
+
+        @keyframes blinkDots {
+            0% { content: ""; }
+            25% { content: "."; }
+            50% { content: ".."; }
+            75%, 100% { content: "..."; }
+        }
+
+        /* bar: w-full h-1 rounded-full (track dimmed so the fill reads as progress) */
+        .splash-track {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.35);
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+
+        .splash-fill {
+            height: 100%;
+            width: 5%;
+            background: #ffffff;
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+        }
+
+        /* Offline banner: hidden unless the OS reports no connection. */
+        .offline-banner {
+            display: none;
+            margin-top: 2px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            color: #ffffff;
+            font-family: "Manrope", sans-serif;
+            font-weight: 700;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        body.is-offline .offline-banner {
+            display: block;
+        }
+
+        /* pixel grid: h-full w-[340px] grid grid-cols-6 grid-rows-6 */
+        .splash-grid {
+            height: 100%;
+            width: 340px;
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            grid-template-rows: repeat(6, minmax(0, 1fr));
+        }
+
+        /* .box: white at 30% */
+        .cell-dim {
+            background-color: #ffffff;
+            opacity: 0.3;
         }
     </style>
 </head>
 <body>
-    <div class="loader"></div>
-    <div class="text">Connecting to FlowDesk...</div>
+    <div class="splash">
+        <div class="splash-left">
+            <div class="splash-brand">
+                <h1 class="splash-title">
+                    FlowDesk
+                </h1>
+                <p class="splash-tag">
+                    Bringing clarity to your <br> workflow.
+                </p>
+            </div>
+            <div class="splash-status">
+                <div class="splash-row">
+                    <p><span id="progressLabel">Starting</span><span class="dots"></span></p>
+                    <p id="progressPct">5%</p>
+                </div>
+                <div class="splash-track">
+                    <div id="progressFill" class="splash-fill"></div>
+                </div>
+                <div class="offline-banner">No internet connection &mdash; connect and loading will resume automatically</div>
+            </div>
+        </div>
+        <div class="splash-grid">
+
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+            <div class=""></div>
+            <div class="cell-dim"></div>
+
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+            <div class=""></div>
+            <div class=""></div>
+            <div class="cell-dim"></div>
+
+            <div class="cell-dim"></div>
+            <div class=""></div>
+            <div class=""></div>
+            <div class=""></div>
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+
+            <div class="cell-dim"></div>
+            <div class=""></div>
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+
+            <div class="cell-dim"></div>
+            <div class=""></div>
+            <div class="cell-dim"></div>
+            <div class=""></div>
+            <div class=""></div>
+            <div class="cell-dim"></div>
+
+            <div class="cell-dim"></div>
+            <div class=""></div>
+            <div class="cell-dim"></div>
+            <div class="cell-dim"></div>
+            <div class=""></div>
+            <div class="cell-dim"></div>
+
+
+        </div>
+    </div>
+
+    <script>
+        // Called from the main process via webContents.executeJavaScript as
+        // the real window load progresses (see createMainWindow in main.ts).
+        (function () {
+            var fill = document.getElementById("progressFill");
+            var pct = document.getElementById("progressPct");
+            var label = document.getElementById("progressLabel");
+
+            window.setProgress = function (p, text) {
+                p = Math.max(0, Math.min(100, Number(p) || 0));
+                fill.style.width = p + "%";
+                pct.textContent = Math.round(p) + "%";
+                // Dots are rendered by CSS (.dots::after) — strip any baked
+                // into the incoming text so they never double up.
+                if (typeof text === "string" && text) {
+                    label.textContent = text.replace(/\s*\.+$/, "");
+                }
+            };
+
+            // Instant offline hint straight from the OS network state —
+            // best-effort only (often stuck "true"). The main process
+            // overrides authoritatively via setOffline() below.
+            function refreshOnlineState() {
+                if (document.body.dataset.mainOffline !== "1") {
+                    document.body.classList.toggle("is-offline", !navigator.onLine);
+                }
+            }
+            // Called from the main process with the real probe result.
+            window.setOffline = function (offline) {
+                document.body.dataset.mainOffline = offline ? "1" : "";
+                document.body.classList.toggle("is-offline", !!offline);
+            };
+            window.addEventListener("online", refreshOnlineState);
+            window.addEventListener("offline", refreshOnlineState);
+            refreshOnlineState();
+        })();
+    </script>
 </body>
 </html>

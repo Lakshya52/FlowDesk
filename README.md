@@ -19,7 +19,7 @@
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
 - [Architecture Notes](#architecture-notes)
-- [Contributing](#contributing)
+- [Internal Access](#internal-access)
 
 ---
 
@@ -107,7 +107,8 @@ FlowDesk/
 ### Installation
 
 ```bash
-git clone https://github.com/Lakshya52/FlowDesk.git
+# Internal repository — access is granted by the administrator.
+# Clone the private repo URL shared with you, then:
 cd FlowDesk
 
 # server
@@ -181,9 +182,10 @@ Image/Calendar/Socket CSP allowlist is set in `server/src/index.ts:93` Helmet (`
 
 ---
 
-## 🤝 Contributing
+## 🔒 Internal Access
 
-1. `git checkout -b feature/your-feature-name`
-2. Commit `feat: ...` / `fix: ...`
-3. `git push origin feature/your-feature-name`
-4. Open PR vs `main` — include route/model references in description.
+FlowDesk is proprietary internal software — there is no public repository,
+no external forks, and no public pull requests. Team members work on
+branches of the private repo (`feature/...`, `fix: ...` / `feat: ...`
+commits) and merge via internal review. Do not publish or share this
+codebase outside the organization (see `LICENSE`).

@@ -16,10 +16,6 @@ declare global {
     electronAPI?: {
       platform: string;
       reload: () => void;
-      restartAndInstall: () => void;
-      dismissUpdate: () => void;
-      onDownloadProgress: (callback: (progress: any) => void) => void;
-      onUpdateDownloaded: (callback: (info: any) => void) => void;
       focusApp: () => void;
       showNotification: (data: any) => void;
       onNavigate: (callback: (link: string) => void) => void;
