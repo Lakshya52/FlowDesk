@@ -54,5 +54,13 @@ ServerSignature Off
   RewriteRule . /index.html [L]
 </IfModule>
 
+# ----------------------------------------------------------------------
+# 4. Correct MIME types for PWA files (required with "nosniff" above,
+#    otherwise Chrome may reject site.webmanifest served as text/plain)
+# ----------------------------------------------------------------------
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
 # Fallback in case mod_rewrite fails
 ErrorDocument 404 /index.html

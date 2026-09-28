@@ -320,9 +320,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 							<div className="group flex items-cente justify-center">
 								<img
 									onClick={toggleSidebar}
-									src="/icon.ico"
+									src="/logo.png"
 									alt="FlowDesk logo"
-									className={`rounded-lg ${isOpen ? "" : "group-hover:hidden"}`}
+									className={` ${isOpen ? "" : "group-hover:hidden"}`}
 								/>
 								{/* the icon of opening */}
 								<PanelLeftOpen
@@ -556,7 +556,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 												height: 5,
 												borderRadius: "50%",
 												background:
-													"var(--color-text-tertiary)",
+													"var(--color-primary)",
 												pointerEvents: "none",
 											}}
 										/>

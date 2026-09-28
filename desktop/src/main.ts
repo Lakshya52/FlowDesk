@@ -440,9 +440,18 @@ function createMainWindow() {
 }
 
 // ─── System Tray ───────────────────────────────────────────────────────────
+function trayIconPath() {
+  // Native tray sizes per OS: a 512px icon scaled down by the shell looks
+  // blurry next to the clock. Windows picks the best layer from tray.ico.
+  if (process.platform === "win32")
+    return path.join(__dirname, "../assets/tray.ico");
+  if (process.platform === "darwin")
+    return path.join(__dirname, "../assets/tray-22x22.png");
+  return path.join(__dirname, "../assets/tray-24x24.png");
+}
+
 function createTray() {
-  const iconPath = path.join(__dirname, "../assets/icon.png");
-  tray = new Tray(iconPath);
+  tray = new Tray(trayIconPath());
 
   const contextMenu = Menu.buildFromTemplate([
     { label: "Open FlowDesk", click: () => mainWindow?.show() },

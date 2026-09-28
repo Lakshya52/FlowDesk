@@ -27,7 +27,7 @@ const Navbar = () => {
 						className="overflow-hidden"
 					>
 						<img
-							src="/icon.ico"
+							src="/logo.png"
 							alt="FlowDesk logo"
 							// className="rounded-xl scale-125"
 						/>

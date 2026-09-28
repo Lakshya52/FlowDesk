@@ -144,7 +144,7 @@ const LoginPage: React.FC = () => {
 				<div className="flex flex-col items-center mb-10">
 					<div className="w-12 h-12  inline-flex items-center justify-center mb-4 overflow-hidden">
 						<img
-							src="/icon.ico"
+							src="/logo.png"
 							alt="FlowDesk logo"
 							// className="rounded-xl scale-125"
 						/>

@@ -185,7 +185,7 @@ const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 				<div className="text-center mb-8">
 					<div className="overflow-hidden inline-flex items-center justify-center mb-4 w-12 h-12 ">
 						<img
-							src="/icon.ico"
+							src="/logo.png"
 							alt="FlowDesk logo"
 							// className="rounded-xl scale-125"
 						/>

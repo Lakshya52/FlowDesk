@@ -1,0 +1,48 @@
+{
+  "name": "FlowDesk",
+  "short_name": "FlowDesk",
+  "id": "/",
+  "scope": "/",
+  "description": "FlowDesk is a project and task management application",
+  "start_url": ".",
+  "display": "standalone",
+  "dir": "ltr",
+  "lang": "en",
+  "categories": ["productivity", "business"],
+  "background_color": "#ffffff",
+  "theme_color": "#A08AFA",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/dashboard.png",
+      "sizes": "1370x769",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/dashboardMobile.png",
+      "sizes": "552x953",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}
