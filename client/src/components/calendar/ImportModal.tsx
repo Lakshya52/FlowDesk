@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Chrome, CheckCircle, Loader, Check } from 'lucide-react';
 import { useCalendarStore } from '../../store/calendarStore';
 import { useQueryClient } from '@tanstack/react-query';
@@ -30,10 +30,22 @@ const ImportModal: React.FC = () => {
   const [googleCalendars, setGoogleCalendars] = useState<GoogleCalendar[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0, calendarName: '' });
+  const authCleanupRef = useRef<(() => void) | null>(null);
+
+  // Clean up auth listeners / polling if the modal unmounts mid-flow.
+  useEffect(() => {
+    return () => {
+      authCleanupRef.current?.();
+      authCleanupRef.current = null;
+    };
+  }, []);
 
   if (!isImportModalOpen) return null;
 
  const handleGoogleConnect = async () => {
+  // Cancel any previous in-flight auth attempt.
+  authCleanupRef.current?.();
+  authCleanupRef.current = null;
   setStep('connecting');
   setErrorMsg('');
   try {
@@ -41,9 +53,33 @@ const ImportModal: React.FC = () => {
     const { authUrl } = res.data;
 
     // Open in external browser (Electron uses shell.openExternal via setWindowOpenHandler)
-    window.open(authUrl, '_blank');
+    const popup = window.open(authUrl, '_blank');
+    if (!popup) {
+      setStep('error');
+      setErrorMsg('Your browser blocked the Google sign-in popup. Please allow popups and try again.');
+      return;
+    }
+
+    let done = false;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (pollTimer) clearInterval(pollTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      pollTimer = null;
+      timeoutTimer = null;
+      window.removeEventListener('message', handleMessage);
+      window.electronAPI?.removeGoogleAuthListener?.();
+      if (authCleanupRef.current === cleanup) authCleanupRef.current = null;
+    };
+    authCleanupRef.current = cleanup;
 
     const fetchCalendars = async () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      try { popup.close(); } catch { /* popup may already be closed */ }
       try {
         const listRes = await api.get('/import/google-calendar/list');
         setGoogleCalendars(listRes.data.calendars);
@@ -51,25 +87,57 @@ const ImportModal: React.FC = () => {
         setStep('selecting');
       } catch {
         setStep('error');
-        setErrorMsg('Failed to fetch your Google calendars.');
+        setErrorMsg('Google connected, but we could not fetch your calendars. Please try again.');
       }
     };
 
+    const fail = (msg: string) => {
+      if (done) return;
+      done = true;
+      cleanup();
+      try { popup.close(); } catch { /* ignore */ }
+      setStep('error');
+      setErrorMsg(msg);
+    };
+
+    // Fallback for browser (dev mode) — use postMessage. Registered always
+    // (harmless in Electron) so the web flow works too.
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data === 'google-oauth-success') {
+        void fetchCalendars();
+      } else if (event.data === 'google-oauth-error') {
+        fail('Google authorization failed. Please try again.');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
     // Listen for deep link callback from Electron main process
     if (window.electronAPI?.onGoogleAuthSuccess) {
-      window.electronAPI.onGoogleAuthSuccess(async () => {
-        window.electronAPI?.removeGoogleAuthListener?.();
-        await fetchCalendars();
+      window.electronAPI.onGoogleAuthSuccess(() => {
+        void fetchCalendars();
       });
-    } else {
-      // Fallback for browser (dev mode) — use postMessage
-      const handleMessage = async (event: MessageEvent) => {
-        if (event.data !== 'google-oauth-success') return;
-        window.removeEventListener('message', handleMessage);
-        await fetchCalendars();
-      };
-      window.addEventListener('message', handleMessage);
     }
+
+    // Polling fallback: the deep link (flowdesk://) and postMessage can both
+    // be blocked (strict CSP, popup blockers, protocol not registered). Once
+    // the user approves Google, GET /list starts succeeding — poll for that
+    // so the modal advances even when no callback reaches this window.
+    pollTimer = setInterval(async () => {
+      if (done) return;
+      try {
+        const listRes = await api.get('/import/google-calendar/list');
+        if (listRes.data?.calendars) {
+          await fetchCalendars();
+        }
+      } catch {
+        // Not authorized yet — keep waiting. 400 = "not connected".
+      }
+    }, 3000);
+
+    // Give up after 3 minutes rather than spinning forever.
+    timeoutTimer = setTimeout(() => {
+      fail('Authorization timed out. Please try again — and return to FlowDesk after approving Google.');
+    }, 180000);
   } catch {
     setStep('error');
     setErrorMsg('Could not initiate Google sign-in. Please try again.');
@@ -113,6 +181,8 @@ const ImportModal: React.FC = () => {
   };
 
 const handleClose = () => {
+    authCleanupRef.current?.();
+    authCleanupRef.current = null;
     setStep('idle');
     setErrorMsg('');
     setGoogleCalendars([]);

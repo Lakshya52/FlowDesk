@@ -30,40 +30,93 @@ router.get("/auth-url", authenticate, (req: AuthRequest, res) => {
 });
 
 // ─── 2. OAuth Callback (Google redirects here) ────────────────────────────────
+// NOTE: this page is loaded in the SYSTEM BROWSER (Electron opens the auth
+// URL via shell.openExternal). The global helmet CSP
+// (script-src 'self' ...) would block the inline <script> below, so we
+// override CSP for this response AND avoid depending on JS alone:
+// a <meta refresh> + clickable link performs the flowdesk:// deep-link
+// redirect even when scripts are blocked.
 router.get("/callback", async (req, res) => {
   res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
+  res.setHeader("Cache-Control", "no-store");
+  // Allow the small inline helper script on THIS page only. No user input
+  // is reflected into the HTML, so 'unsafe-inline' here is safe.
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';",
+  );
   const { code, state: userId } = req.query;
 
+  const successHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="refresh" content="0;url=flowdesk://google-auth-success" />
+<title>FlowDesk — Authorization complete</title>
+</head>
+<body>
+<p>Authorization complete. Returning to FlowDesk...</p>
+<p>If you are not redirected automatically, <a href="flowdesk://google-auth-success">click here to return to FlowDesk</a>.</p>
+<script>
   try {
+    if (window.opener) window.opener.postMessage('google-oauth-success', '*');
+  } catch (e) {}
+  try {
+    window.location.href = 'flowdesk://google-auth-success';
+  } catch (e) {}
+  setTimeout(function () { try { window.close(); } catch (e) {} }, 800);
+</script>
+</body>
+</html>`;
+
+  const errorHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>FlowDesk — Authorization failed</title>
+</head>
+<body>
+<p>Google authorization failed. You can close this window and try again in FlowDesk.</p>
+<script>
+  try {
+    if (window.opener) window.opener.postMessage('google-oauth-error', '*');
+  } catch (e) {}
+  try {
+    window.location.href = 'flowdesk://google-auth-error';
+  } catch (e) {}
+</script>
+</body>
+</html>`;
+
+  try {
+    if (!code || !userId) {
+      res.status(400).send(errorHtml);
+      return;
+    }
     const oAuth2Client = getOAuthClient();
     const { tokens } = await oAuth2Client.getToken(code as string);
 
-    // Save refresh token to the user
-    await User.findByIdAndUpdate(userId, {
-      googleRefreshToken: tokens.refresh_token,
-    });
+    // Save refresh token to the user (only overwrite when Google gave us one)
+    if (tokens.refresh_token) {
+      await User.findByIdAndUpdate(userId, {
+        googleRefreshToken: tokens.refresh_token,
+      });
+    } else {
+      // No refresh token (e.g. user already consented): only proceed if the
+      // user already has one stored, otherwise this auth did not connect.
+      const existing = await User.findById(userId).select("googleRefreshToken").lean();
+      if (!(existing as any)?.googleRefreshToken) {
+        res.status(400).send(errorHtml);
+        return;
+      }
+    }
 
-    // Close the popup — frontend is polling for this
-    res.send(`<!DOCTYPE html>
-<html>
-<body>
-<p>Authorization complete. Returning to FlowDesk...</p>
-<script>
-  window.location.href = 'flowdesk://google-auth-success';
-</script>
-</body>
-</html>`);
+    // Frontend polls GET /list as a fallback, so even if the deep link /
+    // postMessage is blocked the modal still advances.
+    res.send(successHtml);
   } catch (err) {
-    res.send(`<!DOCTYPE html>
-<html>
-<body>
-<p>Authorization complete. Returning to FlowDesk...</p>
-<script>
-  window.location.href = 'flowdesk://google-auth-success';
-</script>
-</body>
-</html>`);
     console.log(err);
+    res.status(500).send(errorHtml);
   }
 });
 

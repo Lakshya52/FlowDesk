@@ -47,6 +47,28 @@ let coreIpcRegistered = false;
 // focus requests (tray, second instance, notifications) go to the splash —
 // a hidden, never-loaded window must never be revealed as a blank page.
 let mainLoaded = false;
+// Cold-start deep link: when the app wasn't running, Windows/Linux deliver
+// flowdesk:// as a first-launch argv entry instead of a second-instance
+// event. Flushed to the renderer on did-finish-load (IPC before that is
+// lost because the preload bridge isn't listening yet).
+let pendingDeepLink: string | null =
+  process.argv.find((arg) => arg.startsWith("flowdesk://")) ?? null;
+
+// ─── Deep links (Google OAuth: flowdesk://google-auth-success) ─────────────
+// The OAuth callback page runs in the SYSTEM BROWSER and redirects to the
+// flowdesk:// protocol. The OS then re-invokes / focuses the app:
+// - Windows/Linux: URL arrives as a command-line arg on a second instance
+//   (or on first launch if the app wasn't running).
+// - macOS: URL arrives via the 'open-url' event.
+function handleDeepLink(url: string | undefined) {
+  if (!url?.startsWith("flowdesk://")) return;
+  if (url.startsWith("flowdesk://google-auth-success")) {
+    mainWindow?.webContents.send("google-auth-success");
+  }
+  // flowdesk://google-auth-error (and unknown links): just bring the app
+  // back — the renderer falls back to polling + timeout messaging.
+  focusMainOrLoader();
+}
 
 // ─── Single Instance Lock ──────────────────────────────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();
@@ -55,14 +77,18 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on("second-instance", (_event, commandLine, _workingDirectory) => {
-    // Handle deep link on Windows
+    // Handle deep link on Windows/Linux
     const url = commandLine.find(arg => arg.startsWith("flowdesk://"));
-    if (url?.startsWith("flowdesk://google-auth-success")) {
-      mainWindow?.webContents.send("google-auth-success");
-    }
+    handleDeepLink(url);
     focusMainOrLoader();
   });
 }
+
+// macOS deep-link entry point
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
   
 // ─── Auto-updater configuration ────────────────────────────────────────────
 autoUpdater.autoDownload = false; // Download on user request only
@@ -259,6 +285,11 @@ function createMainWindow() {
   wc.on("did-finish-load", () => {
     loadAttempts = 0;
     renderLoadProgress(85, "Almost ready");
+    if (pendingDeepLink) {
+      const url = pendingDeepLink;
+      pendingDeepLink = null;
+      handleDeepLink(url);
+    }
   });
   wc.on("did-fail-load", (_event, errorCode, _desc, _url, isMainFrame) => {
     // Ignore subframe noise (ads/trackers/iframes) and navigation aborts
