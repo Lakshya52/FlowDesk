@@ -10,6 +10,16 @@ import { NotificationType } from '../models/Notification';
 import { getTenantUserIds, getTenantId } from '../utils/tenant';
 import { emitTaskCreated, emitTaskUpdated, emitTaskDeleted } from '../services/taskSocketService';
 
+const COMPLETED_BOARD_MESSAGE = 'This board is completed and read-only. Reopen it to make changes.';
+
+// Tasks are edited through the tasks endpoints, so a completed board must be
+// enforced here too — not just in boardController — or the lock is bypassable.
+const isBoardCompletedById = async (boardId: any): Promise<boolean> => {
+    if (!boardId) return false;
+    const board = await Board.findById(boardId).select('status');
+    return board?.status === 'completed';
+};
+
 export const createTask = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const AssignmentModel = mongoose.model('Assignment');
@@ -34,6 +44,11 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
                 assignment.status = 'in_progress';
                 await assignment.save();
             }
+        }
+
+        if (req.body.board && await isBoardCompletedById(req.body.board)) {
+            res.status(403).json({ message: COMPLETED_BOARD_MESSAGE });
+            return;
         }
 
         let rank = req.body.rank ?? 0;
@@ -265,6 +280,18 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
             return;
         }
 
+        if (oldTask.board && await isBoardCompletedById(oldTask.board)) {
+            res.status(403).json({ message: COMPLETED_BOARD_MESSAGE });
+            return;
+        }
+
+        // Moving a task onto a completed board is also a change to that board.
+        if (req.body.board && req.body.board.toString() !== oldTask.board?.toString()
+            && await isBoardCompletedById(req.body.board)) {
+            res.status(403).json({ message: 'Cannot move a task to a completed board.' });
+            return;
+        }
+
         // Tenant check
         const assigneeInTenant = oldTask.assignedTo && tenantUserIds.includes(oldTask.assignedTo.toString());
         const creatorInTenant = oldTask.createdBy && tenantUserIds.includes(oldTask.createdBy.toString());
@@ -362,6 +389,19 @@ export const reorderTasks = async (req: AuthRequest, res: Response): Promise<voi
             return;
         }
 
+        const touchedTasks = await Task.find({
+            _id: { $in: updates.map((u: any) => u.taskId) },
+        }).select('board');
+        const touchedBoards = [...new Set(
+            touchedTasks.map((t: any) => t.board?.toString()).filter(Boolean),
+        )];
+        for (const boardId of touchedBoards) {
+            if (await isBoardCompletedById(boardId)) {
+                res.status(403).json({ message: COMPLETED_BOARD_MESSAGE });
+                return;
+            }
+        }
+
         const bulkOps = updates.map(({ taskId, rank }: { taskId: string; rank: number }) => ({
             updateOne: {
                 filter: { _id: taskId },
@@ -383,6 +423,11 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
         const task = await Task.findById(req.params.id);
         if (!task) {
             res.status(404).json({ message: 'Task not found' });
+            return;
+        }
+
+        if (task.board && await isBoardCompletedById(task.board)) {
+            res.status(403).json({ message: COMPLETED_BOARD_MESSAGE });
             return;
         }
 

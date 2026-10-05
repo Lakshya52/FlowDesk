@@ -12,6 +12,7 @@ import {
   addDays,
 } from "date-fns";
 import { useCalendarStore } from "../../store/calendarStore";
+import { onActivateKey } from "../../lib/keyboard";
 
 interface YearViewProps {
   events: any[];
@@ -129,7 +130,9 @@ const YearView: React.FC<YearViewProps> = ({ events }) => {
         >
           {days.map((d, i) => {
             const isCurrentMonth = isSameMonth(d, monthDate);
-            const isToday = isSameDay(d, new Date());
+            // Highlight today only inside its own month block — the same date
+            // also renders faded in neighbouring blocks and must stay plain.
+            const isToday = isCurrentMonth && isSameDay(d, new Date());
             const dayEvents = isCurrentMonth ? getEventsForDay(d) : [];
             const visibleDots = dayEvents.slice(0, 3);
             const extraCount = dayEvents.length - visibleDots.length;
@@ -138,12 +141,22 @@ const YearView: React.FC<YearViewProps> = ({ events }) => {
             return (
               <div
                 key={i}
+                role="button"
+                tabIndex={isCurrentMonth ? 0 : -1}
+                aria-label={isCurrentMonth ? format(d, "MMMM d, yyyy") : undefined}
+                className="cal-focusable"
                 onClick={() => {
                   if (isCurrentMonth) {
                     setCurrentDate(d);
                     setCurrentView("day");
                   }
                 }}
+                onKeyDown={onActivateKey(() => {
+                  if (isCurrentMonth) {
+                    setCurrentDate(d);
+                    setCurrentView("day");
+                  }
+                })}
                 onMouseEnter={(e) => {
                   if (isCurrentMonth && dayEvents.length > 0) {
                     setTooltip({ dayKey, x: e.clientX, y: e.clientY });
@@ -185,9 +198,9 @@ const YearView: React.FC<YearViewProps> = ({ events }) => {
                   fontSize: '13px',
                   fontWeight: isToday ? 700 : 400,
                   backgroundColor: isToday ? 'var(--color-primary)' : 'transparent',
-                  color: isToday ? '#fff' : !isCurrentMonth ? 'transparent' : 'var(--color-text)',
+                  color: isToday ? '#fff' : !isCurrentMonth ? 'var(--color-text-tertiary)' : 'var(--color-text)',
                 }}>
-                  {isCurrentMonth ? format(d, "d") : ""}
+                  {format(d, "d")}
                 </div>
 
                 {/* Event dots */}
@@ -214,13 +227,13 @@ const YearView: React.FC<YearViewProps> = ({ events }) => {
                       />
                     ))}
                     {extraCount > 0 && (
-                      <span
-                        style={{
-                          fontSize: "9px",
-                          color: "var(--color-text-muted)",
-                          lineHeight: 1,
-                        }}
-                      >
+                        <span
+                          style={{
+                            fontSize: "9px",
+                            color: "var(--color-text-tertiary)",
+                            lineHeight: 1,
+                          }}
+                        >
                         +{extraCount}
                       </span>
                     )}
@@ -264,7 +277,7 @@ const YearView: React.FC<YearViewProps> = ({ events }) => {
             pointerEvents: 'none',
           }}
         >
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '8px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '8px' }}>
             {format(new Date(tooltip.dayKey), 'EEE, MMM d')}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

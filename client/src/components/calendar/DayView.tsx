@@ -1,35 +1,165 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { format, isSameDay, startOfDay, endOfDay } from "date-fns";
 import { useCalendarStore } from "../../store/calendarStore";
-
-import { useQueryClient } from "@tanstack/react-query";
-import api from "../../lib/api";
-import toast from "react-hot-toast";
+import { useCalendarEventDrag } from "../../hooks/useCalendarEventDrag";
+import { onActivateKey } from "../../lib/keyboard";
 
 interface DayViewProps {
   events: any[];
 }
 
+const DEFAULT_HOUR_PX = 80;
+const MIN_ZOOM = 0.3; // 30%
+const MAX_ZOOM = 2.5; // 250%
+const MIN_HOUR_PX = DEFAULT_HOUR_PX * MIN_ZOOM;
+const MAX_HOUR_PX = DEFAULT_HOUR_PX * MAX_ZOOM;
+
 const DayView: React.FC<DayViewProps> = ({ events }) => {
   const { currentDate, openEventModal, openEventDrawer } = useCalendarStore();
   const [now, setNow] = useState(new Date());
+  const [hourHeight, setHourHeight] = useState(DEFAULT_HOUR_PX);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Fractional source of truth for smooth trackpad/pinch accumulation.
+  // `hourHeight` state mirrors it for rendering; `renderedHRef` tracks what
+  // the DOM currently shows so cursor anchoring stays exact mid-gesture.
+  const zoomRef = useRef(DEFAULT_HOUR_PX);
+  const renderedHRef = useRef(DEFAULT_HOUR_PX);
+  const pendingAnchorRef = useRef<{
+    cursorY: number;
+    timeHours: number;
+  } | null>(null);
+  const zoomRafRef = useRef(0);
 
   useEffect(() => {
     if (scrollRef.current) {
       const currentHour = new Date().getHours();
-      const scrollTop = Math.max(0, (currentHour - 2) * 80); // 80px per hour, scroll 2hrs before current
+      const scrollTop = Math.max(0, (currentHour - 2) * zoomRef.current);
       scrollRef.current.scrollTop = scrollTop;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const queryClient = useQueryClient();
-  const dragRef = useRef<{
-    eventId: string;
-    startY: number;
-    originalStart: Date;
-    originalEnd: Date;
-    el: HTMLElement;
-  } | null>(null);
+
+  // Apply cursor-anchored scroll *before paint* so zoom never visibly jumps.
+  useLayoutEffect(() => {
+    renderedHRef.current = hourHeight;
+    const el = scrollRef.current;
+    const anchor = pendingAnchorRef.current;
+    if (!el || !anchor) return;
+    pendingAnchorRef.current = null;
+    el.scrollTop = Math.max(
+      0,
+      anchor.timeHours * hourHeight - anchor.cursorY,
+    );
+  }, [hourHeight]);
+
+  const applyZoom = (next: number, cursorY?: number) => {
+    const el = scrollRef.current;
+    if (el) {
+      const y = cursorY ?? el.clientHeight / 2;
+      pendingAnchorRef.current = {
+        cursorY: y,
+        timeHours: (el.scrollTop + y) / renderedHRef.current,
+      };
+    }
+    zoomRef.current = next;
+    setHourHeight(next);
+  };
+
+  // Alt + wheel => vertical-only zoom (adjust px-per-hour), anchored at cursor.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const commit = () => {
+      zoomRafRef.current = 0;
+      setHourHeight(zoomRef.current);
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (!e.altKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Normalize line-mode deltas (Firefox) to ~pixels.
+      const rawDelta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      // Clamp huge jumps so one aggressive tick can't leap min<->max.
+      const delta = Math.max(-100, Math.min(100, rawDelta));
+      const oldZoom = zoomRef.current;
+      // Exponential factor => smooth on both notched wheels and trackpads.
+      // Wheel up (deltaY < 0) zooms in (taller hours), wheel down zooms out.
+      const factor = Math.exp(-delta * 0.0015);
+      const next = Math.max(
+        MIN_HOUR_PX,
+        Math.min(MAX_HOUR_PX, oldZoom * factor),
+      );
+      if (Math.abs(next - oldZoom) < 0.05) return;
+
+      // Anchor against the currently *rendered* height (DOM truth), not the
+      // in-flight target, so queued ticks in the same frame stay consistent.
+      const rect = el.getBoundingClientRect();
+      const cursorY = e.clientY - rect.top;
+      pendingAnchorRef.current = {
+        cursorY,
+        timeHours: (el.scrollTop + cursorY) / renderedHRef.current,
+      };
+
+      zoomRef.current = next;
+      // One state commit per frame no matter how many ticks arrive.
+      if (!zoomRafRef.current) {
+        zoomRafRef.current = requestAnimationFrame(commit);
+      }
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      if (zoomRafRef.current) {
+        cancelAnimationFrame(zoomRafRef.current);
+        zoomRafRef.current = 0;
+      }
+    };
+  }, []);
+
+  // Alt+0 resets, Alt + +/- steps zoom.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing =
+        !!target &&
+        (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+          target.isContentEditable);
+      if (
+        !typing &&
+        e.altKey &&
+        (e.key === "0" || e.key === "+" || e.key === "=" || e.key === "-")
+      ) {
+        e.preventDefault();
+        if (e.key === "0") {
+          applyZoom(DEFAULT_HOUR_PX);
+        } else {
+          // Proportional step so +/- feels even at 30% and at 250%.
+          const oldH = zoomRef.current;
+          const next = Math.max(
+            MIN_HOUR_PX,
+            Math.min(
+              MAX_HOUR_PX,
+              e.key === "-" ? oldH / 1.1 : oldH * 1.1,
+            ),
+          );
+          applyZoom(next);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
+  const { beginDrag } = useCalendarEventDrag({
+    hourPx: hourHeight,
+    ghostLeft: "8px",
+    ghostRight: "16px",
+  });
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -65,129 +195,14 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
   });
 
   const handleDragStart = (e: React.MouseEvent, event: any) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const el = e.currentTarget as HTMLElement;
-    const HOUR_PX = 80; // 64 for WeekView
-    const SNAP_MINUTES = 15;
-    const SNAP_PX = (SNAP_MINUTES / 60) * HOUR_PX;
-
-    dragRef.current = {
-      eventId: event._id,
-      startY: e.clientY,
-      originalStart: new Date(event.startDate),
-      originalEnd: new Date(event.endDate),
-      el,
-    };
-
-    el.style.opacity = "0.85";
-    // Scale bands: dragged event floats above the page (100), snap ghost
-    // is an elevated drag marker (20). Never off-scale one-offs.
-    el.style.zIndex = "100";
-    el.style.boxShadow = "var(--shadow-xl)";
-    el.style.transition =
-      "transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)"; // snap spring
-
-    // Ghost line element showing snap target
-    const ghost = document.createElement("div");
-    ghost.style.cssText = `
-    position: absolute;
-    left: 8px; right: 16px;
-    height: ${el.offsetHeight}px;
-    border-radius: 4px;
-    border: 2px dashed ${event.calendar?.color || "#6366f1"}70;
-    pointer-events: none;
-    z-index: 20;
-    top: ${el.offsetTop}px;
-    transition: top 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  `;
-    el.parentElement?.appendChild(ghost);
-
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const rawDelta = ev.clientY - dragRef.current.startY;
-
-      // Snap delta to nearest 15min interval
-      const snappedDelta = Math.round(rawDelta / SNAP_PX) * SNAP_PX;
-      const rawMinutes = (rawDelta / HOUR_PX) * 60;
-      const snappedMinutes =
-        Math.round(rawMinutes / SNAP_MINUTES) * SNAP_MINUTES;
-
-      // Event follows mouse smoothly but snaps visually
-      el.style.transform = `translateY(${rawDelta}px)`;
-
-      // Ghost snaps to grid
-      const newTop = el.offsetTop + snappedDelta;
-      ghost.style.top = `${newTop}px`;
-
-      // Show time label on ghost
-      const newStart = new Date(
-        dragRef.current.originalStart.getTime() + snappedMinutes * 60000,
-      );
-      const h = newStart.getHours();
-      const m = newStart.getMinutes().toString().padStart(2, "0");
-      const ampm = h >= 12 ? "PM" : "AM";
-      const displayH = h % 12 || 12;
-      ghost.setAttribute("data-time", `${displayH}:${m} ${ampm}`);
-      ghost.style.setProperty("--ghost-label", `"${displayH}:${m} ${ampm}"`);
-
-      // Magnetic pull: when close to snap point, jump the dragged element too
-      const snapDiff = Math.abs(rawDelta - snappedDelta);
-      if (snapDiff < 4) {
-        el.style.transform = `translateY(${snappedDelta}px)`;
-      }
-    };
-
-    const onMouseUp = async (ev: MouseEvent) => {
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
-    if (!dragRef.current) return;
-
-    ghost.remove();
-
-    const rawDelta = ev.clientY - dragRef.current.startY;
-    dragRef.current.el.dataset.dragged = Math.abs(rawDelta) > 5 ? 'true' : 'false';
-      const rawMinutes = (rawDelta / HOUR_PX) * 60;
-      const deltaMinutes = Math.round(rawMinutes / SNAP_MINUTES) * SNAP_MINUTES;
-
-      el.style.opacity = "1";
-      el.style.zIndex = "";
-      el.style.transform = "";
-      el.style.boxShadow = "";
-      el.style.transition = "";
-
-      if (deltaMinutes === 0) {
-        dragRef.current = null;
-        return;
-      }
-
-      const newStart = new Date(
-        dragRef.current.originalStart.getTime() + deltaMinutes * 60000,
-      );
-      const newEnd = new Date(
-        dragRef.current.originalEnd.getTime() + deltaMinutes * 60000,
-      );
-
-      try {
-        await api.put(`/calendar-events/${dragRef.current.eventId}/move`, {
-          startDate: newStart.toISOString(),
-          endDate: newEnd.toISOString(),
-          allDay: false,
-        });
-        queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
-        toast.success("Event rescheduled");
-      } catch {
-        toast.error("Failed to reschedule event");
-      }
-      dragRef.current = null;
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    beginDrag(e, event);
   };
+
+  const zoomPercent = Math.round((hourHeight / DEFAULT_HOUR_PX) * 100);
 
   return (
     <div
+      title="Hold Alt and scroll to zoom the timeline vertically"
       style={{
         flex: 1,
         display: "flex",
@@ -195,6 +210,7 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
         height: "100%",
         backgroundColor: "var(--color-surface)",
         overflow: "hidden",
+        position: "relative",
       }}
     >
       {/* Header */}
@@ -229,15 +245,6 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
               }}
             >
               {format(currentDate, "EEEE")}
-            </div>
-            <div
-              style={{
-                fontSize: "24px",
-                fontWeight: "bold",
-                color: "var(--color-text)",
-              }}
-            >
-              {format(currentDate, "MMMM d, yyyy")}
             </div>
           </div>
         </div>
@@ -324,7 +331,7 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
             <div
               key={hour}
               style={{
-                height: "80px",
+                height: `${hourHeight}px`,
                 borderBottom: "1px solid var(--color-border)",
                 display: "flex",
                 alignItems: "flex-start",
@@ -350,17 +357,26 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
           {hours.map((hour) => (
             <div
               key={hour}
+              role="button"
+              tabIndex={0}
+              aria-label={`Create event at ${hour % 12 || 12} ${hour >= 12 ? "PM" : "AM"}`}
+              className="cal-focusable"
               style={{
-                height: "80px",
+                height: `${hourHeight}px`,
                 borderBottom: "1px solid var(--color-surface-hover)",
                 cursor: "pointer",
                 transition: "background-color 0.2s",
               }}
               onClick={() => {
                 const newDate = new Date(currentDate);
-                newDate.setHours(hour);
+                newDate.setHours(hour, 0, 0, 0);
                 openEventModal(undefined, newDate);
               }}
+              onKeyDown={onActivateKey(() => {
+                const newDate = new Date(currentDate);
+                newDate.setHours(hour, 0, 0, 0);
+                openEventModal(undefined, newDate);
+              })}
               onMouseOver={(e) =>
                 (e.currentTarget.style.backgroundColor =
                   "var(--color-primary-light)")
@@ -380,15 +396,22 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
             const actualStart = start < dayStartTime ? dayStartTime : start;
             const actualEnd = end > dayEndTime ? dayEndTime : end;
             const top =
-              actualStart.getHours() * 80 +
-              (actualStart.getMinutes() / 60) * 80;
+              actualStart.getHours() * hourHeight +
+              (actualStart.getMinutes() / 60) * hourHeight;
             const durationHours =
               (actualEnd.getTime() - actualStart.getTime()) / (1000 * 60 * 60);
-            const height = Math.max(durationHours * 80, 24);
+            // Min height shrinks with zoom so events can still pack
+            // densely at 30% instead of overlapping each other.
+            const minHeight = Math.min(24, hourHeight * 0.75);
+            const height = Math.max(durationHours * hourHeight, minHeight);
 
             return (
               <div
                 key={event._id}
+                role="button"
+                tabIndex={0}
+                aria-label={event.title}
+                className="cal-focusable"
                 onMouseDown={(e) => handleDragStart(e, event)}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -398,6 +421,7 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
                   }
                   openEventDrawer(event._id);
                 }}
+                onKeyDown={onActivateKey(() => openEventDrawer(event._id))}
                 style={{
                   position: "absolute",
                   cursor: "grab",
@@ -409,7 +433,11 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
                   overflow: "hidden",
                   // cursor: "pointer",
                   boxShadow: "var(--shadow-md)",
-                  transition: "all 0.2s",
+                  // NOTE: never transition `all` here — animating
+                  // top/height fights the Alt+wheel zoom and makes
+                  // events lag/dance behind the cursor.
+                  transition:
+                    "background-color 0.2s, box-shadow 0.2s, filter 0.2s",
                   border: "1px solid var(--color-surface-hover)",
                   top: `${top}px`,
                   height: `${height}px`,
@@ -478,7 +506,7 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
                 position: "absolute",
                 left: 0,
                 right: 0,
-                top: `${now.getHours() * 80 + (now.getMinutes() / 60) * 80}px`,
+                top: `${now.getHours() * hourHeight + (now.getMinutes() / 60) * hourHeight}px`,
                 height: "2px",
                 backgroundColor: "var(--color-danger)",
                 zIndex: 20,
@@ -499,6 +527,45 @@ const DayView: React.FC<DayViewProps> = ({ events }) => {
             </div>
           )}
         </div>
+      </div>
+      {/* Zoom hint + controls — always visible */}
+      <div
+        style={{
+          position: "absolute",
+          right: "16px",
+          bottom: "16px",
+          zIndex: 30,
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "6px 10px",
+          borderRadius: "8px",
+          fontSize: "12px",
+          backgroundColor: "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+          boxShadow: "var(--shadow-md)",
+          color: "var(--color-text-secondary)",
+          pointerEvents: "auto",
+        }}
+      >
+        <span>Alt + scroll to zoom • {zoomPercent}%</span>
+        {hourHeight !== DEFAULT_HOUR_PX && (
+          <button
+            type="button"
+            onClick={() => applyZoom(DEFAULT_HOUR_PX)}
+            style={{
+              border: "1px solid var(--color-border)",
+              borderRadius: "6px",
+              padding: "2px 8px",
+              fontSize: "12px",
+              cursor: "pointer",
+              backgroundColor: "var(--color-surface)",
+              color: "var(--color-text)",
+            }}
+          >
+            Reset
+          </button>
+        )}
       </div>
     </div>
   );

@@ -20,6 +20,8 @@ export interface IBoardInvitation {
     invitedAt: Date;
 }
 
+export type BoardStatus = 'active' | 'completed';
+
 export interface IBoard extends Document {
     title: string;
     description: string;
@@ -29,6 +31,9 @@ export interface IBoard extends Document {
     columns: IBoardColumn[];
     requests: IBoardRequest[];
     invitations: IBoardInvitation[];
+    status: BoardStatus;
+    completedAt?: Date;
+    completedBy?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -80,6 +85,9 @@ const boardSchema = new Schema<IBoard>(
         columns: [boardColumnSchema],
         requests: [boardRequestSchema],
         invitations: [boardInvitationSchema],
+        status: { type: String, enum: ['active', 'completed'], default: 'active' },
+        completedAt: { type: Date },
+        completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     },
     { timestamps: true }
 );

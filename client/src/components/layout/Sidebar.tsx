@@ -139,8 +139,8 @@ export const navItems: NavItem[] = [
 		label: "Productivity",
 		subItems: [
 			{ to: "/assignments", label: "Projects" },
-			{ to: "/boards", label: "Sprint Boards" },
 			{ to: "/tasks", label: "Kanban View" },
+			{ to: "/boards", label: "Sprint Boards" },
 		],
 	},
 	{ to: "/teams", icon: UsersRoundIcon, label: "Our Teams" },
@@ -322,6 +322,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 									onClick={toggleSidebar}
 									src="/logo.png"
 									alt="FlowDesk logo"
+									width={32}
+									height={32}
+									style={{ display: 'block' }}
 									className={` ${isOpen ? "" : "group-hover:hidden"}`}
 								/>
 								{/* the icon of opening */}

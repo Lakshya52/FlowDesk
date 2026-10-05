@@ -5,6 +5,12 @@ import CalendarEvent from '../models/CalendarEvent';
 import Calendar from '../models/Calendar';
 import Task from '../models/Task';
 import Assignment from '../models/Assignment';
+import { getTenantId } from '../utils/tenant';
+import {
+  emitCalendarEventCreated,
+  emitCalendarEventUpdated,
+  emitCalendarEventDeleted,
+} from '../services/calendarSocketService';
 
 export const getEventById = async (req: AuthRequest, res: Response) => {
   try {
@@ -130,6 +136,10 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
       .populate('createdBy', 'name email avatar')
       .populate('attendees.user', 'name email avatar');
 
+    try {
+      emitCalendarEventCreated(getTenantId(req.user!), populatedEvent);
+    } catch {}
+
     res.status(201).json(populatedEvent);
   } catch (error) {
     res.status(500).json({ message: 'Error creating event', error });
@@ -161,6 +171,10 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
      .populate('createdBy', 'name email avatar')
      .populate('attendees.user', 'name email avatar');
 
+    try {
+      emitCalendarEventUpdated(getTenantId(req.user!), updatedEvent);
+    } catch {}
+
     res.json(updatedEvent);
   } catch (error) {
     res.status(500).json({ message: 'Error updating event', error });
@@ -187,7 +201,11 @@ export const deleteEvent = async (req: AuthRequest, res: Response) => {
     await CalendarEvent.findByIdAndDelete(id);
 
     // If recurring, might need to handle deleting future events too (skip for now to keep simple)
-    
+
+    try {
+      emitCalendarEventDeleted(getTenantId(req.user!), id as string);
+    } catch {}
+
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting event', error });
@@ -198,12 +216,29 @@ export const moveEvent = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { startDate, endDate, allDay } = req.body;
-    
+    const userId = req.user?._id;
+
+    const existing = await CalendarEvent.findById(id).populate('calendar');
+    if (!existing) return res.status(404).json({ message: 'Event not found' });
+
+    const calendar: any = existing.calendar;
+    const isOwner = calendar.owner?.toString() === userId?.toString();
+    const isEditor = calendar.sharedWith.some((s: any) => s.user.toString() === userId?.toString() && s.permission === 'editor');
+    const isAdmin = req.user?.role === 'admin';
+
+    if (!isOwner && !isEditor && !(calendar.isSystem && isAdmin)) {
+      return res.status(403).json({ message: 'Not authorized to move this event' });
+    }
+
     const updatedEvent = await CalendarEvent.findByIdAndUpdate(
       id,
       { $set: { startDate, endDate, allDay } },
       { new: true }
     ).populate('calendar', 'name color isSystem');
+
+    try {
+      emitCalendarEventUpdated(getTenantId(req.user!), updatedEvent);
+    } catch {}
 
     res.json(updatedEvent);
   } catch (error) {

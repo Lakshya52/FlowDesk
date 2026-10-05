@@ -4,6 +4,12 @@ import Calendar from "../models/Calendar";
 import CalendarEvent from "../models/CalendarEvent";
 import User from "../models/User";
 import Notification from "../models/Notification";
+import { getTenantId } from "../utils/tenant";
+import {
+  emitCalendarCreated,
+  emitCalendarUpdated,
+  emitCalendarDeleted,
+} from "../services/calendarSocketService";
 
 export const getCalendars = async (req: AuthRequest, res: Response) => {
   try {
@@ -87,6 +93,10 @@ export const createCalendar = async (req: AuthRequest, res: Response) => {
       isSystem: isSystem || false,
     });
 
+    try {
+      emitCalendarCreated(getTenantId(req.user!), calendar);
+    } catch {}
+
     res.status(201).json(calendar);
   } catch (error) {
     res.status(500).json({ message: "Error creating calendar", error });
@@ -124,6 +134,10 @@ export const updateCalendar = async (req: AuthRequest, res: Response) => {
       .populate("sharedWith.user", "name email avatar")
       .populate("owner", "name email avatar");
 
+    try {
+      emitCalendarUpdated(getTenantId(req.user!), updatedCalendar);
+    } catch {}
+
     res.json(updatedCalendar);
   } catch (error) {
     res.status(500).json({ message: "Error updating calendar", error });
@@ -151,6 +165,10 @@ export const deleteCalendar = async (req: AuthRequest, res: Response) => {
     await CalendarEvent.deleteMany({ calendar: id });
     await Calendar.findByIdAndDelete(id);
 
+    try {
+      emitCalendarDeleted(getTenantId(req.user!), id as string);
+    } catch {}
+
     res.json({ message: "Calendar deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Error deleting calendar", error });
@@ -165,6 +183,9 @@ export const archiveCalendar = async (req: AuthRequest, res: Response) => {
       { $set: { isArchived: req.body.isArchived } },
       { new: true },
     );
+    try {
+      emitCalendarUpdated(getTenantId(req.user!), calendar);
+    } catch {}
     res.json(calendar);
   } catch (error) {
     res.status(500).json({ message: "Error archiving calendar", error });
@@ -196,6 +217,10 @@ export const shareCalendar = async (req: AuthRequest, res: Response) => {
     }
 
     await calendar.save();
+
+    try {
+      emitCalendarUpdated(getTenantId(req.user!), calendar);
+    } catch {}
 
     await Notification.create({
       user: userId,
@@ -229,6 +254,10 @@ export const removeShare = async (req: AuthRequest, res: Response) => {
     );
     await calendar.save();
 
+    try {
+      emitCalendarUpdated(getTenantId(req.user!), calendar);
+    } catch {}
+
     res.json(calendar);
   } catch (error) {
     res.status(500).json({ message: "Error removing share", error });
@@ -248,6 +277,9 @@ export const acceptShare = async (req: AuthRequest, res: Response) => {
 
     share.status = 'accepted';
     await calendar.save();
+    try {
+      emitCalendarUpdated(getTenantId(req.user!), calendar);
+    } catch {}
     res.json({ message: "Calendar share accepted" });
   } catch (error) {
     res.status(500).json({ message: "Error accepting calendar share", error });
@@ -264,6 +296,9 @@ export const rejectShare = async (req: AuthRequest, res: Response) => {
 
     calendar.sharedWith = calendar.sharedWith.filter((s) => s.user.toString() !== userId?.toString());
     await calendar.save();
+    try {
+      emitCalendarUpdated(getTenantId(req.user!), calendar);
+    } catch {}
     res.json({ message: "Calendar share rejected" });
   } catch (error) {
     res.status(500).json({ message: "Error rejecting calendar share", error });

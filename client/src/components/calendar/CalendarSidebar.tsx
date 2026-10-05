@@ -9,7 +9,11 @@ import {
   endOfWeek,
   isSameMonth,
   isSameDay,
+  isSameWeek,
   addDays,
+  subDays,
+  addWeeks,
+  subWeeks,
 } from "date-fns";
 import {
   ChevronLeft,
@@ -27,6 +31,7 @@ import { Check, X } from "lucide-react";
 // import { useCalendarStore } from '../../store/calendarStore';
 import { useAuthStore } from "../../store/authStore";
 import { useQueryClient } from "@tanstack/react-query";
+import { onActivateKey } from "../../lib/keyboard";
 import api from "../../lib/api";
 
 interface CalendarSidebarProps {
@@ -36,6 +41,7 @@ interface CalendarSidebarProps {
 const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ calendars }) => {
   const {
     currentDate,
+    currentView,
     setCurrentDate,
     visibleCalendarIds,
     toggleCalendarVisibility,
@@ -54,6 +60,40 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ calendars }) => {
   useEffect(() => {
     setOrderedCalendars(calendars);
   }, [calendars]);
+
+  // Mini calendar stepping follows the current view: one date in day view,
+  // one week in week view, a whole month otherwise (moving the big calendar
+  // along too so both stay in sync).
+  const shiftMiniMonth = (dir: 1 | -1) => {
+    if (currentView === "day") {
+      setCurrentDate(dir === 1 ? addDays(currentDate, 1) : subDays(currentDate, 1));
+      return;
+    }
+    if (currentView === "week") {
+      setCurrentDate(dir === 1 ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1));
+      return;
+    }
+    const nextMini = dir === 1 ? addMonths(miniCalDate, 1) : subMonths(miniCalDate, 1);
+    setMiniCalDate(nextMini);
+    const selected = new Date(currentDate);
+    const day = Math.min(selected.getDate(), endOfMonth(nextMini).getDate());
+    setCurrentDate(new Date(nextMini.getFullYear(), nextMini.getMonth(), day));
+  };
+
+  // Keep the mini calendar in sync with the big calendar: when the toolbar's
+  // Today / prev / next buttons (or a day click elsewhere) move currentDate
+  // into a month the mini calendar isn't showing, follow it. Browsing months
+  // with the mini calendar's own chevrons is untouched while months match.
+  useEffect(() => {
+    setMiniCalDate((prev) => {
+      const prevDate = new Date(prev);
+      const nextDate = new Date(currentDate);
+      return prevDate.getMonth() === nextDate.getMonth() &&
+        prevDate.getFullYear() === nextDate.getFullYear()
+        ? prev
+        : nextDate;
+    });
+  }, [currentDate]);
 
   const pendingInvitations = calendars.filter((c) =>
     c.sharedWith?.some(
@@ -171,6 +211,8 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ calendars }) => {
   const endDate = endOfWeek(monthEnd);
 
   const dateFormat = "d";
+  const weekStartDate = startOfWeek(new Date(currentDate));
+  const weekEndDate = endOfWeek(new Date(currentDate));
   const rows = [];
   let days = [];
   let day = startDate;
@@ -182,6 +224,8 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ calendars }) => {
       const cloneDay = day;
 
       const isSelected = isSameDay(day, currentDate);
+      const isInSelectedWeek =
+        currentView === "week" && isSameWeek(day, currentDate);
       const isCurrentMonth = isSameMonth(day, monthStart);
       const isToday = isSameDay(day, new Date());
 
@@ -199,39 +243,69 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ calendars }) => {
           : "var(--color-text)",
       };
 
-      if (isToday && !isSelected) {
+      const isWeekStart =
+        currentView === "week" && isSameDay(day, weekStartDate);
+      const isWeekEnd =
+        currentView === "week" && isSameDay(day, weekEndDate);
+      if (isInSelectedWeek && !isToday) {
+        dayStyle = {
+          ...dayStyle,
+          backgroundColor: "var(--color-primary-light)",
+          // Only the week's first/last day stay rounded — middle days form
+          // the strip. The selected day keeps its own circular ring.
+          borderRadius: isSelected
+            ? "50%"
+            : isWeekStart
+              ? "16px 0 0 16px"
+              : isWeekEnd
+                ? "0 16px 16px 0"
+                : 0,
+        };
+      }
+      // Today: solid filled circle.
+      if (isToday) {
+        dayStyle = {
+          ...dayStyle,
+          color: "#ffffff",
+          fontWeight: 700,
+          backgroundColor: "var(--color-primary)",
+          borderRadius: "50%",
+        };
+      }
+      // Selected date: hollow rounded ring — circular, never squared.
+      if (isSelected && !isToday) {
         dayStyle = {
           ...dayStyle,
           color: "var(--color-primary)",
-          fontWeight: "bold",
-          backgroundColor: "var(--color-primary-light)",
-        };
-      }
-      if (isSelected) {
-        dayStyle = {
-          ...dayStyle,
-          backgroundColor: "var(--color-primary)",
-          color: "#ffffff",
-          fontWeight: 500,
+          fontWeight: 700,
+          backgroundColor: "transparent",
+          border: "1.5px solid var(--color-primary)",
+          borderRadius: "50%",
         };
       }
 
       days.push(
         <div
           key={day.toString()}
+          role="button"
+          tabIndex={0}
+          aria-label={format(day, "MMMM d, yyyy")}
+          aria-current={isToday ? "date" : undefined}
+          className="cal-focusable"
           onClick={() => setCurrentDate(cloneDay)}
+          onKeyDown={onActivateKey(() => setCurrentDate(cloneDay))}
           style={dayStyle}
           onMouseOver={(e) => {
-            if (!isSelected && isCurrentMonth) {
+            // Hover tint only on plain days — never wipe the selected ring,
+            // today's fill, or the week band.
+            if (!isSelected && !isToday && !isInSelectedWeek && isCurrentMonth) {
               e.currentTarget.style.backgroundColor =
                 "var(--color-surface-hover)";
             }
           }}
           onMouseOut={(e) => {
-            if (!isSelected && isCurrentMonth) {
-              e.currentTarget.style.backgroundColor = isToday
-                ? "var(--color-primary-light)"
-                : "transparent";
+            if (!isSelected && !isToday && !isInSelectedWeek && isCurrentMonth) {
+              e.currentTarget.style.backgroundColor = "transparent";
             }
           }}
         >
@@ -291,24 +365,26 @@ const miniCalBg = visibleCalendars.length === 0
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent: currentView === "year" ? "space-between" : "flex-end",
             alignItems: "center",
             marginBottom: "16px",
           }}
         >
-          <h3
-            style={{
-              fontSize: "14px",
-              fontWeight: 600,
-              color: "var(--color-text)",
-              margin: 0,
-            }}
-          >
-            {format(miniCalDate, "MMMM yyyy")}
-          </h3>
+          {currentView === "year" && (
+            <h3
+              style={{
+                fontSize: "14px",
+                fontWeight: 600,
+                color: "var(--color-text)",
+                margin: 0,
+              }}
+            >
+              {format(miniCalDate, "MMMM yyyy")}
+            </h3>
+          )}
           <div style={{ display: "flex" }}>
             <button
-              onClick={() => setMiniCalDate(subMonths(miniCalDate, 1))}
+              onClick={() => shiftMiniMonth(-1)}
               style={{
                 padding: "4px",
                 color: "var(--color-text-secondary)",
@@ -328,7 +404,7 @@ const miniCalBg = visibleCalendars.length === 0
               <ChevronLeft size={16} />
             </button>
             <button
-              onClick={() => setMiniCalDate(addMonths(miniCalDate, 1))}
+              onClick={() => shiftMiniMonth(1)}
               style={{
                 padding: "4px",
                 color: "var(--color-text-secondary)",

@@ -18,9 +18,20 @@ const EventChip: React.FC<EventChipProps> = ({
 }) => {
   return (
     <div 
+      role="button"
+      tabIndex={0}
+      aria-label={time ? `${title} at ${time}` : title}
+      className="cal-focusable"
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(e);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick?.(e as unknown as React.MouseEvent);
+        }
       }}
       style={{ 
         display: 'flex',

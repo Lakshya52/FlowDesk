@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
   Search,
   Plus,
   Menu,
@@ -18,8 +16,6 @@ const CalendarToolbar: React.FC = () => {
     currentDate,
     currentView,
     setCurrentView,
-    navigateNext,
-    navigatePrev,
     navigateToday,
     searchQuery,
     setSearchQuery,
@@ -106,223 +102,6 @@ const CalendarToolbar: React.FC = () => {
         >
           <Menu size={20} />
         </button>
-
-        <div ref={createMenuRef} style={{ position: "relative" }}>
-          <button
-            onClick={() => setShowCreateMenu((prev) => !prev)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "8px 16px",
-              backgroundColor: "var(--color-primary)",
-              color: "white",
-              borderRadius: "6px",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: 500,
-              boxShadow: "var(--shadow-sm)",
-            }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.backgroundColor =
-                "var(--color-primary-hover)")
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.backgroundColor = "var(--color-primary)")
-            }
-          >
-            <Plus size={18} />
-            <span>Create</span>
-            {/* <ChevronDown size={14} /> */}
-          </button>
-
-          {showCreateMenu && (
-            <div
-              style={{
-                position: "absolute",
-                top: "calc(100% + 6px)",
-                left: 0,
-                backgroundColor: "var(--color-surface)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "8px",
-                boxShadow: "var(--shadow-lg)",
-                zIndex: 50,
-                overflow: "hidden",
-                minWidth: "160px",
-              }}
-            >
-              <button
-                onClick={() => {
-                  openEventModal();
-                  setShowCreateMenu(false);
-                }}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px 16px",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  color: "var(--color-text)",
-                  backgroundColor: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "var(--color-surface-hover)")
-                }
-                onMouseOut={(e) =>
-                  (e.currentTarget.style.backgroundColor = "transparent")
-                }
-              >
-                <Plus size={16} color="var(--color-primary)" />
-                New Event
-              </button>
-              <button
-                onClick={() => {
-                  openCalendarModal();
-                  setShowCreateMenu(false);
-                }}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px 16px",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  color: "var(--color-text)",
-                  backgroundColor: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "var(--color-surface-hover)")
-                }
-                onMouseOut={(e) =>
-                  (e.currentTarget.style.backgroundColor = "transparent")
-                }
-              >
-                <CalendarIcon size={16} color="var(--color-primary)" />
-                New Calendar
-              </button>
-              <button
-                onClick={() => {
-                  openImportModal();
-                  setShowCreateMenu(false);
-                }}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px 16px",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  color: "var(--color-text)",
-                  backgroundColor: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "var(--color-surface-hover)")
-                }
-                onMouseOut={(e) =>
-                  (e.currentTarget.style.backgroundColor = "transparent")
-                }
-              >
-                <Import  size={16} color="var(--color-primary)" />
-                {/* <CalendarIcon /> */}
-                Import
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            backgroundColor: "var(--color-surface-hover)",
-            borderRadius: "6px",
-            padding: "4px",
-          }}
-        >
-          <button
-            onClick={navigateToday}
-            style={{
-              padding: "4px 12px",
-              fontSize: "14px",
-              fontWeight: 500,
-              color: "var(--color-text)",
-              backgroundColor: "transparent",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.backgroundColor = "var(--color-surface)")
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.backgroundColor = "transparent")
-            }
-          >
-            Today
-          </button>
-          <div
-            style={{
-              width: "1px",
-              height: "16px",
-              backgroundColor: "var(--color-border)",
-              margin: "0 4px",
-            }}
-          ></div>
-          <button
-            onClick={navigatePrev}
-            style={{
-              padding: "4px",
-              color: "var(--color-text-secondary)",
-              backgroundColor: "transparent",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.backgroundColor = "var(--color-surface)")
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.backgroundColor = "transparent")
-            }
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <button
-            onClick={navigateNext}
-            style={{
-              padding: "4px",
-              color: "var(--color-text-secondary)",
-              backgroundColor: "transparent",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.backgroundColor = "var(--color-surface)")
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.backgroundColor = "transparent")
-            }
-          >
-            <ChevronRight size={20} />
-          </button>
-        </div>
 
         <h2
           style={{
@@ -458,6 +237,174 @@ const CalendarToolbar: React.FC = () => {
               {view.label}
             </button>
           ))}
+        </div>
+
+        <button
+          onClick={navigateToday}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "36px",
+            minWidth: "104px",
+            padding: "8px 16px",
+            fontSize: "14px",
+            fontWeight: 500,
+            color: "var(--color-text)",
+            backgroundColor: "transparent",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+          onMouseOver={(e) =>
+            (e.currentTarget.style.backgroundColor = "var(--color-surface-hover)")
+          }
+          onMouseOut={(e) =>
+            (e.currentTarget.style.backgroundColor = "transparent")
+          }
+        >
+          Today
+        </button>
+
+        <div ref={createMenuRef} style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowCreateMenu((prev) => !prev)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              height: "36px",
+              minWidth: "104px",
+              padding: "8px 16px",
+              fontSize: "14px",
+              backgroundColor: "var(--color-primary)",
+              color: "white",
+              borderRadius: "6px",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: 500,
+              boxShadow: "var(--shadow-sm)",
+            }}
+            onMouseOver={(e) =>
+              (e.currentTarget.style.backgroundColor =
+                "var(--color-primary-hover)")
+            }
+            onMouseOut={(e) =>
+              (e.currentTarget.style.backgroundColor = "var(--color-primary)")
+            }
+          >
+            <Plus size={18} />
+            <span>Create</span>
+          </button>
+
+          {showCreateMenu && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                right: 0,
+                backgroundColor: "var(--color-surface)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "8px",
+                boxShadow: "var(--shadow-lg)",
+                zIndex: 50,
+                overflow: "hidden",
+                minWidth: "160px",
+              }}
+            >
+              <button
+                onClick={() => {
+                  openEventModal();
+                  setShowCreateMenu(false);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "10px 16px",
+                  fontSize: "14px",
+                  fontWeight: 500,
+                  color: "var(--color-text)",
+                  backgroundColor: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    "var(--color-surface-hover)")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.backgroundColor = "transparent")
+                }
+              >
+                <Plus size={16} color="var(--color-primary)" />
+                New Event
+              </button>
+              <button
+                onClick={() => {
+                  openCalendarModal();
+                  setShowCreateMenu(false);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "10px 16px",
+                  fontSize: "14px",
+                  fontWeight: 500,
+                  color: "var(--color-text)",
+                  backgroundColor: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    "var(--color-surface-hover)")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.backgroundColor = "transparent")
+                }
+              >
+                <CalendarIcon size={16} color="var(--color-primary)" />
+                New Calendar
+              </button>
+              <button
+                onClick={() => {
+                  openImportModal();
+                  setShowCreateMenu(false);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "10px 16px",
+                  fontSize: "14px",
+                  fontWeight: 500,
+                  color: "var(--color-text)",
+                  backgroundColor: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    "var(--color-surface-hover)")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.backgroundColor = "transparent")
+                }
+              >
+                <Import  size={16} color="var(--color-primary)" />
+                Import
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

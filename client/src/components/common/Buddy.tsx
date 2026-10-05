@@ -363,6 +363,19 @@ const FlowDeskBuddy: FC = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent, isLoading]);
 
+  // Dashboard AI hero ("Command what to do") opens Buddy with a prompt.
+  // Event: window.dispatchEvent(new CustomEvent("flowdesk:open-buddy", { detail: { prompt } }))
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const prompt = (e as CustomEvent<{ prompt?: string }>)?.detail?.prompt;
+      setIsOpen(true);
+      if (prompt) setInput(prompt);
+      window.setTimeout(() => inputRef.current?.focus(), 120);
+    };
+    window.addEventListener("flowdesk:open-buddy", handler);
+    return () => window.removeEventListener("flowdesk:open-buddy", handler);
+  }, []);
+
   const sendMessage = async (text?: string): Promise<void> => {
     const userText = (text ?? input).trim();
     if (!userText || isLoading) return;

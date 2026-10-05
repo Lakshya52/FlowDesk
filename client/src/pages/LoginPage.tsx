@@ -142,11 +142,11 @@ const LoginPage: React.FC = () => {
 			<div className="animate-fade-in h-[90dvh] flex flex-col items-center justify-center w-full max-w-100">
 				{/* Brand */}
 				<div className="flex flex-col items-center mb-10">
-					<div className="w-12 h-12  inline-flex items-center justify-center mb-4 overflow-hidden">
+					<div className="w-12 h-12 inline-flex items-center justify-center mb-4 overflow-hidden">
 						<img
 							src="/logo.png"
 							alt="FlowDesk logo"
-							// className="rounded-xl scale-125"
+							style={{ width: 48, height: 48, display: 'block' }}
 						/>
 					</div>
 					<h1 className="text-2xl font-bold ">FlowDesk - Sign In</h1>

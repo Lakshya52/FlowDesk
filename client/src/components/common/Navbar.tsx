@@ -29,7 +29,7 @@ const Navbar = () => {
 						<img
 							src="/logo.png"
 							alt="FlowDesk logo"
-							// className="rounded-xl scale-125"
+							style={{ width: 28, height: 28, display: 'block' }}
 						/>
 					</div>
 						FlowDesk

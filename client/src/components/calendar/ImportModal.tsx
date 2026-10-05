@@ -85,9 +85,13 @@ const ImportModal: React.FC = () => {
         setGoogleCalendars(listRes.data.calendars);
         setSelectedIds(new Set(listRes.data.calendars.map((c: GoogleCalendar) => c.id)));
         setStep('selecting');
-      } catch {
+      } catch (err: any) {
         setStep('error');
-        setErrorMsg('Google connected, but we could not fetch your calendars. Please try again.');
+        setErrorMsg(
+          err?.response?.data?.needsReconnect
+            ? 'Google authorization expired. Click Try Again, then reconnect your Google account.'
+            : 'Google connected, but we could not fetch your calendars. Please try again.'
+        );
       }
     };
 
@@ -160,23 +164,36 @@ const ImportModal: React.FC = () => {
     const selected = googleCalendars.filter(c => selectedIds.has(c.id));
     setImportProgress({ current: 0, total: selected.length, calendarName: '' });
 
-    try {
-      for (let i = 0; i < selected.length; i++) {
-        const cal = selected[i];
-        setImportProgress({ current: i, total: selected.length, calendarName: cal.name });
+    const failed: string[] = [];
+    let reconnectNeeded = false;
+    for (let i = 0; i < selected.length; i++) {
+      const cal = selected[i];
+      setImportProgress({ current: i, total: selected.length, calendarName: cal.name });
+      try {
         await api.post('/import/google-calendar/sync-one', {
           calendarId: cal.id,
           calendarName: cal.name,
           calendarColor: cal.color,
         });
-        setImportProgress({ current: i + 1, total: selected.length, calendarName: cal.name });
+      } catch (err: any) {
+        failed.push(cal.name);
+        if (err?.response?.data?.needsReconnect) reconnectNeeded = true;
       }
-      await queryClient.invalidateQueries({ queryKey: ['calendars'] });
-      await queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      setImportProgress({ current: i + 1, total: selected.length, calendarName: cal.name });
+    }
+    await queryClient.invalidateQueries({ queryKey: ['calendars'] });
+    await queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+    if (failed.length === 0) {
       setStep('success');
-    } catch {
+    } else {
       setStep('error');
-      setErrorMsg('Import failed. Please try again.');
+      setErrorMsg(
+        reconnectNeeded
+          ? 'Google authorization expired. Click Try Again, then reconnect your Google account.'
+          : failed.length === selected.length
+            ? 'Import failed. Please try again.'
+            : `Imported ${selected.length - failed.length} of ${selected.length} calendars. Failed: ${failed.join(', ')}. Please retry the rest.`
+      );
     }
   };
 
@@ -193,6 +210,7 @@ const handleClose = () => {
 
   return (
     <Modal isOpen={isImportModalOpen} onClose={handleClose}>
+      <style>{`@keyframes fd-spin { to { transform: rotate(360deg); } }`}</style>
       <div style={{
         backgroundColor: 'var(--color-surface)',
         borderRadius: '12px',
@@ -206,7 +224,7 @@ const handleClose = () => {
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
             Import from Google Calendar
           </h2>
-          <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '4px' }}>
+          <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', padding: '4px' }}>
             <X size={20} />
           </button>
         </div>
@@ -214,7 +232,7 @@ const handleClose = () => {
         {/* Step: idle */}
         {step === 'idle' && (
           <>
-            <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginBottom: '20px' }}>
               Connect your Google account to choose which calendars to import.
             </p>
             <button
@@ -235,7 +253,7 @@ const handleClose = () => {
               <Chrome size={18} color="#4285F4" />
               Continue with Google
             </button>
-            <p style={{ marginTop: '16px', fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center' }}>
+            <p style={{ marginTop: '16px', fontSize: '12px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
               We only read your calendar data. We never modify or delete your Google events.
             </p>
           </>
@@ -244,8 +262,8 @@ const handleClose = () => {
         {/* Step: connecting */}
         {step === 'connecting' && (
           <div className='flex items-center flex-col' style={{ textAlign: 'center', padding: '24px 0' }}>
-            <Loader size={32} color="var(--color-primary)" style={{ animation: 'spin 1s linear infinite', marginBottom: '12px' }} />
-            <p style={{ fontSize: '14px', color: 'var(--color-text-muted)' }}>
+            <Loader size={32} color="var(--color-primary)" style={{ animation: 'fd-spin 1s linear infinite', marginBottom: '12px' }} />
+            <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>
               Waiting for Google authorization...
             </p>
           </div>
@@ -254,7 +272,7 @@ const handleClose = () => {
         {/* Step: selecting */}
         {step === 'selecting' && (
           <>
-            <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>
               Select the calendars you want to import:
             </p>
 
@@ -278,7 +296,7 @@ const handleClose = () => {
                   
                   <span style={{ flex: 1, fontSize: '14px', color: 'var(--color-text)', fontWeight: cal.primary ? 500 : 400 }}>
                     {cal.name}
-                    {cal.primary && <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--color-text-muted)' }}>(primary)</span>}
+                    {cal.primary && <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--color-text-secondary)' }}>(primary)</span>}
                   </span>
 
                   {/* Checkbox */}
@@ -328,13 +346,13 @@ const handleClose = () => {
         {step === 'importing' && (
           <div style={{ padding: '24px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-              <Loader size={28} color="var(--color-primary)" style={{ animation: 'spin 1s linear infinite' }} />
+              <Loader size={28} color="var(--color-primary)" style={{ animation: 'fd-spin 1s linear infinite' }} />
             </div>
 
             <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text)', textAlign: 'center', marginBottom: '6px' }}>
               Importing your calendars and events...
             </p>
-            <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: '20px', minHeight: '18px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', textAlign: 'center', marginBottom: '20px', minHeight: '18px' }}>
               {importProgress.calendarName ? `Syncing "${importProgress.calendarName}"` : 'Starting...'}
             </p>
 
@@ -349,7 +367,7 @@ const handleClose = () => {
               }} />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
               <span>{importProgress.current} of {importProgress.total} calendars</span>
               <span>{importProgress.total > 0 ? Math.round((importProgress.current / importProgress.total) * 100) : 0}%</span>
             </div>
@@ -363,7 +381,7 @@ const handleClose = () => {
             <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text)', marginBottom: '6px' }}>
               Import Successful!
             </p>
-            <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginBottom: '20px' }}>
               Your selected Google Calendar{selectedIds.size !== 1 ? 's have' : ' has'} been imported.
             </p>
             <button

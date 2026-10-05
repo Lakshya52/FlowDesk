@@ -796,6 +796,13 @@ input, textarea, select, button, a-button, .btn, [role="button"], a {
   display: none;
 }
 
+/* Visible keyboard focus ring for div-based calendar controls
+ * (role="button" + .cal-focusable + onActivateKey from lib/keyboard). */
+.cal-focusable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* ===== Calendar Responsiveness ===== */
 .mobile-hamburger {
   display: none;

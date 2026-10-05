@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Clock, MapPin, AlignLeft, Calendar as CalendarIcon, Tag } from 'lucide-react';
 import { format } from 'date-fns';
+import {
+  toDateTimeInputValue,
+  shiftDateTimeInput,
+  allDayRange,
+} from '../../lib/calendarDates';
 import { useCalendarStore } from '../../store/calendarStore';
 import api from '../../lib/api';
 import toast from 'react-hot-toast';
@@ -18,6 +23,9 @@ const EventModal: React.FC<EventModalProps> = ({ calendars }) => {
 const endDateRef = useRef<HTMLInputElement>(null);
   
   const [loading, setLoading] = useState(false);
+  // Name of the event's calendar when editing an event that lives in a
+  // calendar outside the owned list (shown as a disabled option).
+  const [editCalendarName, setEditCalendarName] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     calendar: '',
@@ -32,6 +40,53 @@ const endDateRef = useRef<HTMLInputElement>(null);
   });
 
   const myCalendars = calendars.filter(c => !c.isSystem && (c.owner?._id || c.owner));
+  const calendarMissingFromList = formData.calendar && !myCalendars.some(c => c._id === formData.calendar);
+
+  // Shift a "yyyy-MM-ddTHH:mm" value by minutes, keeping the same format.
+  const shiftDateTime = shiftDateTimeInput;
+
+  // Auto-adjust the other end when start/end cross, instead of only erroring
+  // on submit. Start drives end forward; end pulls start back.
+  const handleStartChange = (value: string) => {
+    setFormData(prev => {
+      const next = { ...prev, startDate: value };
+      if (value && prev.endDate) {
+        if (prev.allDay) {
+          if (value.substring(0, 10) > prev.endDate.substring(0, 10)) next.endDate = value.substring(0, 10);
+        } else if (new Date(value) > new Date(prev.endDate)) {
+          next.endDate = shiftDateTime(value, 60);
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleEndChange = (value: string) => {
+    setFormData(prev => {
+      const next = { ...prev, endDate: value };
+      if (value && prev.startDate) {
+        if (prev.allDay) {
+          if (value.substring(0, 10) < prev.startDate.substring(0, 10)) next.startDate = value.substring(0, 10);
+        } else if (new Date(value) < new Date(prev.startDate)) {
+          next.startDate = shiftDateTime(value, -60);
+        }
+      }
+      return next;
+    });
+  };
+
+  // Open the native picker on full-field click, but not while already editing
+  // (avoids re-triggering / flashing the picker on some browsers).
+  const openPickerOnce = (ref: React.RefObject<HTMLInputElement | null>) => {
+    const el = ref.current;
+    if (el && document.activeElement !== el) {
+      try {
+        el.showPicker();
+      } catch {
+        // showPicker unavailable — the native control still works
+      }
+    }
+  };
 
   useEffect(() => {
     if (isEventModalOpen) {
@@ -39,14 +94,25 @@ const endDateRef = useRef<HTMLInputElement>(null);
         // Edit mode - fetch event
         fetchEventDetails();
       } else {
-        // Create mode - use the date the user clicked (selectedDate) or fall back to the current view date
+        // Create mode - use the date the user clicked (selectedDate) or fall back to the current view date.
+        // A click on a day/week time slot carries a time (non-midnight) — preselect it with a 1-hour
+        // block; plain day clicks default to 09:00–10:00.
         const baseDate = selectedDate || currentDate;
         const dateStr = format(baseDate, 'yyyy-MM-dd');
+        const toLocalDT = (d: Date) => toDateTimeInputValue(d);
+        let startDT = `${dateStr}T09:00`;
+        let endDT = `${dateStr}T10:00`;
+        if (selectedDate && (baseDate.getHours() !== 0 || baseDate.getMinutes() !== 0)) {
+          const s = new Date(baseDate);
+          s.setSeconds(0, 0);
+          startDT = toLocalDT(s);
+          endDT = toLocalDT(new Date(s.getTime() + 60 * 60000));
+        }
         setFormData({
           title: '',
           calendar: myCalendars.length > 0 ? myCalendars[0]._id : '',
-          startDate: `${dateStr}T09:00`,
-          endDate: `${dateStr}T10:00`,
+          startDate: startDT,
+          endDate: endDT,
           allDay: false,
           location: '',
           description: '',
@@ -67,10 +133,8 @@ const endDateRef = useRef<HTMLInputElement>(null);
       const sDate = new Date(ev.startDate);
       const eDate = new Date(ev.endDate);
 
-      
-      // format for local datetime-local input
-      const pad = (n: number) => n.toString().padStart(2, '0');
-      const formatDT = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      // Local values for datetime-local inputs (see lib/calendarDates)
+      const formatDT = toDateTimeInputValue;
       
       setFormData({
         title: ev.title || '',
@@ -84,6 +148,7 @@ const endDateRef = useRef<HTMLInputElement>(null);
         priority: ev.priority || 'medium',
         isImportant: ev.isImportant || false
       });
+      setEditCalendarName(ev.calendar?.name || '');
     } catch (error) {
       console.error(error);
       toast.error('Failed to fetch event details');
@@ -107,11 +172,25 @@ const endDateRef = useRef<HTMLInputElement>(null);
 
     try {
       setLoading(true);
-      
+
+      // All-day inputs are date-only — normalise via lib/calendarDates so the
+      // event lands on the right day in every timezone.
+      let startISO: string;
+      let endISO: string;
+      if (formData.allDay) {
+        const range = allDayRange(formData.startDate);
+        const rangeEnd = allDayRange(formData.endDate);
+        startISO = range.startISO;
+        endISO = rangeEnd.endISO;
+      } else {
+        startISO = new Date(formData.startDate).toISOString();
+        endISO = new Date(formData.endDate).toISOString();
+      }
+
       const payload = {
         ...formData,
-        startDate: new Date(formData.startDate).toISOString(),
-        endDate: new Date(formData.endDate).toISOString(),
+        startDate: startISO,
+        endDate: endISO,
       };
 
       if (selectedEventId) {
@@ -178,25 +257,39 @@ const endDateRef = useRef<HTMLInputElement>(null);
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Clock size={20} color="var(--color-text-secondary)" />
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                  <input
-                    ref={startDateRef}
-                    type={formData.allDay ? 'date' : 'datetime-local'}
-                    value={formData.startDate.substring(0, formData.allDay ? 10 : 16)}
-                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
-                    onClick={() => startDateRef.current?.showPicker()}
-                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
-                    required
-                  />
-                  <span style={{ color: 'var(--color-text-secondary)' }}>to</span>
-                  <input
-                    ref={endDateRef}
-                    type={formData.allDay ? 'date' : 'datetime-local'}
-                    value={formData.endDate.substring(0, formData.allDay ? 10 : 16)}
-                    onChange={e => setFormData({ ...formData, endDate: e.target.value })}
-                    onClick={() => endDateRef.current?.showPicker()}
-                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
-                    required
-                  />
+                  {formData.allDay ? (
+                    <input
+                      ref={startDateRef}
+                      type="date"
+                      value={formData.startDate.substring(0, 10)}
+                      onChange={e => setFormData({ ...formData, startDate: e.target.value, endDate: e.target.value })}
+                      onClick={() => openPickerOnce(startDateRef)}
+                      style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
+                      required
+                    />
+                  ) : (
+                    <>
+                      <input
+                        ref={startDateRef}
+                        type="datetime-local"
+                        value={formData.startDate.substring(0, 16)}
+                        onChange={e => handleStartChange(e.target.value)}
+                        onClick={() => openPickerOnce(startDateRef)}
+                        style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
+                        required
+                      />
+                      <span style={{ color: 'var(--color-text-secondary)' }}>to</span>
+                      <input
+                        ref={endDateRef}
+                        type="datetime-local"
+                        value={formData.endDate.substring(0, 16)}
+                        onChange={e => handleEndChange(e.target.value)}
+                        onClick={() => openPickerOnce(endDateRef)}
+                        style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
+                        required
+                      />
+                    </>
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', paddingLeft: '32px' }}>
@@ -204,7 +297,24 @@ const endDateRef = useRef<HTMLInputElement>(null);
                   <input 
                     type="checkbox"
                     checked={formData.allDay}
-                    onChange={e => setFormData({ ...formData, allDay: e.target.checked })}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setFormData(prev => {
+                        if (checked) {
+                          // All-day needs a single date: collapse onto the start day
+                          return { ...prev, allDay: true, endDate: prev.startDate.substring(0, 10) };
+                        }
+                        // Restore times when switching back to timed inputs
+                        const withTime = (v: string, t: string) =>
+                          v && v.length > 10 ? v : `${v.substring(0, 10)}T${t}`;
+                        return {
+                          ...prev,
+                          allDay: false,
+                          startDate: withTime(prev.startDate, '09:00'),
+                          endDate: withTime(prev.endDate, '10:00'),
+                        };
+                      });
+                    }}
                     style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)', cursor: 'pointer' }}
                   />
                   All day event
@@ -223,10 +333,20 @@ const endDateRef = useRef<HTMLInputElement>(null);
                 required
               >
                 <option value="" disabled>Select a calendar</option>
+                {calendarMissingFromList && (
+                  <option value={formData.calendar} disabled>
+                    {editCalendarName ? `${editCalendarName} (shared)` : 'Current calendar (shared)'}
+                  </option>
+                )}
                 {myCalendars.map(cal => (
                   <option key={cal._id} value={cal._id}>{cal.name}</option>
                 ))}
               </select>
+              {!selectedEventId && myCalendars.length === 0 && (
+                <p style={{ fontSize: '12px', color: 'var(--color-warning)', margin: '6px 0 0' }}>
+                  You don&apos;t own any calendars yet — create one from + Create → New Calendar first.
+                </p>
+              )}
             </div>
 
             {/* Location */}

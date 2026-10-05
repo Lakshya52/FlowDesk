@@ -1,6 +1,7 @@
 import React from 'react';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays, format, startOfDay, endOfDay } from 'date-fns';
 import { useCalendarStore } from '../../store/calendarStore';
+import { onActivateKey } from '../../lib/keyboard';
 import EventChip from './EventChip';
 
 interface MonthViewProps {
@@ -53,7 +54,12 @@ const MonthView: React.FC<MonthViewProps> = ({ events }) => {
           return (
             <div 
               key={day.toString()}
+              role="button"
+              tabIndex={0}
+              aria-label={`Create event on ${format(day, 'MMMM d, yyyy')}`}
+              className="cal-focusable"
               onClick={() => openEventModal(undefined, day)}
+              onKeyDown={onActivateKey(() => openEventModal(undefined, day))}
               style={{
                 minHeight: '80px',
                 borderBottom: '1px solid var(--color-border)',

@@ -1,7 +1,19 @@
 import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import {
+  startOfYear,
+  endOfYear,
+  startOfWeek,
+  endOfWeek,
+  startOfDay,
+  endOfDay,
+  addDays,
+  subMonths,
+  addMonths,
+} from 'date-fns';
 import api from '../lib/api';
 import { useCalendarStore } from '../store/calendarStore';
+import { useCalendarSocket } from '../hooks/useCalendarSocket';
 import CalendarSidebar from '../components/calendar/CalendarSidebar';
 import CalendarToolbar from '../components/calendar/CalendarToolbar';
 import MonthView from '../components/calendar/MonthView';
@@ -16,6 +28,7 @@ import ImportModal from '../components/calendar/ImportModal';
 import EventDetailDrawer from '../components/calendar/EventDetailDrawer';
 
 const CalendarPage: React.FC = () => {
+  useCalendarSocket();
   const { 
     currentView, 
     currentDate,
@@ -59,12 +72,45 @@ const CalendarPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendars.length]);
 
-  // Determine query range based on view
+  // Determine query range based on view — the old month±1 window starved the
+  // year view (9 of 12 month blocks fetched nothing). Each view fetches what
+  // it actually renders, plus a buffer for spillover and navigation.
   const getQueryRange = () => {
     const date = new Date(currentDate);
-    const start = new Date(date.getFullYear(), date.getMonth() - 1, 1).toISOString();
-    const end = new Date(date.getFullYear(), date.getMonth() + 2, 0).toISOString();
-    return { start, end };
+    switch (currentView) {
+      case 'year':
+        return {
+          start: startOfDay(startOfYear(date)).toISOString(),
+          end: endOfDay(endOfYear(date)).toISOString(),
+        };
+      case 'month':
+        return {
+          start: new Date(date.getFullYear(), date.getMonth() - 1, 1).toISOString(),
+          end: endOfDay(new Date(date.getFullYear(), date.getMonth() + 2, 0)).toISOString(),
+        };
+      case 'week': {
+        const ws = startOfWeek(date);
+        const we = endOfWeek(date);
+        return { start: addDays(ws, -7).toISOString(), end: addDays(we, 7).toISOString() };
+      }
+      case 'day':
+        return {
+          start: addDays(startOfDay(date), -7).toISOString(),
+          end: addDays(endOfDay(date), 7).toISOString(),
+        };
+      case 'agenda':
+        // Agenda offers up to 90 days ahead plus "All" — fetch a wide window
+        // around the view date so its filter never outruns the query.
+        return {
+          start: startOfDay(subMonths(date, 6)).toISOString(),
+          end: endOfDay(addMonths(date, 12)).toISOString(),
+        };
+      default:
+        return {
+          start: new Date(date.getFullYear(), date.getMonth() - 1, 1).toISOString(),
+          end: endOfDay(new Date(date.getFullYear(), date.getMonth() + 2, 0)).toISOString(),
+        };
+    }
   };
 
   const { start, end } = getQueryRange();

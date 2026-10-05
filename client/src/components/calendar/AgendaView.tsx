@@ -1,7 +1,8 @@
 import React, {useState } from 'react';
 import { format, isSameDay, addDays, startOfDay } from 'date-fns';
-import { Clock, MapPin, AlignLeft } from 'lucide-react';
+import { Clock, MapPin, AlignLeft, CalendarX } from 'lucide-react';
 import { useCalendarStore } from '../../store/calendarStore';
+import { onActivateKey } from '../../lib/keyboard';
 
 interface AgendaViewProps {
   events: any[];
@@ -18,37 +19,64 @@ const AgendaView: React.FC<AgendaViewProps> = ({ events }) => {
   const { currentDate, openEventDrawer } = useCalendarStore();
   const [rangeDays, setRangeDays] = useState<number | null>(30);
 
-  const rangeEnd = rangeDays ? addDays(startOfDay(new Date()), rangeDays) : null;
+  // Anchor the whole window to the current view date (the range end used to
+  // anchor to today while the start used currentDate, yielding empty windows).
+  const windowStart = startOfDay(new Date(currentDate));
+  const rangeEnd = rangeDays ? addDays(windowStart, rangeDays) : null;
 
   // Sort events chronologically
   const sortedEvents = [...events].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-  
-  // Filter: from currentDate, up to rangeEnd if set
-  const upcomingEvents = sortedEvents.filter(e => {
-    const end = new Date(e.endDate);
-    const start = new Date(e.startDate);
-    if (end < startOfDay(new Date(currentDate))) return false;
-    if (rangeEnd && start > rangeEnd) return false;
-    return true;
+
+  // Keep events overlapping the window, expanding multi-day events so they
+  // appear under every day they touch (span capped for safety).
+  const MAX_SPAN_DAYS = 400;
+  const dayEntries: { key: string; date: Date; event: any; continued: boolean }[] = [];
+  sortedEvents.forEach((e) => {
+    const startDay = startOfDay(new Date(e.startDate));
+    const endDay = startOfDay(new Date(e.endDate));
+    if (endDay < windowStart) return;
+    if (rangeEnd && startDay > rangeEnd) return;
+    const fromDay = startDay < windowStart ? windowStart : startDay;
+    let toDay = endDay;
+    if (rangeEnd && toDay > rangeEnd) toDay = rangeEnd;
+    const spanCap = addDays(fromDay, MAX_SPAN_DAYS);
+    if (toDay > spanCap) toDay = spanCap;
+    for (let d = fromDay; d <= toDay; d = addDays(d, 1)) {
+      // Local date construction avoids the UTC-midnight label shift of
+      // new Date('yyyy-MM-dd') in negative-offset timezones.
+      const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      dayEntries.push({
+        key: format(local, 'yyyy-MM-dd'),
+        date: local,
+        event: e,
+        continued: local > startDay,
+      });
+    }
   });
 
   // Group by day
-  const groupedEvents: { [key: string]: any[] } = {};
-  upcomingEvents.forEach(event => {
-    const dayKey = format(new Date(event.startDate), 'yyyy-MM-dd');
-    if (!groupedEvents[dayKey]) {
-      groupedEvents[dayKey] = [];
-    }
-    groupedEvents[dayKey].push(event);
+  const groupedEvents: { [key: string]: { date: Date; entries: { event: any; continued: boolean }[] } } = {};
+  dayEntries.forEach(({ key, date, event, continued }) => {
+    if (!groupedEvents[key]) groupedEvents[key] = { date, entries: [] };
+    groupedEvents[key].entries.push({ event, continued });
   });
 
   const days = Object.keys(groupedEvents).sort();
 
-  if (upcomingEvents.length === 0) {
+  // Month sections for sticky dividers on long ranges
+  const sections: { month: string; days: string[] }[] = [];
+  days.forEach((dayKey) => {
+    const month = format(groupedEvents[dayKey].date, 'MMMM yyyy');
+    const last = sections[sections.length - 1];
+    if (last && last.month === month) last.days.push(dayKey);
+    else sections.push({ month, days: [dayKey] });
+  });
+
+  if (dayEntries.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-bg)', color: 'var(--color-text-secondary)' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '36px', marginBottom: '16px' }}>📅</div>
+          <div style={{ marginBottom: '16px' }}><CalendarX size={36} color="var(--color-text-tertiary)" /></div>
           <h3 style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text)' }}>No upcoming events</h3>
           <p style={{ fontSize: '14px', marginTop: '4px' }}>You're all caught up!</p>
         </div>
@@ -83,10 +111,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({ events }) => {
       </div>
 
       <div style={{ maxWidth: '768px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-        {days.map(dayKey => {
-          const date = new Date(dayKey);
-          const dayEvents = groupedEvents[dayKey];
-          const isToday = isSameDay(date, new Date());
+        {sections.map(section => (
+          <div key={section.month} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <div style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--color-surface)', padding: '8px 0 4px', fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>
+              {section.month}
+            </div>
+            {section.days.map(dayKey => {
+              const { date, entries } = groupedEvents[dayKey];
+              const isToday = isSameDay(date, new Date());
           
           return (
             <div key={dayKey} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
@@ -100,10 +132,15 @@ const AgendaView: React.FC<AgendaViewProps> = ({ events }) => {
               </div>
               
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '2px solid var(--color-border)', paddingLeft: '16px', minWidth: '250px' }}>
-                {dayEvents.map(event => (
+                {entries.map(({ event, continued }) => (
                   <div 
                     key={event._id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={event.title}
+                    className="cal-focusable"
                     onClick={() => openEventDrawer(event._id)}
+                    onKeyDown={onActivateKey(() => openEventDrawer(event._id))}
                     style={{
                       backgroundColor: 'var(--color-surface)',
                       border: '1px solid var(--color-border)',
@@ -143,6 +180,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ events }) => {
                           {event.isImportant && (
                             <span style={{ fontSize: '12px', backgroundColor: 'var(--color-danger-light)', color: 'var(--color-danger)', padding: '2px 8px', borderRadius: '4px', fontWeight: 500 }}>
                               Important
+                            </span>
+                          )}
+                          {continued && (
+                            <span style={{ fontSize: '12px', backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)', padding: '2px 8px', borderRadius: '4px', fontWeight: 500 }}>
+                              Continued
                             </span>
                           )}
                         </div>
@@ -192,8 +234,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({ events }) => {
                 ))}
               </div>
             </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );

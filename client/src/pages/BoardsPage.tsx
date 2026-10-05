@@ -5,7 +5,7 @@ import api from "../lib/api";
 import Avatar from "../components/common/Avatar";
 import Modal from "../components/common/Modal";
 import { useAuthStore } from "../store/authStore";
-import { Plus, LayoutGrid, Users, X, Loader2, Columns3, Settings, Check, Trash2, Mail, Pencil } from "lucide-react";
+import { Plus, LayoutGrid, Users, X, Loader2, Columns3, Settings, Check, Trash2, Mail, Pencil, Undo2 } from "lucide-react";
 import { useTaskSocket } from "../hooks/useTaskSocket";
 
 const COLORS = [
@@ -21,6 +21,8 @@ const BoardsPage: React.FC = () => {
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ title: "", description: "", color: "#3b82f6" });
     const [submitting, setSubmitting] = useState(false);
+    const [createMemberIds, setCreateMemberIds] = useState<string[]>([]);
+    const [createSearch, setCreateSearch] = useState("");
 
     const [manageBoardId, setManageBoardId] = useState<string | null>(null);
     const [inviteUserId, setInviteUserId] = useState("");
@@ -42,6 +44,11 @@ const BoardsPage: React.FC = () => {
     });
     // console.log(boardsData);
     const boards = boardsData || [];
+    const [showCompleted, setShowCompleted] = useState(true);
+    const completedCount = boards.filter((b: any) => b.status === "completed").length;
+    const visibleBoards = showCompleted
+        ? boards
+        : boards.filter((b: any) => b.status !== "completed");
 
     const { data: manageBoardData, refetch: refetchManageBoard } = useQuery({
         queryKey: ["board-manage", manageBoardId],
@@ -82,12 +89,28 @@ const BoardsPage: React.FC = () => {
     const allUsers = usersData || [];
 
     const isCreator = manageBoard && (manageBoard.createdBy?._id === user?._id || user?.role === "admin");
+    const isManageCompleted = manageBoard?.status === "completed";
 
     const filteredUsers = allUsers.filter((u: any) =>
         u._id !== user?._id &&
         !manageBoard?.members?.some((m: any) => m._id === u._id) &&
         (u.name?.toLowerCase().includes(inviteSearch.toLowerCase()) ||
         u.email?.toLowerCase().includes(inviteSearch.toLowerCase()))
+    );
+
+    const closeCreate = () => {
+        setShowCreate(false);
+        setForm({ title: "", description: "", color: "#3b82f6" });
+        setCreateMemberIds([]);
+        setCreateSearch("");
+    };
+
+    const filteredCreateUsers = allUsers.filter((u: any) =>
+        u._id !== user?._id &&
+        !createMemberIds.includes(u._id) &&
+        (createSearch.trim() === "" ||
+            u.name?.toLowerCase().includes(createSearch.toLowerCase()) ||
+            u.email?.toLowerCase().includes(createSearch.toLowerCase()))
     );
 
     const handleCreate = async () => {
@@ -98,9 +121,9 @@ const BoardsPage: React.FC = () => {
                 title: form.title,
                 description: form.description,
                 color: form.color,
+                members: createMemberIds,
             });
-            setShowCreate(false);
-            setForm({ title: "", description: "", color: "#3b82f6" });
+            closeCreate();
             await queryClient.invalidateQueries({ queryKey: ["boards"] });
             navigate(`/tasks/${data.board._id}`);
         } catch (e: any) {
@@ -246,18 +269,42 @@ const BoardsPage: React.FC = () => {
         }
     };
 
-    const handleDeleteBoard = async () => {
-        if (!manageBoardId) return;
-        if (!window.confirm("You really want to delete this?")) return;
-        setSavingEdit(true);
+    const handleCardComplete = async (board: any) => {
+        if (!window.confirm(`Complete "${board.title}"? The board will become view-only.`)) return;
+        setActionLoading(`complete-${board._id}`);
         try {
-            await api.delete(`/boards/${manageBoardId}`);
-            closeManageModal();
+            await api.post(`/boards/${board._id}/complete`);
+            await queryClient.invalidateQueries({ queryKey: ["boards"] });
+        } catch (e: any) {
+            alert(e.response?.data?.message || "Failed to complete board");
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleCardReopen = async (board: any) => {
+        if (!window.confirm(`Reopen "${board.title}"? Members will be able to make changes again.`)) return;
+        setActionLoading(`reopen-${board._id}`);
+        try {
+            await api.post(`/boards/${board._id}/reopen`);
+            await queryClient.invalidateQueries({ queryKey: ["boards"] });
+        } catch (e: any) {
+            alert(e.response?.data?.message || "Failed to reopen board");
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleCardDelete = async (board: any) => {
+        if (!window.confirm(`Delete "${board.title}"? This cannot be undone.`)) return;
+        setActionLoading(`delete-${board._id}`);
+        try {
+            await api.delete(`/boards/${board._id}`);
             await queryClient.invalidateQueries({ queryKey: ["boards"] });
         } catch (e: any) {
             alert(e.response?.data?.message || "Failed to delete board");
         } finally {
-            setSavingEdit(false);
+            setActionLoading(null);
         }
     };
 
@@ -281,16 +328,33 @@ const BoardsPage: React.FC = () => {
                         Sprint Boards
                     </h1>
                     <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginTop: 2 }}>
-                        {boards.length} board{boards.length !== 1 ? "s" : ""}
+                        {visibleBoards.length} board{visibleBoards.length !== 1 ? "s" : ""}
+                        {visibleBoards.length !== boards.length ? ` (${boards.length} total)` : ""}
                     </p>
                 </div>
-                <button
-                    className="btn btn-primary w-full sm:w-auto"
-                    onClick={() => setShowCreate(true)}
-                    style={{ display: "flex", alignItems: "center", gap: 6 }}
-                >
-                    <Plus size={16} /> Create Board
-                </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 w-full sm:w-auto">
+                    {completedCount > 0 && (
+                        <label
+                            style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.8125rem", color: "var(--color-text-secondary)", cursor: "pointer", userSelect: "none" }}
+                            title={showCompleted ? "Hide completed sprints" : "Show completed sprints"}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={showCompleted}
+                                onChange={(e) => setShowCompleted(e.target.checked)}
+                                style={{ width: 16, height: 16, accentColor: "var(--color-primary)", cursor: "pointer" }}
+                            />
+                            Show completed ({completedCount})
+                        </label>
+                    )}
+                    <button
+                        className="btn btn-primary w-full sm:w-auto"
+                        onClick={() => setShowCreate(true)}
+                        style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                        <Plus size={16} /> Create Board
+                    </button>
+                </div>
             </div>
             <span className="text-sm ">
                 Sprint Boards are Kanban-style workspaces that break a project into columns (e.g., To Do, In Progress, Done). Add as many columns as your workflow needs, rename them anytime, and rearrange them by dragging. Move task cards across columns as work progresses, giving the team a clear visual picture of what's planned, active, and completed during the sprint.
@@ -373,15 +437,33 @@ const BoardsPage: React.FC = () => {
                         <div key={i} className="skeleton" style={{ height: 160, borderRadius: 12 }} />
                     ))}
                 </div>
-            ) : boards.length === 0 ? (
+            ) : visibleBoards.length === 0 ? (
                 <div style={{ textAlign: "center", padding: 48, color: "var(--color-text-tertiary)" }}>
                     <LayoutGrid size={48} style={{ margin: "0 auto 16px", opacity: 0.3 }} />
-                    <p style={{ fontSize: "1rem", fontWeight: 500 }}>No boards yet</p>
-                    <p style={{ fontSize: "0.875rem", marginTop: 4 }}>Create your first board to organize tasks</p>
+                    {boards.length > 0 ? (
+                        <>
+                            <p style={{ fontSize: "1rem", fontWeight: 500 }}>No active sprints</p>
+                            <p style={{ fontSize: "0.875rem", marginTop: 4 }}>
+                                {completedCount} completed sprint{completedCount !== 1 ? "s" : ""} hidden
+                            </p>
+                            <button
+                                className="btn btn-sm"
+                                style={{ marginTop: 12 }}
+                                onClick={() => setShowCompleted(true)}
+                            >
+                                Show completed
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <p style={{ fontSize: "1rem", fontWeight: 500 }}>No boards yet</p>
+                            <p style={{ fontSize: "0.875rem", marginTop: 4 }}>Create your first board to organize tasks</p>
+                        </>
+                    )}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {boards.map((board: any) => (
+                    {visibleBoards.map((board: any) => (
                         <div
                             key={board._id}
                             className="card"
@@ -398,20 +480,59 @@ const BoardsPage: React.FC = () => {
                             <div style={{ height: 4, background: board.color }} />
                             <div style={{ padding: 16 }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                                    <h3
-                                        style={{ fontSize: "1rem", fontWeight: 600 }}
-                                    >
-                                        {board.title}
-                                    </h3>
-                                    {(board.createdBy?._id === user?._id || user?.role === "admin") && (
-                                        <button
-                                            className="btn btn-ghost btn-xs"
-                                            style={{ padding: 4 }}
-                                            onClick={(e) => { e.stopPropagation(); setManageBoardId(board._id); }}
-                                            title="Manage board"
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <h3
+                                            style={{ fontSize: "1rem", fontWeight: 600 }}
                                         >
-                                            <Settings size={14} style={{ color: "var(--color-text-tertiary)" }} />
-                                        </button>
+                                            {board.title}
+                                        </h3>
+                                        {board.status === "completed" && (
+                                            <span style={{ fontSize: "0.625rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", padding: "2px 8px", borderRadius: 9999, background: "#dcfce7", color: "#15803d" }}>
+                                                Completed
+                                            </span>
+                                        )}
+                                    </div>
+                                    {(board.createdBy?._id === user?._id || user?.role === "admin") && (
+                                        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                                            {board.status === "completed" ? (
+                                                <button
+                                                    className="btn btn-ghost btn-xs"
+                                                    style={{ padding: 4 }}
+                                                    disabled={actionLoading === `reopen-${board._id}`}
+                                                    onClick={(e) => { e.stopPropagation(); handleCardReopen(board); }}
+                                                    title="Reopen sprint"
+                                                >
+                                                    <Undo2 size={14} style={{ color: "var(--color-text-tertiary)" }} />
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    className="btn btn-ghost btn-xs"
+                                                    style={{ padding: 4 }}
+                                                    disabled={actionLoading === `complete-${board._id}`}
+                                                    onClick={(e) => { e.stopPropagation(); handleCardComplete(board); }}
+                                                    title="Mark sprint as completed (view-only)"
+                                                >
+                                                    <Check size={14} style={{ color: "#22c55e" }} />
+                                                </button>
+                                            )}
+                                            <button
+                                                className="btn btn-ghost btn-xs"
+                                                style={{ padding: 4 }}
+                                                disabled={actionLoading === `delete-${board._id}`}
+                                                onClick={(e) => { e.stopPropagation(); handleCardDelete(board); }}
+                                                title="Delete board"
+                                            >
+                                                <Trash2 size={14} style={{ color: "#ef4444" }} />
+                                            </button>
+                                            <button
+                                                className="btn btn-ghost btn-xs"
+                                                style={{ padding: 4 }}
+                                                onClick={(e) => { e.stopPropagation(); setManageBoardId(board._id); }}
+                                                title="Board settings"
+                                            >
+                                                <Settings size={14} style={{ color: "var(--color-text-tertiary)" }} />
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                                 {board.description && (
@@ -450,9 +571,9 @@ const BoardsPage: React.FC = () => {
             )}
 
             {/* Create Board Modal */}
-            <Modal isOpen={showCreate} onClose={() => setShowCreate(false)}>
-                <div className="card animate-fade-in" style={{ maxWidth: 440, width: "100%", padding: 0, overflow: "hidden", borderRadius: 16 }}>
-                    <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-surface)" }}>
+            <Modal isOpen={showCreate} onClose={closeCreate}>
+                <div className="card animate-fade-in" style={{ maxWidth: 440, width: "100%", padding: 0, overflow: "visible", borderRadius: 16 }}>
+                    <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-surface)", borderRadius: "16px 16px 0 0", overflow: "hidden" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--color-primary-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <Plus size={18} style={{ color: "var(--color-primary)" }} />
@@ -464,7 +585,7 @@ const BoardsPage: React.FC = () => {
                         </div>
                         <button
                             style={{ background: "var(--color-surface-hover)", border: "none", cursor: "pointer", color: "var(--color-text-tertiary)", width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}
-                            onClick={() => setShowCreate(false)}
+                            onClick={closeCreate}
                         >
                             <X size={16} />
                         </button>
@@ -518,6 +639,66 @@ const BoardsPage: React.FC = () => {
                                 ))}
                             </div>
                         </div>
+                        <div>
+                            <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)", marginBottom: 6 }}>
+                                Members <span style={{ color: "var(--color-text-tertiary)" }}>(optional — they get an invitation to accept)</span>
+                            </label>
+                            {createMemberIds.length > 0 && (
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                                    {createMemberIds.map((id: string) => {
+                                        const m = allUsers.find((u: any) => u._id === id);
+                                        if (!m) return null;
+                                        return (
+                                            <span
+                                                key={id}
+                                                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 6px 4px 4px", borderRadius: 9999, background: "var(--color-surface-hover)", fontSize: "0.75rem", fontWeight: 500 }}
+                                            >
+                                                <Avatar src={m.avatar} name={m.name} size={20} />
+                                                {m.name}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCreateMemberIds(createMemberIds.filter((x) => x !== id))}
+                                                    style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--color-text-tertiary)", display: "flex", padding: 0 }}
+                                                    title={`Remove ${m.name}`}
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <div style={{ position: "relative" }}>
+                                <input
+                                    className="input"
+                                    placeholder="Search by name or email to add members..."
+                                    value={createSearch}
+                                    onChange={(e) => setCreateSearch(e.target.value)}
+                                    style={{ width: "100%" }}
+                                />
+                                {createSearch && filteredCreateUsers.length > 0 && (
+                                    <div style={{
+                                        position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                                        background: "var(--color-surface)", border: "1px solid var(--color-border)",
+                                        borderRadius: 8, maxHeight: 160, overflowY: "auto", marginTop: 4,
+                                    }}>
+                                        {filteredCreateUsers.slice(0, 8).map((u: any) => (
+                                            <div
+                                                key={u._id}
+                                                style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", cursor: "pointer", fontSize: "0.8125rem" }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-hover)"; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                                onClick={() => { setCreateMemberIds([...createMemberIds, u._id]); setCreateSearch(""); }}
+                                            >
+                                                <Avatar src={u.avatar} name={u.name} size={20} />
+                                                <span>{u.name}</span>
+                                                <span style={{ color: "var(--color-text-tertiary)", fontSize: "0.6875rem" }}>{u.email}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                         <button
                             className="btn btn-primary"
                             style={{ width: "100%", marginTop: 4, padding: "10px" }}
@@ -536,6 +717,11 @@ const BoardsPage: React.FC = () => {
                 <div className="card" style={{ maxWidth: 480, width: "100%", padding: 24 }}>
                     {manageBoard ? (
                         <>
+                            {isManageCompleted && (
+                                <div style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginBottom: 16 }}>
+                                    This sprint is completed and view-only.
+                                </div>
+                            )}
                             {startBoardEditing && editForm ? (
                                 <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
                                     <h3 style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-text-secondary)" }}>Edit Board</h3>
@@ -654,13 +840,12 @@ const BoardsPage: React.FC = () => {
                                             </div>
                                         )} */}
                                     </div>
-                                    <div className="flex">
-                                        <button className="btn btn-ghost btn-xs group" title="Edit board" onClick={handleStartEdit}>
-                                            <Pencil size={16} className="group-hover:text-(--color-primary)" />
-                                        </button>
-                                        <button className="btn btn-ghost btn-xs group" title="Delete board" disabled={savingEdit} onClick={handleDeleteBoard} >
-                                            <Trash2 size={16} className="group-hover:text-(--color-danger)" />
-                                        </button>
+                                    <div className="flex" style={{ alignItems: "center", gap: 4 }}>
+                                        {!isManageCompleted && (
+                                            <button className="btn btn-ghost btn-xs group" title="Edit board details" onClick={handleStartEdit}>
+                                                <Pencil size={16} className="group-hover:text-(--color-primary)" />
+                                            </button>
+                                        )}
                                         <button className="btn btn-ghost btn-xs group" onClick={closeManageModal}>
                                             <X size={18} className="group-hover:text-(--color-text)" />
                                         </button>
@@ -684,6 +869,7 @@ const BoardsPage: React.FC = () => {
                                                         <div style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>{req.user?.email}</div>
                                                     </div>
                                                 </div>
+                                                {!isManageCompleted && (
                                                 <div style={{ display: "flex", gap: 4 }}>
                                                     <button
                                                         className="btn btn-ghost btn-xs"
@@ -702,6 +888,7 @@ const BoardsPage: React.FC = () => {
                                                         <X size={14} />
                                                     </button>
                                                 </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -743,7 +930,7 @@ const BoardsPage: React.FC = () => {
                                                     <div style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>{m.email}</div>
                                                 </div>
                                             </div>
-                                            {isCreator && m._id !== manageBoard.createdBy?._id && (
+                                            {isCreator && !isManageCompleted && m._id !== manageBoard.createdBy?._id && (
                                                 <button
                                                     className="btn btn-ghost btn-xs"
                                                     style={{ color: "#ef4444", padding: 4 }}
@@ -760,7 +947,7 @@ const BoardsPage: React.FC = () => {
                             </div>
 
                             {/* Invite Member - only visible to creator/admin */}
-                            {isCreator && (
+                            {isCreator && !isManageCompleted && (
                                 <div>
                                     <h3 style={{ fontSize: "0.8125rem", fontWeight: 600, marginBottom: 8, color: "var(--color-text-secondary)" }}>
                                         Invite Member

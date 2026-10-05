@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import { google } from "googleapis";
 import User from "../models/User";
 import Calendar from "../models/Calendar";
@@ -16,15 +17,132 @@ const getOAuthClient = () =>
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 
+// ─── Signed OAuth state (CSRF protection: unguessable, HMAC-bound) ──────────
+const stateSecret = () => process.env.JWT_SECRET || "flowdesk";
+
+const signState = (userId: string): string => {
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const sig = crypto
+    .createHmac("sha256", stateSecret())
+    .update(`${userId}.${nonce}`)
+    .digest("hex");
+  return `${userId}.${nonce}.${sig}`;
+};
+
+const verifyState = (state: unknown): string | null => {
+  if (typeof state !== "string") return null;
+  const [userId, nonce, sig] = state.split(".");
+  if (!userId || !nonce || !sig) return null;
+  const expected = crypto
+    .createHmac("sha256", stateSecret())
+    .update(`${userId}.${nonce}`)
+    .digest("hex");
+  if (sig.length !== expected.length) return null;
+  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
+    ? userId
+    : null;
+};
+
+// True when Google rejected our credentials (revoked/expired grant) — the
+// client uses this to prompt a reconnect instead of a generic retry.
+const isGoogleAuthError = (err: any): boolean =>
+  err?.response?.data?.error === "invalid_grant" || err?.code === 401;
+
+// ─── Shared Google → local date mapping ─────────────────────────────────────
+// All-day `end.date` values from Google are EXCLUSIVE (day after the last
+// day); plain `new Date("yyyy-MM-dd")` would also parse as UTC midnight.
+// Both are normalised to local time here to match app conventions.
+const parseGoogleStart = (gEvent: any): Date => {
+  if (gEvent.start.dateTime) return new Date(gEvent.start.dateTime);
+  const [y, m, d] = (gEvent.start.date as string).split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0);
+};
+
+const parseGoogleEnd = (gEvent: any): Date => {
+  if (gEvent.end?.dateTime) return new Date(gEvent.end.dateTime);
+  if (gEvent.end?.date) {
+    return new Date(new Date(gEvent.end.date).getTime() - 1);
+  }
+  if (gEvent.start.dateTime) return new Date(gEvent.start.dateTime);
+  return new Date(new Date(gEvent.start.date as string).getTime() - 1);
+};
+
+// ─── Shared import logic (Google calendar → local, idempotent) ──────────────
+const syncGoogleCalendarIntoLocal = async (
+  userId: any,
+  calendarApi: any,
+  gCalId: string,
+  gCalName: string,
+  gCalColor?: string,
+): Promise<number> => {
+  let calendar = await Calendar.findOne({ owner: userId, googleCalendarId: gCalId });
+  if (!calendar) {
+    calendar = await Calendar.create({
+      name: gCalName,
+      color: gCalColor || "#4285F4",
+      owner: userId,
+      googleCalendarId: gCalId,
+    });
+  }
+
+  let pageToken: string | undefined;
+  let count = 0;
+  do {
+    const eventsRes = await calendarApi.events.list({
+      calendarId: gCalId,
+      timeMin: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
+      timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      singleEvents: true,
+      maxResults: 2500,
+      pageToken,
+    });
+
+    const googleEvents: any[] = eventsRes.data.items || [];
+    for (const gEvent of googleEvents) {
+      // Deleted in Google → remove the local copy instead of resurrecting it
+      if (gEvent.status === "cancelled") {
+        await CalendarEvent.deleteOne({ googleEventId: gEvent.id, createdBy: userId });
+        continue;
+      }
+      if (!gEvent.start) continue;
+      // Scoped to the importing user: the same shared Google event imported
+      // by two colleagues must not overwrite each other's local copy.
+      await CalendarEvent.findOneAndUpdate(
+        { googleEventId: gEvent.id, createdBy: userId },
+        {
+          title: gEvent.summary || "(No title)",
+          description: gEvent.description || "",
+          startDate: parseGoogleStart(gEvent),
+          endDate: parseGoogleEnd(gEvent),
+          allDay: !gEvent.start.dateTime,
+          calendar: calendar._id,
+          createdBy: userId,
+          googleEventId: gEvent.id,
+        },
+        { upsert: true, new: true },
+      );
+      count++;
+    }
+    pageToken = eventsRes.data.nextPageToken || undefined;
+  } while (pageToken);
+
+  return count;
+};
+
 // ─── 1. Return the Google OAuth URL ───────────────────────────────────────────
 router.get("/auth-url", authenticate, (req: AuthRequest, res) => {
+  const userId = req.user?._id?.toString();
+  if (!userId) {
+    res.status(401).json({ message: "Not authenticated." });
+    return;
+  }
   const oAuth2Client = getOAuthClient();
   //   console.log(">>> REDIRECT URI:", process.env.GOOGLE_REDIRECT_URI);
   const url = oAuth2Client.generateAuthUrl({
     access_type: "offline", // gives us a refresh token
     prompt: "consent", // forces refresh token every time
     scope: SCOPES,
-    state: req.user?._id.toString(), // pass userId through OAuth so callback knows who this is
+    state: signState(userId), // signed + unguessable (CSRF-safe)
   });
   res.json({ authUrl: url });
 });
@@ -45,7 +163,8 @@ router.get("/callback", async (req, res) => {
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';",
   );
-  const { code, state: userId } = req.query;
+  const { code, state } = req.query;
+  const userId = verifyState(state);
 
   const successHtml = `<!DOCTYPE html>
 <html>
@@ -146,6 +265,9 @@ router.get("/list", authenticate, async (req: AuthRequest, res) => {
     res.json({ calendars });
   } catch (err) {
     console.error("List calendars error:", err);
+    if (isGoogleAuthError(err)) {
+      return res.status(401).json({ message: "Google authorization expired. Please reconnect your account.", needsReconnect: true });
+    }
     res.status(500).json({ message: "Failed to fetch calendars" });
   }
 });
@@ -165,46 +287,20 @@ router.post("/sync-one", authenticate, async (req: AuthRequest, res) => {
     oAuth2Client.setCredentials({ refresh_token: user.googleRefreshToken });
     const calendarApi = google.calendar({ version: 'v3', auth: oAuth2Client });
 
-    let calendar = await Calendar.findOne({ owner: userId, googleCalendarId: calendarId });
-    if (!calendar) {
-      calendar = await Calendar.create({
-        name: calendarName,
-        color: calendarColor || '#4285F4',
-        owner: userId,
-        googleCalendarId: calendarId,
-      });
-    }
-
-    const eventsRes = await calendarApi.events.list({
+    const eventCount = await syncGoogleCalendarIntoLocal(
+      userId,
+      calendarApi,
       calendarId,
-      timeMin: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
-      timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      singleEvents: true,
-      maxResults: 2500,
-    });
+      calendarName,
+      calendarColor,
+    );
 
-    const googleEvents = eventsRes.data.items || [];
-    for (const gEvent of googleEvents) {
-      if (!gEvent.start) continue;
-      await CalendarEvent.findOneAndUpdate(
-        { googleEventId: gEvent.id },
-        {
-          title: gEvent.summary || '(No title)',
-          description: gEvent.description || '',
-          startDate: new Date(gEvent.start.dateTime || gEvent.start.date!),
-          endDate: new Date(gEvent.end?.dateTime || gEvent.end?.date || gEvent.start.dateTime || gEvent.start.date!),
-          allDay: !gEvent.start.dateTime,
-          calendar: calendar._id,
-          createdBy: userId,
-          googleEventId: gEvent.id,
-        },
-        { upsert: true, new: true }
-      );
-    }
-
-    res.json({ message: 'OK', eventCount: googleEvents.length });
+    res.json({ message: 'OK', eventCount });
   } catch (err) {
     console.error('sync-one error:', err);
+    if (isGoogleAuthError(err)) {
+      return res.status(401).json({ message: 'Google authorization expired. Please reconnect your account.', needsReconnect: true });
+    }
     res.status(500).json({ message: 'Failed to sync calendar' });
   }
 });
@@ -232,62 +328,23 @@ router.post("/sync", authenticate, async (req: AuthRequest, res) => {
       ? allCalendars.filter(c => calendarIds.includes(c.id))
       : allCalendars;
 
+    let eventCount = 0;
     for (const gCal of googleCalendars) {
-      // Upsert calendar — don't create duplicates on re-sync
-      let calendar = await Calendar.findOne({
-        owner: userId,
-        googleCalendarId: gCal.id,
-      });
-
-      if (!calendar) {
-        calendar = await Calendar.create({
-          name: gCal.summary,
-          color: gCal.backgroundColor || "#4285F4",
-          owner: userId,
-          googleCalendarId: gCal.id,
-        });
-      }
-
-      // Fetch events from this Google calendar (last 6 months → next 1 year)
-      const eventsRes = await calendarApi.events.list({
-        calendarId: gCal.id!,
-        timeMin: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
-        timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-        singleEvents: true,
-        maxResults: 2500,
-      });
-
-      const googleEvents = eventsRes.data.items || [];
-
-      for (const gEvent of googleEvents) {
-        if (!gEvent.start) continue;
-
-        // Upsert events — safe to call sync multiple times
-        await CalendarEvent.findOneAndUpdate(
-          { googleEventId: gEvent.id },
-          {
-            title: gEvent.summary || "(No title)",
-            description: gEvent.description || "",
-            startDate: new Date(gEvent.start.dateTime || gEvent.start.date!),
-            endDate: new Date(
-              gEvent.end?.dateTime ||
-                gEvent.end?.date ||
-                gEvent.start.dateTime ||
-                gEvent.start.date!,
-            ),
-            allDay: !gEvent.start.dateTime,
-            calendar: calendar._id,
-            createdBy: userId,
-            googleEventId: gEvent.id,
-          },
-          { upsert: true, new: true },
-        );
-      }
+      eventCount += await syncGoogleCalendarIntoLocal(
+        userId,
+        calendarApi,
+        gCal.id!,
+        gCal.summary || 'Calendar',
+        gCal.backgroundColor || undefined,
+      );
     }
 
-    res.json({ message: "Import successful" });
+    res.json({ message: "Import successful", eventCount });
   } catch (err) {
     console.error("Google Calendar sync error:", err);
+    if (isGoogleAuthError(err)) {
+      return res.status(401).json({ message: "Google authorization expired. Please reconnect your account.", needsReconnect: true });
+    }
     res.status(500).json({ message: "Import failed" });
   }
 });

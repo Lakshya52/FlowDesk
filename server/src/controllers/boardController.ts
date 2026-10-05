@@ -29,6 +29,23 @@ const checkBoardAccess = (board: any, req: AuthRequest): boolean => {
   return false;
 };
 
+const isBoardCompleted = (board: any): boolean => board?.status === 'completed';
+
+const canManageBoard = (board: any, req: AuthRequest): boolean => {
+  const userId = req.user!._id.toString();
+  return req.user!.role === 'admin' || board.createdBy?.toString() === userId;
+};
+
+// Rejects any mutation on a completed board. Returns true when blocked
+// (response already sent) so handlers can `if (blockIfCompleted(...)) return;`.
+const blockIfCompleted = (board: any, res: Response): boolean => {
+  if (isBoardCompleted(board)) {
+    res.status(403).json({ message: 'This board is completed and read-only. Reopen it to make changes.' });
+    return true;
+  }
+  return false;
+};
+
 export const createBoard = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { title, description, color, members } = req.body;
@@ -37,19 +54,40 @@ export const createBoard = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
-        const allMembers = new Set<string>([req.user!._id.toString()]);
-        if (members && Array.isArray(members)) {
-            members.forEach((m: string) => allMembers.add(m));
-        }
+        // Only the creator joins directly. Everyone else picked at creation
+        // time goes through the normal invitation flow: pending invitation +
+        // notification, becoming a member only after accepting.
+        const creatorId = req.user!._id.toString();
+        const invitedIds = [...new Set(
+            (Array.isArray(members) ? members : []).map((m: string) => m?.toString()),
+        )].filter((id) => id && id !== creatorId);
 
         const board = await Board.create({
             title: title.trim(),
             description: description || '',
             color: color || '#3b82f6',
             createdBy: req.user!._id,
-            members: Array.from(allMembers),
+            members: [creatorId],
+            invitations: invitedIds.map((userId) => ({
+                user: userId,
+                invitedBy: req.user!._id,
+                status: 'pending',
+                invitedAt: new Date(),
+            })),
             columns: DEFAULT_COLUMNS,
         });
+
+        for (const invitedUserId of invitedIds) {
+            try {
+                await createNotification({
+                    user: invitedUserId,
+                    type: NotificationType.BOARD_INVITED,
+                    title: 'Board Invitation',
+                    message: `${req.user!.name} invited you to the board "${board.title}"`,
+                    link: '/boards',
+                });
+            } catch {}
+        }
 
         const populated = await Board.findById(board._id)
             .populate('createdBy', 'name email avatar')
@@ -91,6 +129,7 @@ export const getBoards = async (req: AuthRequest, res: Response): Promise<void> 
         const boards = await Board.find(filter)
             .populate('createdBy', 'name email avatar')
             .populate('members', 'name email avatar')
+            .populate('completedBy', 'name email avatar')
             .sort({ updatedAt: -1 });
 
         res.json({ boards });
@@ -121,6 +160,7 @@ export const getBoard = async (req: AuthRequest, res: Response): Promise<void> =
         const board = await Board.findById(req.params.id)
             .populate('createdBy', 'name email avatar')
             .populate('members', 'name email avatar')
+            .populate('completedBy', 'name email avatar')
             .populate('requests.user', 'name email avatar')
             .populate('invitations.user', 'name email avatar')
             .populate('invitations.invitedBy', 'name email avatar');
@@ -153,6 +193,8 @@ export const updateBoard = async (req: AuthRequest, res: Response): Promise<void
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+
+        if (blockIfCompleted(board, res)) return;
 
         if (req.user!.role !== 'admin' && board.createdBy.toString() !== req.user!._id.toString()) {
             res.status(403).json({ message: 'Only the board creator can update it' });
@@ -189,6 +231,8 @@ export const deleteBoard = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
+        if (blockIfCompleted(board, res)) return;
+
         if (req.user!.role !== 'admin' && board.createdBy.toString() !== req.user!._id.toString()) {
             res.status(403).json({ message: 'Only the board creator can delete it' });
             return;
@@ -221,6 +265,8 @@ export const updateColumns = async (req: AuthRequest, res: Response): Promise<vo
             res.status(403).json({ message: 'Access denied' });
             return;
         }
+
+        if (blockIfCompleted(board, res)) return;
 
         const { columns } = req.body;
         if (!Array.isArray(columns)) {
@@ -255,6 +301,8 @@ export const addColumn = async (req: AuthRequest, res: Response): Promise<void> 
             res.status(403).json({ message: 'Access denied' });
             return;
         }
+
+        if (blockIfCompleted(board, res)) return;
 
         const { label, color } = req.body;
         if (!label?.trim()) {
@@ -304,6 +352,8 @@ export const renameColumn = async (req: AuthRequest, res: Response): Promise<voi
             res.status(403).json({ message: 'Access denied' });
             return;
         }
+
+        if (blockIfCompleted(board, res)) return;
 
         const { key: oldKey } = req.params;
         const { label } = req.body;
@@ -364,6 +414,8 @@ export const deleteColumn = async (req: AuthRequest, res: Response): Promise<voi
             return;
         }
 
+        if (blockIfCompleted(board, res)) return;
+
         const { key } = req.params;
         const columnIndex = board.columns.findIndex(c => c.key === key);
         if (columnIndex === -1) {
@@ -411,6 +463,8 @@ export const reorderColumns = async (req: AuthRequest, res: Response): Promise<v
             return;
         }
 
+        if (blockIfCompleted(board, res)) return;
+
         const { columnKeys } = req.body;
         if (!Array.isArray(columnKeys)) {
             res.status(400).json({ message: 'columnKeys must be an array' });
@@ -448,6 +502,8 @@ export const requestToJoin = async (req: AuthRequest, res: Response): Promise<vo
         }
 
         const userId = req.user!._id.toString();
+
+        if (blockIfCompleted(board, res)) return;
 
         if (board.members.some((m: any) => m.toString() === req.user!._id.toString())) {
             res.status(400).json({ message: 'You are already a member' });
@@ -488,6 +544,8 @@ export const handleRequest = async (req: AuthRequest, res: Response): Promise<vo
             res.status(403).json({ message: 'Only the board creator can manage requests' });
             return;
         }
+
+        if (blockIfCompleted(board, res)) return;
 
         const { requestId } = req.params;
         const { action } = req.body;
@@ -533,6 +591,8 @@ export const removeMember = async (req: AuthRequest, res: Response): Promise<voi
             return;
         }
 
+        if (blockIfCompleted(board, res)) return;
+
         const { memberId } = req.params;
         const userId = req.user!._id.toString();
 
@@ -573,6 +633,8 @@ export const addMember = async (req: AuthRequest, res: Response): Promise<void> 
             return;
         }
 
+        if (blockIfCompleted(board, res)) return;
+
         const { userId: memberUserId } = req.body;
         if (!memberUserId) {
             res.status(400).json({ message: 'userId is required' });
@@ -610,6 +672,8 @@ export const inviteToBoard = async (req: AuthRequest, res: Response): Promise<vo
             res.status(403).json({ message: 'Only the board creator can invite members' });
             return;
         }
+
+        if (blockIfCompleted(board, res)) return;
 
         const { userId: invitedUserId } = req.body;
         if (!invitedUserId) {
@@ -667,6 +731,8 @@ export const handleInvitation = async (req: AuthRequest, res: Response): Promise
             return;
         }
 
+        if (blockIfCompleted(board, res)) return;
+
         const { invitationId } = req.params;
         const { action } = req.body;
 
@@ -708,6 +774,130 @@ export const handleInvitation = async (req: AuthRequest, res: Response): Promise
             .populate('members', 'name email avatar')
             .populate('invitations.user', 'name email avatar')
             .populate('invitations.invitedBy', 'name email avatar');
+
+        res.json({ board: populated });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const removeInvitation = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const board = await Board.findById(req.params.id);
+        if (!board) {
+            res.status(404).json({ message: 'Board not found' });
+            return;
+        }
+
+        if (blockIfCompleted(board, res)) return;
+
+        if (!canManageBoard(board, req)) {
+            res.status(403).json({ message: 'Only board creators/admins can remove invitations' });
+            return;
+        }
+
+        const { invitationId } = req.params;
+        const invitation = (board.invitations as any).id(invitationId);
+        if (!invitation) {
+            res.status(404).json({ message: 'Invitation not found' });
+            return;
+        }
+
+        if (invitation.status !== 'pending') {
+            res.status(400).json({ message: 'Only pending invitations can be removed' });
+            return;
+        }
+
+        (board.invitations as any).pull({ _id: invitationId });
+        await board.save();
+
+        const populated = await Board.findById(board._id)
+            .populate('createdBy', 'name email avatar')
+            .populate('members', 'name email avatar')
+            .populate('invitations.user', 'name email avatar')
+            .populate('invitations.invitedBy', 'name email avatar');
+
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardUpdated(tenantId, populated);
+        } catch {}
+
+        res.json({ board: populated, message: 'Invitation removed' });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const completeBoard = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const board = await Board.findById(req.params.id);
+        if (!board) {
+            res.status(404).json({ message: 'Board not found' });
+            return;
+        }
+
+        if (!canManageBoard(board, req)) {
+            res.status(403).json({ message: 'Only the board creator can complete it' });
+            return;
+        }
+
+        if (isBoardCompleted(board)) {
+            res.status(400).json({ message: 'Board is already completed' });
+            return;
+        }
+
+        board.status = 'completed';
+        board.completedAt = new Date();
+        board.completedBy = req.user!._id as any;
+        await board.save();
+
+        const populated = await Board.findById(board._id)
+            .populate('createdBy', 'name email avatar')
+            .populate('members', 'name email avatar')
+            .populate('completedBy', 'name email avatar');
+
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardUpdated(tenantId, populated);
+        } catch {}
+
+        res.json({ board: populated });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const reopenBoard = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const board = await Board.findById(req.params.id);
+        if (!board) {
+            res.status(404).json({ message: 'Board not found' });
+            return;
+        }
+
+        if (!canManageBoard(board, req)) {
+            res.status(403).json({ message: 'Only the board creator can reopen it' });
+            return;
+        }
+
+        if (!isBoardCompleted(board)) {
+            res.status(400).json({ message: 'Board is not completed' });
+            return;
+        }
+
+        board.status = 'active';
+        board.completedAt = undefined;
+        board.completedBy = undefined;
+        await board.save();
+
+        const populated = await Board.findById(board._id)
+            .populate('createdBy', 'name email avatar')
+            .populate('members', 'name email avatar');
+
+        try {
+            const tenantId = getTenantId(req.user!);
+            emitBoardUpdated(tenantId, populated);
+        } catch {}
 
         res.json({ board: populated });
     } catch (error: any) {

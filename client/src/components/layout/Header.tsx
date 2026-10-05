@@ -390,7 +390,8 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
           <MenuIcon size={20} isAnimated={iconsAnimated} />
         </button>
       </div>
-      {/* Search */}
+      {/* Search bar — commented out */}
+      {false && (
       <div
         ref={searchRef}
         style={{
@@ -667,11 +668,12 @@ const rejectShare = async (calendarId: string, notifId: string, e: React.MouseEv
           </div>
         )}
       </div>
+      )}
 
       {/* Actions */}
       <div
-        style={{ display: "flex", alignItems: "center" }}
-        className="gap-0 sm:gap-2"
+        style={{ display: "flex", alignItems: "center", marginLeft: "auto" }}
+        className="gap-0 sm:gap-2 ml-auto"
       >
         {/* Theme toggle */}
         <button

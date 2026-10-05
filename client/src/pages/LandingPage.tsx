@@ -107,14 +107,13 @@ const LandingPage: React.FC = () => {
                     <div style={{
                         width: 36,
                         height: 36,
-                        borderRadius: 10,
                         // background: 'linear-gradient(135deg, #6366f1, #a78bfa)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)'
                     }}>
-                        <img src="/logo.png" alt="FlowDesk logo" className='rounded-xl scale-125' />
+                        <img src="/logo.png" alt="FlowDesk logo" style={{ width: 36, height: 36, display: 'block' }} />
                         {/* <Zap size={20} color="white" /> */}
                     </div>
                     <span style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.03em', background: 'linear-gradient(to right, #171717, #404040)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>FlowDesk</span>

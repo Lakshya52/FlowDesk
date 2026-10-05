@@ -18,6 +18,9 @@ import {
     inviteToBoard,
     handleInvitation,
     getPendingInvitations,
+    completeBoard,
+    reopenBoard,
+    removeInvitation,
 } from '../controllers/boardController';
 import { authenticate, authorize } from '../middlewares/auth';
 
@@ -32,6 +35,8 @@ router.get('/invitations/pending', getPendingInvitations);
 router.get('/:id', getBoard);
 router.put('/:id', authorize('admin', 'manager', 'member'), updateBoard);
 router.delete('/:id', authorize('admin', 'manager', 'member'), deleteBoard);
+router.post('/:id/complete', authorize('admin', 'manager', 'member'), completeBoard);
+router.post('/:id/reopen', authorize('admin', 'manager', 'member'), reopenBoard);
 
 router.put('/:id/columns', authorize('admin', 'manager', 'member'), updateColumns);
 router.post('/:id/columns', authorize('admin', 'manager', 'member'), addColumn);
@@ -43,6 +48,7 @@ router.post('/:id/request', authorize('admin', 'manager', 'member'), requestToJo
 router.put('/:id/requests/:requestId', handleRequest);
 router.post('/:id/invite', authorize('admin', 'manager', 'member'), inviteToBoard);
 router.put('/:id/invitations/:invitationId', handleInvitation);
+router.delete('/:id/invitations/:invitationId', authorize('admin', 'manager', 'member'), removeInvitation);
 router.post('/:id/members', authorize('admin', 'manager', 'member'), addMember);
 router.delete('/:id/members/:memberId', authorize('admin', 'manager', 'member'), removeMember);
 
