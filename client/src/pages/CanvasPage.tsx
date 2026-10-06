@@ -25,6 +25,7 @@ import {
 	Brush,
 	Eraser,
 	Type,
+	PaintBucket,
 	AlignLeft,
 	AlignCenter,
 	AlignRight,
@@ -110,6 +111,30 @@ const BRUSH_COLORS = [
 	"#6366f1",
 	"#d946ef",
 ];
+
+/** Canvas background presets. Empty string = follow the app theme. */
+const CANVAS_BG_PRESETS = [
+	"#ffffff",
+	"#f1f5f9",
+	"#fef9c3",
+	"#dcfce7",
+	"#dbeafe",
+	"#1e293b",
+];
+
+/** localStorage key for the canvas background color. */
+const BG_STORAGE_KEY = "flowdesk_canvas_bg";
+
+/** True for dark hex colors — used for icon contrast on swatches. */
+const isDarkHex = (hex: string): boolean => {
+	const h = hex.replace("#", "");
+	if (h.length < 6) return false;
+	const r = parseInt(h.slice(0, 2), 16);
+	const g = parseInt(h.slice(2, 4), 16);
+	const b = parseInt(h.slice(4, 6), 16);
+	if ([r, g, b].some((v) => Number.isNaN(v))) return false;
+	return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
+};
 
 const MIN_POINT_GAP = 2.5; // canvas units between recorded points (keeps payloads small)
 const MAX_STROKE_POINTS = 2000;
@@ -1101,6 +1126,41 @@ const CanvasPage: React.FC = () => {
 	}, [strokes]);
 	const [brushColor, setBrushColor] = useState("#6366f1");
 	const [brushWidth, setBrushWidth] = useState(4);
+
+	// Canvas background color. Empty string = follow the app theme
+	// (`var(--color-bg)`); persisted per browser like the zoom/pan view state.
+	const [canvasBg, setCanvasBg] = useState<string>(() => {
+		try {
+			return localStorage.getItem(BG_STORAGE_KEY) || "";
+		} catch {
+			return "";
+		}
+	});
+	useEffect(() => {
+		try {
+			if (canvasBg) localStorage.setItem(BG_STORAGE_KEY, canvasBg);
+			else localStorage.removeItem(BG_STORAGE_KEY);
+		} catch {
+			/* storage unavailable – ignore */
+		}
+	}, [canvasBg]);
+	const [bgOpen, setBgOpen] = useState(false);
+	const bgPopRef = useRef<HTMLDivElement>(null);
+
+	// Close the background picker on outside click.
+	useEffect(() => {
+		if (!bgOpen) return;
+		const close = (e: MouseEvent) => {
+			if (
+				bgPopRef.current &&
+				!bgPopRef.current.contains(e.target as Node)
+			) {
+				setBgOpen(false);
+			}
+		};
+		document.addEventListener("mousedown", close);
+		return () => document.removeEventListener("mousedown", close);
+	}, [bgOpen]);
 	// Live stroke being drawn (rendered immediately, saved on pointer-up).
 	const [liveStroke, setLiveStroke] = useState<{
 		points: { x: number; y: number }[];
@@ -2985,7 +3045,7 @@ const CanvasPage: React.FC = () => {
 				position: "absolute",
 				inset: 0,
 				zIndex: 10,
-				background: "var(--color-bg)",
+				background: canvasBg || "var(--color-bg)",
 				cursor: isPanning
 					? "grabbing"
 					: isLinking
@@ -3632,6 +3692,127 @@ const CanvasPage: React.FC = () => {
 						</button>
 					</div>
 				)}
+				{/* Canvas background picker — sits next to the reset orb */}
+				<div className="relative" ref={bgPopRef} style={{ margin: isMobile ? "0 10px 12px 0" : "0 10px 24px 0" }}>
+					<button
+						onClick={() => setBgOpen((v) => !v)}
+						title="Canvas background"
+						aria-label="Change canvas background"
+						aria-expanded={bgOpen}
+						style={{
+							width: isMobile ? 40 : 44,
+							height: isMobile ? 40 : 44,
+							borderRadius: "50%",
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "center",
+							background: canvasBg || "var(--color-surface)",
+							border: "1px solid var(--color-border)",
+							boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+							color: !canvasBg
+								? "var(--color-text-secondary)"
+								: isDarkHex(canvasBg) ? "#fff" : "#1e293b",
+							cursor: "pointer",
+						}}
+					>
+						<PaintBucket size={18} />
+					</button>
+					{bgOpen && (
+						<div
+							className="absolute z-[1000] rounded-xl border border-border bg-surface shadow-lg"
+							style={{
+								bottom: "calc(100% + 8px)",
+								right: 0,
+								padding: 12,
+								width: 196,
+							}}
+							onMouseDown={(e) => e.stopPropagation()}
+						>
+							<div
+								style={{
+									fontSize: "0.7rem",
+									fontWeight: 700,
+									color: "var(--color-text-tertiary)",
+									textTransform: "uppercase",
+									letterSpacing: "0.05em",
+									marginBottom: 8,
+								}}
+							>
+								Background
+							</div>
+							<div
+								style={{
+									display: "flex",
+									flexWrap: "wrap",
+									gap: 8,
+								}}
+							>
+								{CANVAS_BG_PRESETS.map((c) => (
+									<button
+									key={c}
+									onClick={() => {
+									setCanvasBg(c);
+									setBgOpen(false);
+									}}
+									title={c}
+									aria-label={`Set background ${c}`}
+									style={{
+									width: 24,
+									height: 24,
+									borderRadius: "50%",
+									background: c,
+									border:
+									canvasBg === c
+									? "2px solid var(--color-primary)"
+									: "1px solid var(--color-border)",
+									cursor: "pointer",
+									padding: 0,
+									}}
+									/>
+								))}
+								<input
+									type="color"
+									value={canvasBg || "#ffffff"}
+									onChange={(e) => {
+									setCanvasBg(e.target.value);
+									setBgOpen(false);
+									}}
+									title="Custom color"
+									aria-label="Custom background color"
+									style={{
+									width: 24,
+									height: 24,
+									padding: 0,
+									border: "1px dashed var(--color-border)",
+									borderRadius: "50%",
+									cursor: "pointer",
+									background: "none",
+									}}
+								/>
+							</div>
+							<button
+								onClick={() => {
+								setCanvasBg("");
+								setBgOpen(false);
+								}}
+								style={{
+								marginTop: 8,
+								width: "100%",
+								padding: "6px 0",
+								fontSize: "0.75rem",
+								fontWeight: 600,
+								color: "var(--color-text-secondary)",
+								background: "none",
+								border: "none",
+								cursor: "pointer",
+								textAlign: "center",
+								}}
+							>
+								Use default
+							</button>
+						</div>
+					)}
+				</div>
 				<button
 					onClick={resetView}
 					title="Reset View"

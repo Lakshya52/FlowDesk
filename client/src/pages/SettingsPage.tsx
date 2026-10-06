@@ -72,6 +72,7 @@ const SettingsPage: React.FC = () => {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [showNewUserPassword, setShowNewUserPassword] = useState(false);
     const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' });
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [passwordError, setPasswordError] = useState('');
@@ -544,7 +545,17 @@ const updateUser = async (e: React.FormEvent) => {
                                 <input className="input" type="email" required placeholder="Email" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
-                                <input className="input" type="password" required placeholder="Password" minLength={6} value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} />
+                                <div style={{ position: 'relative' }}>
+                                    <input className="input" type={showNewUserPassword ? 'text' : 'password'} required placeholder="Password" minLength={6} value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} style={{ width: '100%', paddingRight: 40 }} />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowNewUserPassword(!showNewUserPassword)}
+                                        style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
+                                        aria-label={showNewUserPassword ? 'Hide password' : 'Show password'}
+                                    >
+                                        {showNewUserPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
                                 <select className="select" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
                                     {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                 </select>
