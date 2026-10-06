@@ -50,3 +50,6 @@ pnpm-debug.log*
 
 # removing scripts folder from github tracking
 /scripts/
+
+# some custom zip files
+FlowdeskZip05-10-26.zip

@@ -106,9 +106,9 @@ export const getTasks = async (req: AuthRequest, res: Response): Promise<void> =
     try {
         const { assignment: assignmentId, status, priority, assignedTo, search, companyId, board: boardId } = req.query;
 
-        // Determine board membership up front — board membership is
-        // explicitly allowed to cross tenant boundaries (see getBoards/getBoard),
-        // so it must be able to bypass the tenant filter below.
+        // Determine board membership up front — board members see every task
+        // scoped to their board (visibility only). The tenant filter below
+        // always applies: board membership never crosses tenants.
         let isBoardMember = false;
         if (boardId) {
             const board = await Board.findById(boardId).select('members createdBy');
@@ -123,13 +123,11 @@ export const getTasks = async (req: AuthRequest, res: Response): Promise<void> =
         const tenantUserIds = await getTenantUserIds(req.user);
         let andConditions: any[] = [];
 
-        if (!isBoardMember) {
-            // Base tenant filter: task assigned to or created by users in this tenant.
-            // Skipped for board members since boards can include cross-tenant users.
-            andConditions.push({
-                $or: [{ assignedTo: { $in: tenantUserIds } }, { createdBy: { $in: tenantUserIds } }]
-            });
-        }
+        // Base tenant filter: task assigned to or created by users in this tenant.
+        // Always applied — no exceptions.
+        andConditions.push({
+            $or: [{ assignedTo: { $in: tenantUserIds } }, { createdBy: { $in: tenantUserIds } }]
+        });
 
         if (assignmentId) andConditions.push({ assignment: assignmentId });
         if (boardId) andConditions.push({ board: boardId });
@@ -215,7 +213,9 @@ export const getTasks = async (req: AuthRequest, res: Response): Promise<void> =
             .populate('assignedTo', 'name email avatar')
             .populate('createdBy', 'name email')
             .populate('assignment', 'title')
-            .populate('board', 'title color')
+            // `status` is needed by clients to lock cards whose sprint board is
+            // completed (a project view can surface tasks from any board).
+            .populate('board', 'title color status')
             .sort({ rank: 1, createdAt: -1 });
 
         res.json({ tasks });

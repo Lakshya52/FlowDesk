@@ -16,6 +16,8 @@ import { format, differenceInDays } from 'date-fns';
 
 import FilePreviewModal from '../components/common/FilePreviewModal';
 import Modal from '../components/common/Modal';
+import { PriorityBadge } from '../components/common/PriorityIcon';
+import { PrioritySelect } from '../components/common/PrioritySelect';
 
 const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1023,14 +1025,11 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                             </div>
                             <div style={{ minWidth: 0 }}>
                                 <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Priority</label>
-                                <select
-                                    className="select"
-                                    style={{ width: '100%' }}
+                                <PrioritySelect
                                     value={editProjectForm.priority}
-                                    onChange={e => setEditProjectForm({ ...editProjectForm, priority: e.target.value })}
-                                >
-                                    {Object.entries(PRIORITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                </select>
+                                    onChange={next => setEditProjectForm({ ...editProjectForm, priority: next })}
+                                    style={{ width: '100%' }}
+                                />
                             </div>
                         </div>
 
@@ -1338,13 +1337,11 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         onChange={e => setEditProjectForm({ ...editProjectForm, title: e.target.value })}
                                         placeholder="Project Title"
                                     />
-                                    <select
-                                        className="select sm:w-30 w-full"
+                                    <PrioritySelect
                                         value={editProjectForm.priority}
-                                        onChange={e => setEditProjectForm({ ...editProjectForm, priority: e.target.value })}
-                                    >
-                                        {Object.entries(PRIORITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                    </select>
+                                        onChange={next => setEditProjectForm({ ...editProjectForm, priority: next })}
+                                        className="sm:w-30 w-full"
+                                    />
                                 </div>
                                 <textarea
                                     className="input"
@@ -1631,7 +1628,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         </button>
                                         </>
                                     )}
-                                    <span className={`badge badge-${assignment.priority}`}>{PRIORITY_LABELS[assignment.priority]}</span>
+                                    <PriorityBadge priority={assignment.priority} label={PRIORITY_LABELS[assignment.priority]} />
                                 </div>
                                 {assignment.isRecurring && !assignment.parentAssignmentId && (
                                     <div style={{
@@ -1893,9 +1890,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                     <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Priority</label>
-                                    <select className="select" value={taskForm.priority} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTaskForm({ ...taskForm, priority: e.target.value })}>
-                                        {Object.entries(PRIORITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                    </select>
+                                    <PrioritySelect value={taskForm.priority} onChange={(next: string) => setTaskForm({ ...taskForm, priority: next })} />
                                 </div>
                             </div>
                             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -1914,7 +1909,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                         onClick={() => { setDetailTask(t); openDetailAttachments(t._id); }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                                             <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{t.title}</span>
-                                            <span className={`badge badge-${t.priority}`}>{PRIORITY_LABELS[t.priority]}</span>
+                                            <PriorityBadge priority={t.priority} label={PRIORITY_LABELS[t.priority]} />
                                             <span className={`badge badge-${t.status}`}>{TASK_STATUS_LABELS[t.status]}</span>
                                         </div>
                                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }} >
@@ -2524,11 +2519,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                             </div>
                                             <div>
                                                 <label style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', display: 'block' }}>Priority</label>
-                                                <select className="select" style={{ width: '100%' }} value={detailEditForm.priority} onChange={(e) => setDetailEditForm({ ...detailEditForm, priority: e.target.value })}>
-                                                    {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
-                                                        <option key={k} value={k}>{v}</option>
-                                                    ))}
-                                                </select>
+                                                <PrioritySelect value={detailEditForm.priority} onChange={(next) => setDetailEditForm({ ...detailEditForm, priority: next })} style={{ width: '100%' }} />
                                             </div>
                                             <div>
                                                 <label style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', display: 'block' }}>Status</label>
@@ -2571,9 +2562,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Priority</div>
-                                                <span className={`badge badge-${detailTask.priority}`} style={{ fontSize: '0.75rem' }}>
-                                                    {PRIORITY_LABELS[detailTask.priority]}
-                                                </span>
+                                                <PriorityBadge priority={detailTask.priority} />
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Status</div>

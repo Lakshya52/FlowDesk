@@ -9,7 +9,7 @@ import { useAuthStore } from "./store/authStore";
 // import axios from 'axios';
 // import api from "./lib/api";
 import AppLayout from "./components/layout/AppLayout";
-import AiDashboardWrapper from "./components/dashboard/AiDashboardWrapper";
+// import AiDashboardWrapper from "./components/dashboard/AiDashboardWrapper";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -295,10 +295,16 @@ const AppInner: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route element={<AppLayout />}>
-          <Route path="/dashboard" element={<RouteGuard><AiDashboardWrapper><DashboardPage /></AiDashboardWrapper></RouteGuard>} />
+          <Route path="/dashboard" element={<RouteGuard>
+            {/* <AiDashboardWrapper> */}
+              <DashboardPage />
+            {/* </AiDashboardWrapper> */}
+          </RouteGuard>} />
           <Route path="/assignments" element={<RouteGuard><AssignmentsPage /></RouteGuard>} />
           <Route path="/assignments/:id" element={<RouteGuard><AssignmentDetailPage /></RouteGuard>} />
           <Route path="/tasks" element={<RouteGuard><TasksPage /></RouteGuard>} />
+          <Route path="/tasks/project" element={<RouteGuard><TasksPage /></RouteGuard>} />
+          <Route path="/tasks/project/:projectId" element={<RouteGuard><TasksPage /></RouteGuard>} />
           <Route path="/tasks/:id" element={<RouteGuard><TasksPage /></RouteGuard>} />
           <Route path="/boards" element={<RouteGuard><BoardsPage /></RouteGuard>} />
           <Route path="/clients" element={<RouteGuard><ClientsPage /></RouteGuard>} />

@@ -11,6 +11,7 @@ import api from '../../lib/api';
 import toast from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import Modal from '../common/Modal';
+import { PrioritySelect } from '../common/PrioritySelect';
 
 interface EventModalProps {
   calendars: any[];
@@ -395,16 +396,11 @@ const endDateRef = useRef<HTMLInputElement>(null);
               
               <div style={{ position: 'relative' }}>
                 <label style={labelStyle}>Priority</label>
-                <select
+                <PrioritySelect
                   value={formData.priority}
-                  onChange={e => setFormData({ ...formData, priority: e.target.value })}
+                  onChange={next => setFormData({ ...formData, priority: next })}
                   style={inputStyle}
-                >
-                  <option value="low">Low Priority</option>
-                  <option value="medium">Medium Priority</option>
-                  <option value="high">High Priority</option>
-                  <option value="urgent">Urgent</option>
-                </select>
+                />
               </div>
             </div>
 

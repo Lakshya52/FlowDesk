@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import Board from '../models/Board';
 import Task from '../models/Task';
+import User from '../models/User';
 import { AuthRequest } from '../middlewares/auth';
 import { getTenantUserIds, getTenantId } from '../utils/tenant';
 import { createNotification } from '../services/notificationService';
@@ -36,6 +37,49 @@ const canManageBoard = (board: any, req: AuthRequest): boolean => {
   return req.user!.role === 'admin' || board.createdBy?.toString() === userId;
 };
 
+// Strict tenant isolation: boards never span tenants. A board's tenant is its
+// creator's tenant, and every membership mutation must keep it that way.
+const getBoardTenantId = async (board: any): Promise<string | null> => {
+  const creatorId = board.createdBy?._id || board.createdBy;
+  if (!creatorId) return null;
+  const creator = await User.findById(creatorId).select('tenantId');
+  return creator?.tenantId?.toString() || null;
+};
+
+// The target user must exist and live in the given tenant. Fail closed.
+const checkJoinTenant = async (tenantId: string | null, userId: any): Promise<string | null> => {
+  if (!tenantId) return 'Board tenant could not be determined';
+  let member: any = null;
+  try {
+    member = await User.findById(userId).select('_id tenantId');
+  } catch {
+    return 'User not found';
+  }
+  if (!member) return 'User not found';
+  if (member.tenantId?.toString() !== tenantId) {
+    return 'Boards are strictly tenant-isolated: users can only join boards in their own tenant';
+  }
+  return null;
+};
+
+// Rejects any cross-tenant access to a board, including cross-tenant admins
+// acting by id. Responds 404 (not 403) so foreign board ids are
+// indistinguishable from non-existent ones. Returns true when blocked.
+const blockCrossTenant = async (board: any, req: AuthRequest, res: Response): Promise<boolean> => {
+  let myTenant: string | null = null;
+  try {
+    myTenant = getTenantId(req.user!);
+  } catch {
+    myTenant = null;
+  }
+  const boardTenant = await getBoardTenantId(board);
+  if (!boardTenant || !myTenant || boardTenant !== myTenant) {
+    res.status(404).json({ message: 'Board not found' });
+    return true;
+  }
+  return false;
+};
+
 // Rejects any mutation on a completed board. Returns true when blocked
 // (response already sent) so handlers can `if (blockIfCompleted(...)) return;`.
 const blockIfCompleted = (board: any, res: Response): boolean => {
@@ -61,6 +105,16 @@ export const createBoard = async (req: AuthRequest, res: Response): Promise<void
         const invitedIds = [...new Set(
             (Array.isArray(members) ? members : []).map((m: string) => m?.toString()),
         )].filter((id) => id && id !== creatorId);
+
+        // Membership never crosses tenants — and every id must be a real user.
+        const creatorTenant = getTenantId(req.user!);
+        for (const id of invitedIds) {
+            const err = await checkJoinTenant(creatorTenant, id);
+            if (err) {
+                res.status(400).json({ message: err });
+                return;
+            }
+        }
 
         const board = await Board.create({
             title: title.trim(),
@@ -169,6 +223,7 @@ export const getBoard = async (req: AuthRequest, res: Response): Promise<void> =
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (req.user!.role !== 'admin') {
             const userId = req.user!._id.toString();
@@ -193,6 +248,7 @@ export const updateBoard = async (req: AuthRequest, res: Response): Promise<void
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (blockIfCompleted(board, res)) return;
 
@@ -230,6 +286,7 @@ export const deleteBoard = async (req: AuthRequest, res: Response): Promise<void
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (blockIfCompleted(board, res)) return;
 
@@ -259,6 +316,7 @@ export const updateColumns = async (req: AuthRequest, res: Response): Promise<vo
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         const userId = req.user!._id.toString();
         if (req.user!.role !== 'admin' && board.createdBy.toString() !== userId && !board.members.some((m: any) => m.toString() === userId)) {
@@ -296,6 +354,7 @@ export const addColumn = async (req: AuthRequest, res: Response): Promise<void> 
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (!checkBoardAccess(board, req)) {
             res.status(403).json({ message: 'Access denied' });
@@ -347,6 +406,7 @@ export const renameColumn = async (req: AuthRequest, res: Response): Promise<voi
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (!checkBoardAccess(board, req)) {
             res.status(403).json({ message: 'Access denied' });
@@ -408,6 +468,7 @@ export const deleteColumn = async (req: AuthRequest, res: Response): Promise<voi
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (!checkBoardAccess(board, req)) {
             res.status(403).json({ message: 'Access denied' });
@@ -457,6 +518,7 @@ export const reorderColumns = async (req: AuthRequest, res: Response): Promise<v
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (!checkBoardAccess(board, req)) {
             res.status(403).json({ message: 'Access denied' });
@@ -500,6 +562,7 @@ export const requestToJoin = async (req: AuthRequest, res: Response): Promise<vo
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         const userId = req.user!._id.toString();
 
@@ -539,6 +602,7 @@ export const handleRequest = async (req: AuthRequest, res: Response): Promise<vo
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (board.createdBy.toString() !== req.user!._id.toString() && req.user!.role !== 'admin') {
             res.status(403).json({ message: 'Only the board creator can manage requests' });
@@ -565,6 +629,11 @@ export const handleRequest = async (req: AuthRequest, res: Response): Promise<vo
 
         if (action === 'accepted') {
             const requestUserId = request.user.toString();
+            const reqTenantErr = await checkJoinTenant(await getBoardTenantId(board), request.user);
+            if (reqTenantErr) {
+                res.status(400).json({ message: reqTenantErr });
+                return;
+            }
             if (!board.members.includes(request.user)) {
                 board.members.push(request.user);
             }
@@ -590,6 +659,7 @@ export const removeMember = async (req: AuthRequest, res: Response): Promise<voi
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (blockIfCompleted(board, res)) return;
 
@@ -626,6 +696,7 @@ export const addMember = async (req: AuthRequest, res: Response): Promise<void> 
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         const userId = req.user!._id.toString();
         if (req.user!.role !== 'admin' && board.createdBy.toString() !== userId) {
@@ -638,6 +709,12 @@ export const addMember = async (req: AuthRequest, res: Response): Promise<void> 
         const { userId: memberUserId } = req.body;
         if (!memberUserId) {
             res.status(400).json({ message: 'userId is required' });
+            return;
+        }
+
+        const addTenantErr = await checkJoinTenant(await getBoardTenantId(board), memberUserId);
+        if (addTenantErr) {
+            res.status(400).json({ message: addTenantErr });
             return;
         }
 
@@ -666,6 +743,7 @@ export const inviteToBoard = async (req: AuthRequest, res: Response): Promise<vo
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         const userId = req.user!._id.toString();
         if (req.user!.role !== 'admin' && board.createdBy.toString() !== userId) {
@@ -678,6 +756,12 @@ export const inviteToBoard = async (req: AuthRequest, res: Response): Promise<vo
         const { userId: invitedUserId } = req.body;
         if (!invitedUserId) {
             res.status(400).json({ message: 'userId is required' });
+            return;
+        }
+
+        const inviteTenantErr = await checkJoinTenant(await getBoardTenantId(board), invitedUserId);
+        if (inviteTenantErr) {
+            res.status(400).json({ message: inviteTenantErr });
             return;
         }
 
@@ -730,6 +814,7 @@ export const handleInvitation = async (req: AuthRequest, res: Response): Promise
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (blockIfCompleted(board, res)) return;
 
@@ -762,6 +847,11 @@ export const handleInvitation = async (req: AuthRequest, res: Response): Promise
 
         if (action === 'accepted') {
             const invitedUserId = invitation.user.toString();
+            const invTenantErr = await checkJoinTenant(await getBoardTenantId(board), invitation.user);
+            if (invTenantErr) {
+                res.status(400).json({ message: invTenantErr });
+                return;
+            }
             if (!board.members.some((m: any) => m.toString() === invitedUserId)) {
                 board.members.push(invitation.user);
             }
@@ -788,6 +878,7 @@ export const removeInvitation = async (req: AuthRequest, res: Response): Promise
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (blockIfCompleted(board, res)) return;
 
@@ -835,6 +926,7 @@ export const completeBoard = async (req: AuthRequest, res: Response): Promise<vo
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (!canManageBoard(board, req)) {
             res.status(403).json({ message: 'Only the board creator can complete it' });
@@ -874,6 +966,7 @@ export const reopenBoard = async (req: AuthRequest, res: Response): Promise<void
             res.status(404).json({ message: 'Board not found' });
             return;
         }
+        if (await blockCrossTenant(board, req, res)) return;
 
         if (!canManageBoard(board, req)) {
             res.status(403).json({ message: 'Only the board creator can reopen it' });

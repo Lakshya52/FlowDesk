@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import Avatar from "../components/common/Avatar";
 import Modal from "../components/common/Modal";
+import { PriorityBadge } from "../components/common/PriorityIcon";
+import { PrioritySelect } from "../components/common/PrioritySelect";
 import { useAuthStore } from "../store/authStore";
 import {
 	Search,
@@ -36,6 +38,7 @@ const TasksPage: React.FC = () => {
 	useTaskSocket();
 	const params = useParams();
 	const boardIdFromUrl = params.id || "";
+	const projectIdFromUrl = params.projectId || "";
 	const [search, setSearch] = useState("");
 	const [selectedCompany, setSelectedCompany] = useState("");
 	const [currentTab, setCurrentTab] = useState<"all" | "my">("all");
@@ -133,7 +136,25 @@ const TasksPage: React.FC = () => {
 		return () => clearTimeout(timer);
 	}, [dropAnim]);
 
+	// `/tasks/:boardId` scopes to a sprint board, `/tasks/project/:projectId`
+	// scopes to a project. Bare `/tasks` selects nothing — there is no
+	// unscoped "all tasks" fetch.
 	const activeBoardId = boardIdFromUrl;
+	const activeProjectId = projectIdFromUrl;
+
+	// Opening "New Task" seeds the form from the open sprint/project, so the
+	// task lands in the current context instead of standalone.
+	const prevShowCreateModal = useRef(false);
+	useEffect(() => {
+		if (showCreateModal && !prevShowCreateModal.current) {
+			setCreateForm((f) => ({
+				...f,
+				assignment: activeProjectId,
+				board: activeBoardId,
+			}));
+		}
+		prevShowCreateModal.current = showCreateModal;
+	}, [showCreateModal, activeProjectId, activeBoardId]);
 
 	const { data: boardsData } = useQuery({
 		queryKey: ["boards"],
@@ -216,6 +237,12 @@ const TasksPage: React.FC = () => {
 	};
 
 	const getDeniedReason = (task: any): string => {
+		// A project can surface tasks from any sprint board, including
+		// completed ones — the server rejects writes to those (403), so
+		// explain it up front instead of letting the drag fail silently.
+		if (task.board?.status === "completed") {
+			return `"${task.board.title}" is a completed sprint and is view-only. Reopen it to make changes.`;
+		}
 		if (task.assignment) {
 			return `This task belongs to "${task.assignment.title}". Only the project creator or team members can move it.`;
 		}
@@ -351,9 +378,14 @@ const TasksPage: React.FC = () => {
 	});
 	const assignments = assignmentsData || [];
 
+	const activeProject = activeProjectId
+		? assignments.find((a: any) => a._id === activeProjectId) || null
+		: null;
+
 	const taskQueryKey = [
 		"tasks",
 		activeBoardId,
+		activeProjectId,
 		selectedCompany,
 		currentTab,
 		user?._id,
@@ -365,6 +397,10 @@ const TasksPage: React.FC = () => {
 			const params: any = {};
 			if (activeBoardId) {
 				params.board = activeBoardId;
+			} else if (activeProjectId) {
+				params.assignment = activeProjectId;
+			} else {
+				return [];
 			}
 			if (selectedCompany) params.companyId = selectedCompany;
 			if (currentTab === "my") params.assignedTo = user?._id;
@@ -375,11 +411,13 @@ const TasksPage: React.FC = () => {
 	const tasks = tasksData || [];
 
 	const { data: searchData } = useQuery({
-		queryKey: ["tasks-search", search],
+		queryKey: ["tasks-search", search, activeBoardId, activeProjectId],
 		queryFn: async () => {
 			if (!search || search.trim().length < 2) return [];
 			const params: any = { search };
 			if (activeBoardId) params.board = activeBoardId;
+			else if (activeProjectId) params.assignment = activeProjectId;
+			else return [];
 			if (selectedCompany) params.companyId = selectedCompany;
 			const { data } = await api.get("/tasks", { params });
 			return data.tasks || [];
@@ -497,6 +535,9 @@ const TasksPage: React.FC = () => {
 		return (prevRank + nextRank) / 2;
 	};
 
+	const isTaskLocked = (task: any): boolean =>
+		!!task.board && task.board.status === "completed";
+
 	const handleDrop = async (e: React.DragEvent, status: string) => {
 		e.preventDefault();
 		if (isCompleted) {
@@ -507,7 +548,9 @@ const TasksPage: React.FC = () => {
 		const taskId = e.dataTransfer.getData("taskId");
 		if (taskId) {
 			const task = tasks.find((t: any) => t._id === taskId);
-			if (task && canEditTask(task)) {
+			if (task && isTaskLocked(task)) {
+				showToast(getDeniedReason(task));
+			} else if (task && canEditTask(task)) {
 				const insertIdx =
 					dragInsertInfo?.colKey === status
 						? dragInsertInfo.index
@@ -552,8 +595,38 @@ const TasksPage: React.FC = () => {
 		draggedCardRectRef.current = null;
 	};
 
-	const deleteTask = async (taskId: string) => {
-		if (!window.confirm("Delete this task?")) return false;
+	// Inline priority change straight from the kanban card — optimistic
+	// update with rollback, same permission/lock rules as dragging.
+	const quickUpdatePriority = async (taskId: string, next: string) => {
+		const task = tasks.find((t: any) => t._id === taskId);
+		if (!task || task.priority === next) return;
+		if (isTaskLocked(task) || !canEditTask(task)) {
+			showToast(getDeniedReason(task));
+			return;
+		}
+		const prev = task.priority;
+		queryClient.setQueryData(taskQueryKey, (old: any[]) =>
+			old
+				? old.map((t) =>
+						t._id === taskId ? { ...t, priority: next } : t,
+					)
+				: old,
+		);
+		try {
+			await api.put(`/tasks/${taskId}`, { priority: next });
+		} catch (e: any) {
+			queryClient.setQueryData(taskQueryKey, (old: any[]) =>
+				old
+					? old.map((t) =>
+							t._id === taskId ? { ...t, priority: prev } : t,
+						)
+					: old,
+			);
+			showToast(e.response?.data?.message || "Failed to update priority");
+		}
+	};
+
+	const deleteTask = async (taskId: string) => {		if (!window.confirm("Delete this task?")) return false;
 		try {
 			await api.delete(`/tasks/${taskId}`);
 			queryClient.setQueryData(taskQueryKey, (old: any[]) =>
@@ -579,6 +652,7 @@ const TasksPage: React.FC = () => {
 			if (createForm.dueDate) payload.dueDate = createForm.dueDate;
 			if (createForm.assignment)
 				payload.assignment = createForm.assignment;
+			else if (activeProjectId) payload.assignment = activeProjectId;
 			if (createColumnStatus) payload.status = createColumnStatus;
 			if (createForm.board) payload.board = createForm.board;
 			else if (activeBoardId) payload.board = activeBoardId;
@@ -900,13 +974,37 @@ const TasksPage: React.FC = () => {
 		{ key: "completed", label: "Completed", color: "#22c55e" },
 	];
 
-	const activeColumns = activeBoardId
-		? boardColumns.map((c: any) => ({
-				key: c.key,
-				label: c.label,
-				color: c.color,
-			}))
-		: defaultColumns;
+	// "in_progress" -> "In Progress" for statuses with no known column label.
+	const activeStatusLabelFor = (key: string): string =>
+		key
+			.replace(/_/g, " ")
+			.replace(/\b\w/g, (c) => c.toUpperCase());
+
+	const activeColumns = (() => {
+		// A board brings its own columns; a project has no board of its own so
+		// it falls back to the default set.
+		const cols = activeBoardId
+			? boardColumns.map((c: any) => ({
+					key: c.key,
+					label: c.label,
+					color: c.color,
+				}))
+			: [...defaultColumns];
+		// Plus one column per extra status the tasks actually use, otherwise
+		// tasks parked on a custom sprint column would silently disappear.
+		const known = new Set(cols.map((c) => c.key));
+		tasks.forEach((t: any) => {
+			const key = t.status;
+			if (!key || known.has(key)) return;
+			known.add(key);
+			cols.push({
+				key,
+				label: activeStatusLabelFor(key),
+				color: "#a78bfa",
+			});
+		});
+		return cols;
+	})();
 
 	const columnCount = activeColumns.length;
 	const fitCount = columnCount <= 4 ? 4 : 5;
@@ -1024,7 +1122,9 @@ const TasksPage: React.FC = () => {
 						>
 							{activeBoardInfo
 								? "Kanban : " + activeBoardInfo?.title
-								: "Tasks / Kanban View"}
+								: activeProject
+									? "Kanban : " + activeProject.title
+									: "Tasks / Kanban View"}
 						</h1>
 
 						{isCompleted && (
@@ -1820,31 +1920,59 @@ const TasksPage: React.FC = () => {
 					</div>
 				)}
 
-				{/* Board switcher */}
+				{/* sprints / projects switcher — sprint boards and projects share
+				    one list; picking one scopes the kanban to it. */}
 				<div className="w-full lg:w-60" style={{ flexShrink: 0 }}>
 					<label htmlFor="task-board" style={fieldLabelStyle}>
-						Board
+						sprints / projects
 					</label>
 					<select
 						id="task-board"
 						className="select"
-						value={activeBoardId || "__all__"}
+						value={
+							activeBoardId
+								? `board:${activeBoardId}`
+								: activeProjectId
+									? `project:${activeProjectId}`
+									: ""
+						}
 						onChange={(e) => {
-							if (e.target.value === "__all__") {
+							const v = e.target.value;
+							if (!v) {
 								navigate("/tasks");
+							} else if (v.startsWith("project:")) {
+								navigate(`/tasks/project/${v.slice(8)}`);
 							} else {
-								navigate(`/tasks/${e.target.value}`);
+								navigate(`/tasks/${v.slice(6)}`);
 							}
 						}}
 						style={{ width: "100%" }}
 					>
-						<option value="__all__">All Tasks (no board)</option>
-						{allBoards.map((b: any) => (
-							<option key={b._id} value={b._id}>
-								{b.title}
-								{b.status === "completed" ? " (Completed)" : ""}
-							</option>
-						))}
+						<option value="">Select a board or project</option>
+						{allBoards.length > 0 && (
+							<optgroup label="Sprint Boards">
+								{allBoards.map((b: any) => (
+									<option key={b._id} value={`board:${b._id}`}>
+										{b.title}
+										{b.status === "completed"
+											? " (Completed)"
+											: ""}
+									</option>
+								))}
+							</optgroup>
+						)}
+						{assignments.length > 0 && (
+							<optgroup label="Projects">
+								{assignments.map((a: any) => (
+									<option
+										key={a._id}
+										value={`project:${a._id}`}
+									>
+										{a.title}
+									</option>
+								))}
+							</optgroup>
+						)}
 					</select>
 				</div>
 				{/* View switch — All / My tasks as a segmented control */}
@@ -1899,6 +2027,24 @@ const TasksPage: React.FC = () => {
 				</div>
 			</div>
 
+			{/* Nothing selected — there is no unscoped "all tasks" view, so
+			    prompt for a pick instead of rendering empty columns. */}
+			{!loading && !activeBoardId && !activeProjectId && (
+				<div
+					className="card"
+					style={{
+						width: "100%",
+						padding: "40px 24px",
+						textAlign: "center",
+						fontSize: "0.8125rem",
+						color: "var(--color-text-secondary)",
+					}}
+				>
+					Select a sprint board or project from sprints / projects
+					above to view its tasks.
+				</div>
+			)}
+
 			{/* Kanban Board - unified view */}
 			{loading ? (
 				<div style={{ display: "flex", gap: 8, width: "100%" }}>
@@ -1910,7 +2056,7 @@ const TasksPage: React.FC = () => {
 						/>
 					))}
 				</div>
-			) : (
+			) : activeBoardId || activeProjectId ? (
 				<>
 					{/* Board scroller: single two-axis scroll container — horizontal
 					    when columns overflow, vertical when cards overflow. The
@@ -2248,10 +2394,7 @@ const TasksPage: React.FC = () => {
 															padding: "12px",
 															borderRadius: "4px",
 															cursor:
-																canEditTask(
-																	t,
-																) &&
-																!isCompleted
+																canEditTask(t) && !isTaskLocked(t)
 																	? "grab"
 																	: "default",
 															opacity:
@@ -2267,9 +2410,14 @@ const TasksPage: React.FC = () => {
 															transition:
 																"opacity 0.15s ease",
 														}}
+														title={
+															isTaskLocked(t)
+															? `Locked: ${t.board.title} is a completed sprint`
+															: undefined
+														}
 														draggable={
 															canEditTask(t) &&
-															!isCompleted
+															!isTaskLocked(t)
 														}
 														onDragStart={(e) =>
 															handleDragStart(
@@ -2281,11 +2429,14 @@ const TasksPage: React.FC = () => {
 															handleDragEnd
 														}
 														onMouseDown={() => {
-															if (isCompleted) {
+															if (isTaskLocked(t)) {
 																showToast(
-																	"This sprint is completed and view-only.",
+																	getDeniedReason(
+																		t,
+																	),
 																);
 															} else if (
+																isCompleted ||
 																!canEditTask(t)
 															) {
 																showToast(
@@ -2342,18 +2493,63 @@ const TasksPage: React.FC = () => {
 																	"General"}
 															</div>
 															<span
-																className={`badge badge-${t.priority}`}
-																style={{
-																	fontSize:
-																		"0.625rem",
+																onMouseDown={(e) => {
+																	// Keep the card's own mousedown
+																	// toasts from double-firing; show
+																	// the same message here instead.
+																	e.stopPropagation();
+																	if (
+																		isTaskLocked(
+																			t,
+																		) ||
+																		!canEditTask(
+																			t,
+																		)
+																	) {
+																		showToast(
+																			getDeniedReason(
+																				t,
+																			),
+																		);
+																	}
 																}}
-															>
-																{
-																	PRIORITY_LABELS[
-																		t
-																			.priority
-																	]
+																onClick={(e) =>
+																	e.stopPropagation()
 																}
+																title={
+																	canEditTask(
+																		t,
+																	) &&
+																	!isTaskLocked(
+																		t,
+																	)
+																		? "Change priority"
+																		: undefined
+																}
+															>
+																<PrioritySelect
+																	compact
+																	value={
+																		t.priority
+																	}
+																	disabled={
+																		!canEditTask(
+																			t,
+																		) ||
+																		isTaskLocked(
+																			t,
+																		)
+																	}
+																	ariaLabel={`Change priority of ${t.title}`}
+																	onChange={(
+																		next,
+																	) =>
+																		quickUpdatePriority(
+																			t._id,
+																			next,
+																		)
+																	}
+																/>
 															</span>
 														</div>
 														<div
@@ -2580,7 +2776,7 @@ const TasksPage: React.FC = () => {
 						</div>
 					</div>
 				</>
-			)}
+			) : null}
 
 			{/* Create Task Modal */}
 			<Modal
@@ -2728,6 +2924,8 @@ const TasksPage: React.FC = () => {
 							/>
 						</div>
 						<div>
+							{/* The task always lands in the open sprint/project —
+							    no standalone pickers. */}
 							<label
 								style={{
 									display: "block",
@@ -2736,79 +2934,17 @@ const TasksPage: React.FC = () => {
 									marginBottom: 6,
 								}}
 							>
-								Project{" "}
-								<span
-									style={{
-										fontSize: "0.7rem",
-										color: "var(--color-text-tertiary)",
-									}}
-								>
-									(optional)
-								</span>
+							Creating in : {activeBoardId ? "kanban" : "project"}
 							</label>
-							<select
-								className="select"
-								value={createForm.assignment}
-								onChange={(e) =>
-									setCreateForm({
-										...createForm,
-										assignment: e.target.value,
-									})
-								}
-								style={{ width: "100%" }}
+							<div
+								style={{
+									fontSize: "0.875rem",
+									fontWeight: 600,
+								}}
 							>
-								<option value="">
-									Standalone task (no project)
-								</option>
-								{assignments.map((a: any) => (
-									<option key={a._id} value={a._id}>
-										{a.title}
-									</option>
-								))}
-							</select>
-						</div>
-						{!activeBoardId && (
-							<div>
-								<label
-									style={{
-										display: "block",
-										fontSize: "0.75rem",
-										color: "var(--color-text-secondary)",
-										marginBottom: 6,
-									}}
-								>
-									Board{" "}
-									<span
-										style={{
-											fontSize: "0.7rem",
-											color: "var(--color-text-tertiary)",
-										}}
-									>
-										(optional)
-									</span>
-								</label>
-								<select
-									className="select"
-									value={createForm.board}
-									onChange={(e) =>
-										setCreateForm({
-											...createForm,
-											board: e.target.value,
-										})
-									}
-									style={{ width: "100%" }}
-								>
-									<option value="">
-										No board (standalone task)
-									</option>
-									{allBoards.map((b: any) => (
-										<option key={b._id} value={b._id}>
-											{b.title}
-										</option>
-									))}
-								</select>
+							{activeBoardId ? board?.title || "Sprint board" : activeProject?.title || ""}
 							</div>
-						)}
+						</div>
 						<div>
 							<label
 								style={{
@@ -3099,25 +3235,16 @@ const TasksPage: React.FC = () => {
 								>
 									Priority
 								</label>
-								<select
-									className="select"
+								<PrioritySelect
 									value={createForm.priority}
-									onChange={(e) =>
+									onChange={(next) =>
 										setCreateForm({
 											...createForm,
-											priority: e.target.value,
+											priority: next,
 										})
 									}
 									style={{ width: "100%" }}
-								>
-									{Object.entries(PRIORITY_LABELS).map(
-										([k, v]) => (
-											<option key={k} value={k}>
-												{v}
-											</option>
-										),
-									)}
-								</select>
+								/>
 							</div>
 						</div>
 						<button
@@ -3366,31 +3493,18 @@ const TasksPage: React.FC = () => {
 												>
 													Priority
 												</label>
-												<select
-													className="select"
-													style={{ width: "100%" }}
+												<PrioritySelect
 													value={
 														detailEditForm.priority
 													}
-													onChange={(e) =>
+													onChange={(next) =>
 														setDetailEditForm({
 															...detailEditForm,
-															priority:
-																e.target.value,
+															priority: next,
 														})
 													}
-												>
-													{Object.entries(
-														PRIORITY_LABELS,
-													).map(([k, v]) => (
-														<option
-															key={k}
-															value={k}
-														>
-															{v}
-														</option>
-													))}
-												</select>
+													style={{ width: "100%" }}
+												/>
 											</div>
 											<div>
 												<label
@@ -3633,18 +3747,17 @@ const TasksPage: React.FC = () => {
 												>
 													Priority
 												</div>
-												<span
-													className={`badge badge-${detailTask.priority}`}
-													style={{
-														fontSize: "0.75rem",
-													}}
-												>
-													{
+												<PriorityBadge
+													priority={
+														detailTask.priority
+													}
+													label={
 														PRIORITY_LABELS[
 															detailTask.priority
 														]
 													}
-												</span>
+													fontSize="0.75rem"
+												/>
 											</div>
 											<div>
 												<div

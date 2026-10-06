@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import Avatar from "../components/common/Avatar";
 import Modal from "../components/common/Modal";
+import { PriorityBadge } from "../components/common/PriorityIcon";
+import { PrioritySelect } from "../components/common/PrioritySelect";
 import { useAuthStore } from "../store/authStore";
 import {
   Plus,
@@ -1220,9 +1222,10 @@ const AssignmentsPage: React.FC = () => {
                           Paused
                         </span>
                       )}
-                      <span className={`badge badge-${a.priority}`}>
-                        {PRIORITY_LABELS[a.priority]}
-                      </span>
+                      <PriorityBadge
+                        priority={a.priority}
+                        label={PRIORITY_LABELS[a.priority]}
+                      />
                       {activeTab !== "blueprints" && (
                         <span className={`badge badge-${a.status}`}>
                           {STATUS_LABELS[a.status]}
@@ -1930,19 +1933,12 @@ const AssignmentsPage: React.FC = () => {
                   >
                     Priority
                   </label>
-                  <select
-                    className="select"
+                  <PrioritySelect
                     value={form.priority}
-                    onChange={(e) =>
-                      setForm({ ...form, priority: e.target.value })
+                    onChange={(next) =>
+                      setForm({ ...form, priority: next })
                     }
-                  >
-                    {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 <div>
                   <label

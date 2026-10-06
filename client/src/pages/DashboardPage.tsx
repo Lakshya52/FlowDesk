@@ -15,7 +15,7 @@ import {
   Clock,
   TrendingUp,
   Users,
-  // Kanban,
+  Kanban,
 } from "lucide-react";
 import {
   BarChart,
@@ -231,7 +231,7 @@ const DashboardPage: React.FC = () => {
         className="flex flex-col sm:flex-row items-start sm:items-end sm:justify-between gap-4"
       >
         <div>
-          {/* <h1
+          <h1
             style={{
               fontSize: "1.5rem",
               fontWeight: 700,
@@ -245,7 +245,7 @@ const DashboardPage: React.FC = () => {
                 ? "afternoon"
                 : "evening"}
             , {user?.name?.split(" ")[0]}
-          </h1> */}
+          </h1>
           <p
             style={{
               color: "var(--color-text-secondary)",
@@ -261,13 +261,13 @@ const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        {/* <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 12 }}>
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => navigate("/tasks")}
           >
             <Kanban size={16} /> Kanbans
-            {/* <CheckCircle2 size={16} /> // close here
+            {/* <CheckCircle2 size={16} /> // close here */} 
           </button>
           <button
             className="btn btn-secondary btn-sm"
@@ -283,7 +283,7 @@ const DashboardPage: React.FC = () => {
               <TrendingUp size={16} /> Reports
             </button>
           )}
-        </div> */}
+        </div>
       </div>
 
       {/* Stat Cards */}
