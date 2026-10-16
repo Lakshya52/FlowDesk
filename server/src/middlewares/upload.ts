@@ -71,10 +71,42 @@ const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterC
   }
 };
 
+// Images only (avatars, selfies, receipts, signatures)
+const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+
+const imageFileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (IMAGE_MIMES.includes(file.mimetype) && IMAGE_EXTS.includes(ext)) {
+    cb(null, true);
+  } else {
+    const err = new Error(`Only image files (JPG, PNG, GIF, WEBP) are allowed (got "${file.originalname}")`) as Error & { statusCode?: number; isOperational?: boolean };
+    err.statusCode = 400;
+    err.isOperational = true;
+    cb(err);
+  }
+};
+
+const makeUpload = (maxMB: number, filter: multer.Options['fileFilter']) =>
+  multer({
+    storage,
+    fileFilter: filter as any,
+    limits: { fileSize: maxMB * 1024 * 1024 },
+  });
+
 export const upload = multer({
     storage,
     fileFilter,
     limits: {
-        fileSize: 52428800, // 50MB in bytes
+        fileSize: 52428800, // 50MB in bytes (Excel/import routes)
     },
 });
+
+// Avatars: small square images
+export const uploadAvatar = makeUpload(2, imageFileFilter);
+
+// Camera photos: selfies, receipts, signatures
+export const uploadImage = makeUpload(8, imageFileFilter);
+
+// Documents & media: task files, chat/conversation files, partner agreements
+export const uploadDoc = makeUpload(25, fileFilter);

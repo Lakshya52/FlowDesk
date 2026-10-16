@@ -25,10 +25,17 @@ export const useCrmSocket = () => {
 
     const invalidateLeads = () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     };
 
     const invalidateCampaigns = () => {
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+    };
+
+    const invalidatePartners = () => {
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     };
 
     socket.on("crm:lead:created", invalidateLeads);
@@ -37,6 +44,9 @@ export const useCrmSocket = () => {
     socket.on("crm:campaign:created", invalidateCampaigns);
     socket.on("crm:campaign:updated", invalidateCampaigns);
     socket.on("crm:campaign:deleted", invalidateCampaigns);
+    socket.on("crm:partner:created", invalidatePartners);
+    socket.on("crm:partner:updated", invalidatePartners);
+    socket.on("crm:partner:deleted", invalidatePartners);
 
     const invalidateFieldVisitReports = () => {
       queryClient.invalidateQueries({ queryKey: ["field-visit-reports"] });
@@ -56,6 +66,9 @@ export const useCrmSocket = () => {
       socket.off("crm:campaign:created", invalidateCampaigns);
       socket.off("crm:campaign:updated", invalidateCampaigns);
       socket.off("crm:campaign:deleted", invalidateCampaigns);
+      socket.off("crm:partner:created", invalidatePartners);
+      socket.off("crm:partner:updated", invalidatePartners);
+      socket.off("crm:partner:deleted", invalidatePartners);
       socket.off("field-visit:created", invalidateFieldVisitReports);
       socket.off("field-visit:updated", invalidateFieldVisitReports);
       socket.off("field-visit:checked-in", invalidateFieldVisitReports);

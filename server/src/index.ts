@@ -41,6 +41,7 @@ import calendarRoutes from "./routes/calendars";
 import calendarEventRoutes from "./routes/calendarEvents";
 import googleCalendarImport from "./routes/googleCalendarImport";
 import campaignRoutes from "./routes/campaigns";
+import partnerRoutes from "./routes/partners";
 import leadRoutes from "./routes/leads";
 import userRoutes from "./routes/users";
 import activityLogRoutes from "./routes/activityLogs";
@@ -50,6 +51,7 @@ import settingsRoutes from "./routes/settings";
 import boardRoutes from "./routes/boards";
 import { startRecurringJob, stopRecurringJob } from "./services/recurringTaskService";
 import { startFieldVisitHeartbeat } from "./services/fieldVisitHeartbeatService";
+import { startOrphanSweeper, stopOrphanSweeper } from "./services/orphanFileService";
 import backupRoutes from "./routes/backup";
 import releasesRoutes from "./routes/releases";
 import { startBackupScheduler, stopBackupScheduler } from "./services/backupScheduleService";
@@ -130,7 +132,10 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Serve files from GridFS (no auth — browsers need direct img src)
+// Serve files from GridFS (no auth — browsers need direct img src).
+// Avatars and other non-sensitive images only; sensitive documents must go
+// through the tenant-checked GET /api/files/by-name/:filename instead.
+// Filenames are unique per upload, so responses are immutable and cached.
 app.get("/uploads/:filename", async (req, res) => {
   try {
     if (!mongoose.connection.db) {
@@ -163,6 +168,7 @@ app.get("/uploads/:filename", async (req, res) => {
     res.set("Content-Disposition", "inline");
     res.set("X-Frame-Options", "ALLOWALL");
     res.set("Cross-Origin-Resource-Policy", "cross-origin");
+    res.set("Cache-Control", "public, max-age=31536000, immutable");
 
     const downloadStream = bucket.openDownloadStreamByName(filename);
 
@@ -276,6 +282,7 @@ app.use("/api/calendars", calendarRoutes);
 app.use("/api/calendar-events", calendarEventRoutes);
 app.use("/api/import/google-calendar", googleCalendarImport);
 app.use("/api/campaigns", campaignRoutes);
+app.use("/api/partners", partnerRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
@@ -586,6 +593,7 @@ const shutdown = async (signal: string) => {
   });
   stopRecurringJob();
   stopBackupScheduler();
+  stopOrphanSweeper();
   await mongoose.disconnect();
   console.log('MongoDB disconnected');
   process.exit(0);
@@ -621,6 +629,7 @@ const startServer = async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       startRecurringJob();
       startBackupScheduler();
+      startOrphanSweeper();
     });
   } catch (error) {
     console.error("❌ Failed to connect to MongoDB:", error);

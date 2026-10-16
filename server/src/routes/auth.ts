@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { register, login, getMe, getUsers, permanentDeleteUser, deleteUser, activateUser, updateUser, uploadAvatar, removeAvatar, changePassword, forgotPassword, verifyForgotPasswordOtp, verifyRegistrationOtp, resendRegistrationOtp, createUser, refreshToken, registerDevice, getUserEncryptionKeys } from '../controllers/authController';
 import { authenticate, authorize } from '../middlewares/auth';
-import { upload } from '../middlewares/upload';
+import { uploadAvatar as uploadAvatarFile } from '../middlewares/upload';
 
 const router = Router();
 
@@ -24,7 +24,7 @@ router.post('/users/create', authenticate, createUser);
 router.put('/users/:id', authenticate, authorize('admin'), updateUser);
 router.delete('/users/:id', authenticate, authorize('admin'), deleteUser);
 router.put('/users/:id/activate', authenticate, authorize('admin'), activateUser);
-router.put('/users/:id/avatar', authenticate, upload.single('avatar'), uploadAvatar);
+router.put('/users/:id/avatar', authenticate, uploadAvatarFile.single('avatar'), uploadAvatar);
 router.delete('/users/:id/avatar', authenticate, removeAvatar);
 router.delete('/users/:id/permanent', authenticate, authorize('admin', 'manager'), permanentDeleteUser);
 router.post('/refresh', authenticate, refreshToken);

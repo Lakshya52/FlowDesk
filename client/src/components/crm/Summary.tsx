@@ -4,7 +4,7 @@ import {
   startOfMonth, endOfMonth, addMonths, subMonths,
   startOfYear, endOfYear, addYears, subYears,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Download, FileText, AlertCircle, Inbox, TrendingUp, TrendingDown, Users, RefreshCw, MapPin, LogIn, CheckCircle, XCircle, CalendarDays, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Upload, FileText, AlertCircle, Inbox, TrendingUp, TrendingDown, Users, RefreshCw, MapPin, LogIn, CheckCircle, XCircle, CalendarDays, User } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -263,7 +263,7 @@ const Summary = () => {
             <RefreshCw size={14} className={(loading || refreshing) ? 'animate-spin' : ''} />
           </button>
           <button onClick={handleExport} disabled={exporting} className="btn btn-primary">
-            <Download size={14} />
+            <Upload size={16} />
             {exporting ? 'Exporting\u2026' : 'Export Excel'}
           </button>
         </div>

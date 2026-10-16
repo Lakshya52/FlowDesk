@@ -9,6 +9,7 @@ import {
 import { NotificationType } from "../models/Notification";
 import { processRecurringAssignments, rescheduleRecurringJob } from "../services/recurringTaskService";
 import { getTenantUserIds, getTenantId } from "../utils/tenant";
+import { deleteAttachmentsFor } from "../utils/attachmentCleanup";
 import XLSX from "xlsx";
 
 const RECURRING_PATTERNS = ["daily", "weekly", "monthly", "yearly"];
@@ -533,6 +534,14 @@ export const deleteAssignment = async (
     console.log('🗑️ [DELETE] Step 7: Deleting assignment from DB...');
     const deleteResult = await assignment.deleteOne();
     console.log('✅ [DELETE] Step 8: deleteOne() result:', JSON.stringify(deleteResult));
+
+    // Remove the project's direct files so they don't orphan in GridFS
+    // (files on surviving tasks stay referenced and are left alone).
+    try {
+        await deleteAttachmentsFor({ assignment: assignment._id });
+    } catch (err) {
+        console.error('❌ [DELETE] Attachment cleanup failed:', err);
+    }
 
     await ActivityLog.create({
       action: "Assignment deleted",

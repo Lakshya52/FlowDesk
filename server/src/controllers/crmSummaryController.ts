@@ -9,6 +9,7 @@ import User from '../models/User';
 import Team from '../models/Team';
 import FieldVisit from '../models/FieldVisit';
 import { AuthRequest } from '../middlewares/auth';
+import { getTenantUserIds } from '../utils/tenant';
 
 const getDateRange = (scope: string, date: Date) => {
   const year = date.getFullYear();
@@ -143,28 +144,56 @@ export const getCrmSummary = async (req: AuthRequest, res: Response) => {
     const lCur = currentLeads[0] || { ...defaultCur };
     const lPrev = prevLeads[0] || { contacted: 0, won: 0 };
 
-    // Calendar events
+    // Calendar events — tenant-scoped via member involvement
+    // (CalendarEvent has no tenantId; an event belongs to a tenant when a
+    // tenant member created it or attends it). Without this, tenants see
+    // each other's meetings.
+    const tenantMemberIds = (await getTenantUserIds(req.user)).map(
+      (id: string) => new mongoose.Types.ObjectId(id),
+    );
+    const tenantEventClause = {
+      $or: [
+        { createdBy: { $in: tenantMemberIds } },
+        { 'attendees.user': { $in: tenantMemberIds } },
+      ],
+    };
     let eventMatch: any = {
       startDate: { $gte: start, $lte: end },
       eventType: { $in: ['meeting', 'event'] },
+      ...tenantEventClause,
     };
     if (targetUserId) {
-      eventMatch.$or = [
-        { createdBy: targetUserId },
-        { 'attendees.user': targetUserId },
-      ];
+      eventMatch = {
+        $and: [
+          eventMatch,
+          {
+            $or: [
+              { createdBy: targetUserId },
+              { 'attendees.user': targetUserId },
+            ],
+          },
+        ],
+      };
     }
 
-    const prevEventMatch: any = {
+    const prevEventBase: any = {
       startDate: { $gte: prevRange.start, $lte: prevRange.end },
       eventType: { $in: ['meeting', 'event'] },
+      ...tenantEventClause,
     };
-    if (targetUserId) {
-      prevEventMatch.$or = [
-        { createdBy: targetUserId },
-        { 'attendees.user': targetUserId },
-      ];
-    }
+    const prevEventMatch: any = targetUserId
+      ? {
+          $and: [
+            prevEventBase,
+            {
+              $or: [
+                { createdBy: targetUserId },
+                { 'attendees.user': targetUserId },
+              ],
+            },
+          ],
+        }
+      : prevEventBase;
 
     const [currentEvents, prevEvents] = await Promise.all([
       CalendarEvent.countDocuments(eventMatch),
@@ -450,6 +479,11 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
     visitOutcomeCounts.forEach((s: any) => { visitOutcomeMap[s._id] = s.count; });
 
     // ── Previous period + telecaller + activity + events in parallel ──
+    // Tenant member ids scope the activity/events queries below (CalendarEvent
+    // and ActivityLog rows must never leak across tenants).
+    const exportMemberIds = (await getTenantUserIds(req.user)).map(
+      (id: string) => new mongoose.Types.ObjectId(id),
+    );
     const [prevAgg, telecallerData, activityData, currentEvents] = await Promise.all([
       Lead.aggregate([
         { $match: { ...leadMatch, createdAt: { $gte: prevRange.start, $lte: prevRange.end } } },
@@ -486,7 +520,8 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
       (async () => {
         const activityMatch: any = {
           createdAt: { $gte: start, $lte: end },
-          entityType: { $in: [EntityType.CAMPAIGN, EntityType.LEAD] },
+          entityType: { $in: [EntityType.CAMPAIGN, EntityType.LEAD, EntityType.PARTNER] },
+          user: { $in: exportMemberIds },
         };
         if (targetUserId) activityMatch.user = targetUserId;
         return ActivityLog.find(activityMatch)
@@ -496,8 +531,22 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
           .lean();
       })(),
       (async () => {
-        const eventMatch: any = { startDate: { $gte: start, $lte: end }, eventType: { $in: ['meeting', 'event'] } };
-        if (targetUserId) eventMatch.$or = [{ createdBy: targetUserId }, { 'attendees.user': targetUserId }];
+        const base: any = {
+          startDate: { $gte: start, $lte: end },
+          eventType: { $in: ['meeting', 'event'] },
+          $or: [
+            { createdBy: { $in: exportMemberIds } },
+            { 'attendees.user': { $in: exportMemberIds } },
+          ],
+        };
+        const eventMatch: any = targetUserId
+          ? {
+              $and: [
+                base,
+                { $or: [{ createdBy: targetUserId }, { 'attendees.user': targetUserId }] },
+              ],
+            }
+          : base;
         return CalendarEvent.countDocuments(eventMatch);
       })(),
     ]);

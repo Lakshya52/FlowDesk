@@ -286,7 +286,7 @@ const Campaigns = () => {
                             title="Import leads"
                             className="bg-(--color-primary-light) border-none cursor-pointer text-(--color-primary) w-8 h-8 rounded-lg flex items-center justify-center shrink-0 hover:opacity-80"
                         >
-                            <Upload size={14} />
+                            <Download size={16} />
                         </button>
                     )}
                     <button

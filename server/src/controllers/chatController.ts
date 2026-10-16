@@ -7,6 +7,7 @@ import { createNotification } from '../services/notificationService';
 import { NotificationType } from '../models/Notification';
 
 import { uploadToGridFS } from '../utils/gridfs';
+import { deleteAttachmentsFor } from '../utils/attachmentCleanup';
 
 export const sendMessage = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -192,6 +193,12 @@ export const deleteMessage = async (req: AuthRequest, res: Response): Promise<vo
         }
 
         await ChatMessage.findByIdAndDelete(req.params.id);
+        // Remove linked files so they don't orphan in GridFS
+        try {
+            await deleteAttachmentsFor({ _id: { $in: (message as any).attachments || [] } });
+        } catch (err) {
+            console.error('[DELETE-MESSAGE] Attachment cleanup failed:', err);
+        }
         res.json({ message: 'Message deleted' });
     } catch (error: any) {
         res.status(500).json({ message: error.message });

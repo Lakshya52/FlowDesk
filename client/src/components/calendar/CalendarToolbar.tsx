@@ -5,7 +5,7 @@ import {
   Menu,
   CalendarIcon,
   X,
-  Import,
+  Download,
   // ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -400,7 +400,7 @@ const CalendarToolbar: React.FC = () => {
                   (e.currentTarget.style.backgroundColor = "transparent")
                 }
               >
-                <Import  size={16} color="var(--color-primary)" />
+                <Download size={16} color="var(--color-primary)" />
                 Import
               </button>
             </div>

@@ -16,8 +16,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   fileUrl,
   fileType,
   fileName,
-}) => {
-  const [scale, setScale] = useState(1);
+}) => {  const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -34,6 +33,13 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [activeSheet, setActiveSheet] = useState<string>("");
   const [excelLoading, setExcelLoading] = useState(false);
   const [excelError, setExcelError] = useState<string | null>(null);
+
+  // Authenticated fetches for tenant-checked file URLs (/api/files/by-name/*).
+  // Public /uploads/* URLs ignore the extra header harmlessly.
+  const authHeaders = (): HeadersInit => {
+    const token = localStorage.getItem("flowdesk_token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
 
   // Close on escape key
   useEffect(() => {
@@ -85,7 +91,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     setPdfError(null);
     setPdfBlobUrl(null);
 
-    fetch(fileUrl)
+    fetch(fileUrl, { headers: authHeaders() })
       .then((response) => {
         if (!response.ok) throw new Error(`Server returned ${response.status}`);
         return response.blob();
@@ -129,7 +135,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     setExcelError(null);
     setExcelData(null);
 
-    fetch(fileUrl)
+    fetch(fileUrl, { headers: authHeaders() })
       .then((response) => {
         if (!response.ok) throw new Error(`Server returned ${response.status}`);
         return response.arrayBuffer();
@@ -189,7 +195,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const currentSheetData = excelData?.sheets[activeSheet] || [];
 
   const handleDownload = async () => {
-    const response = await fetch(fileUrl);
+    const response = await fetch(fileUrl, { headers: authHeaders() });
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

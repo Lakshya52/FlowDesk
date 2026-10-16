@@ -68,6 +68,8 @@ interface LeadDetailModalProps {
 	handleUpdateNote: (noteId: string, text: string) => Promise<void>;
 	handleDeleteNote: (noteId: string) => Promise<void>;
 	currentUserId?: string;
+	currentUserName?: string;
+	partners?: { _id: string; companyName?: string; name?: string; personName: string; partnerType?: string }[];
 	handleScheduleFollowup: () => void;
 	getInitials: (name: string) => string;
 	getCampaignName: (id: any) => string;
@@ -169,6 +171,8 @@ export default function LeadDetailModal({
 	handleUpdateNote,
 	handleDeleteNote,
 	currentUserId,
+	currentUserName,
+	partners = [],
 	handleScheduleFollowup,
 	getInitials,
 	getCampaignName,
@@ -385,6 +389,10 @@ export default function LeadDetailModal({
 			typeof selectedLead.campaignId === "string"
 				? selectedLead.campaignId
 				: (selectedLead.campaignId as any)?._id ?? "";
+		const currentPartnerId =
+			typeof selectedLead.partnerId === "string"
+				? selectedLead.partnerId
+				: (selectedLead.partnerId as any)?._id ?? "";
 		setEditForm({
 			name: selectedLead.name,
 			phone: selectedLead.phone,
@@ -402,6 +410,8 @@ export default function LeadDetailModal({
 			companyGst: selectedLead.companyGst,
 			priority: selectedLead.priority,
 			campaignId: currentCampaignId,
+			sourceType: (selectedLead as any).sourceType || "udyam",
+			partnerId: currentPartnerId,
 		});
 		setIsEditingLead(true);
 	};
@@ -609,13 +619,27 @@ export default function LeadDetailModal({
 														value={
 															editForm[f.key] || ""
 														}
-														onChange={(e) =>
-															setEditForm((prev) => ({
-																...prev,
-																[f.key]:
-																	e.target.value,
-															}))
-														}
+														onChange={(e) => {
+															const v = e.target.value;
+															setEditForm((prev) => {
+																const next = {
+																	...prev,
+																	[f.key]: v,
+																};
+																// Auto-derive PAN from GSTIN (chars 3–12)
+																if (f.key === "companyGst") {
+																	const g = v.toUpperCase().replace(/\s/g, "");
+																	if (g.length === 15) {
+																		const derived = g.slice(2, 12);
+																		if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(derived)) {
+																			next.companyPan = derived;
+																		}
+																	}
+																	next.companyGst = v.toUpperCase();
+																}
+																return next;
+															});
+														}}
 													/>
 												</div>
 											))}
@@ -677,6 +701,61 @@ export default function LeadDetailModal({
 													))}
 												</select>
 											</div>
+											<div className={editForm.sourceType === "partner" ? "" : "sm:col-span-3"}>
+												<label className="block text-[0.65rem] sm:text-[0.7rem] text-(--color-text-tertiary) mb-0.5">
+													Lead Source
+												</label>
+												<select
+													className="input w-full px-2 py-1.5 text-xs sm:text-sm rounded-md"
+													value={editForm.sourceType || "udyam"}
+													onChange={(e) =>
+														setEditForm((prev) => ({
+															...prev,
+															sourceType:
+																e.target.value,
+															partnerId:
+																e.target.value === "partner"
+																	? prev.partnerId
+																	: "",
+														}))
+													}
+												>
+													<option value="udyam">Udyam Capital</option>
+													<option value="self">Self ({currentUserName || "Me"})</option>
+													<option value="partner">Partner</option>
+												</select>
+											</div>
+											{editForm.sourceType === "partner" && (
+												<div className="sm:col-span-3">
+													<label className="block text-[0.65rem] sm:text-[0.7rem] text-(--color-text-tertiary) mb-0.5">
+														Select Partner
+													</label>
+													<select
+														className="input w-full px-2 py-1.5 text-xs sm:text-sm rounded-md"
+														value={editForm.partnerId || ""}
+														onChange={(e) =>
+															setEditForm((prev) => ({
+																...prev,
+																partnerId:
+																	e.target.value,
+															}))
+														}
+													>
+														<option value="">
+															Select Partner
+														</option>
+														{partners.map((p) => (
+															<option
+																key={p._id}
+																value={p._id}
+															>
+																{p.companyName || (p as any).name || p.personName}
+																{p.partnerType ? ` (${p.partnerType})` : ""}
+															</option>
+														))}
+													</select>
+												</div>
+											)}
 										</div>
 										<div className="flex gap-2 m-3 mt-1">
 											<button
@@ -692,7 +771,8 @@ export default function LeadDetailModal({
 												className="btn btn-primary flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold"
 												disabled={
 													!	updatingLead ||
-													!editForm.name
+													!editForm.name ||
+													(editForm.sourceType === "partner" && !editForm.partnerId)
 												}
 												onClick={handleSaveLead}
 											>
@@ -731,6 +811,10 @@ export default function LeadDetailModal({
 												{
 													label: "Industry",
 													value: selectedLead.industry,
+												},
+												{
+													label: "Source",
+													value: selectedLead.source,
 												},
 												{
 													label: "PAN",

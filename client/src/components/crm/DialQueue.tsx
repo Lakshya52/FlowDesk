@@ -25,6 +25,14 @@ interface Campaign {
 	name: string;
 }
 
+interface PartnerOption {
+	_id: string;
+	companyName?: string;
+	name?: string;
+	personName: string;
+	partnerType?: string;
+}
+
 interface LeadNote {
 	_id: string;
 	text: string;
@@ -63,6 +71,8 @@ export interface Lead {
 	website?: string;
 	priority: "very high" | "high" | "medium" | "low";
 	source: string;
+	sourceType?: "udyam" | "self" | "partner";
+	partnerId?: { _id: string; companyName?: string; name?: string; personName?: string; partnerType?: string } | string;
 	status:
 		| "new"
 		| "attempted"
@@ -198,6 +208,8 @@ const DialQueue = () => {
 		alternatePhone: "",
 		campaignId: "",
 		priority: "medium" as Lead["priority"],
+		sourceType: "udyam" as "udyam" | "self" | "partner",
+		partnerId: "",
 	});
 
 	const [pincodeLoading, setPincodeLoading] = useState(false);
@@ -360,6 +372,14 @@ const handlePincodeChange = async (value: string) => {
 		queryFn: async () => {
 			const { data } = await api.get("/campaigns");
 			return data.success ? data.campaigns : [];
+		},
+	});
+
+	const { data: partners = [] } = useQuery({
+		queryKey: ["partners"],
+		queryFn: async () => {
+			const { data } = await api.get("/partners");
+			return (data.success ? data.partners : []) as PartnerOption[];
 		},
 	});
 
@@ -762,8 +782,12 @@ const handlePincodeChange = async (value: string) => {
 
 	const handleCreateLead = async () => {
 		if (!createForm.name.trim()) return;
-		if (!createForm.campaignId) {
-			alert("Please select a campaign before creating a lead.");
+		if (createForm.sourceType !== "partner" && !createForm.campaignId) {
+			alert("Please select a project before creating a lead.");
+			return;
+		}
+		if (createForm.sourceType === "partner" && !createForm.partnerId) {
+			alert("Please select a partner for partner-sourced leads.");
 			return;
 		}
 		if (
@@ -788,9 +812,10 @@ const handlePincodeChange = async (value: string) => {
 			return;
 		}
 		setUpdatingLead(true);
-		const payload = Object.fromEntries(
+		const payload: any = Object.fromEntries(
 			Object.entries(createForm).filter(([_, v]) => v !== ""),
 		);
+		if (payload.sourceType !== "partner") delete payload.partnerId;
 		try {
 			const { data } = await api.post("/leads", payload);
 			if (data.success) {
@@ -812,6 +837,8 @@ const handlePincodeChange = async (value: string) => {
 					alternatePhone: "",
 					campaignId: "",
 					priority: "medium",
+					sourceType: "udyam",
+					partnerId: "",
 				});
 				queryClient.invalidateQueries({ queryKey: ["leads"] });
 			}
@@ -824,13 +851,18 @@ const handlePincodeChange = async (value: string) => {
 
 	const handleSaveLead = async () => {
 		if (!selectedLead || !editForm) return;
+		if (editForm.sourceType === "partner" && !editForm.partnerId) {
+			alert("Please select a partner for partner-sourced leads.");
+			return;
+		}
 		setUpdatingLead(true);
 		try {
 			// "" means "No campaign" — send null so the lead is unassigned
 			// instead of failing ObjectId validation server-side.
-			const payload = {
+			const payload: Record<string, string | null | undefined> = {
 				...editForm,
 				campaignId: editForm.campaignId || null,
+				partnerId: editForm.sourceType === "partner" ? (editForm.partnerId || null) : null,
 			};
 			const { data } = await api.put(
 				`/leads/${selectedLead._id}`,
@@ -1615,6 +1647,8 @@ const handlePincodeChange = async (value: string) => {
 				handleUpdateNote={handleUpdateNote}
 				handleDeleteNote={handleDeleteNote}
 				currentUserId={currentUser?._id}
+				currentUserName={currentUser?.name}
+				partners={partners}
 				handleScheduleFollowup={handleScheduleFollowup}
 				getInitials={getInitials}
 				getCampaignName={getCampaignName}
@@ -2571,12 +2605,20 @@ const handlePincodeChange = async (value: string) => {
 									<input
 										className="input"
 										value={createForm.companyGst}
-										onChange={(e) =>
+										onChange={(e) => {
+											const gst = e.target.value.toUpperCase();
+											const g = gst.replace(/\s/g, "");
+											const derived =
+												g.length === 15 &&
+												/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(g.slice(2, 12))
+													? g.slice(2, 12)
+													: "";
 											setCreateForm((p) => ({
 												...p,
-												companyGst: e.target.value,
-											}))
-										}
+												companyGst: gst,
+												...(derived ? { companyPan: derived } : {}),
+											}));
+										}}
 									/>
 								</div>
 							</div>
@@ -2620,6 +2662,84 @@ const handlePincodeChange = async (value: string) => {
 											marginBottom: 4,
 										}}
 									>
+										Lead Source *
+									</label>
+									<select
+										className="input"
+										value={createForm.sourceType}
+										onChange={(e) =>
+											setCreateForm((p) => ({
+												...p,
+												sourceType: e.target.value as "udyam" | "self" | "partner",
+												partnerId: e.target.value === "partner" ? p.partnerId : "",
+												campaignId: e.target.value === "partner" ? "" : p.campaignId,
+											}))
+										}
+									>
+										<option value="udyam">Udyam Capital</option>
+										<option value="self">Self ({currentUser?.name || "Me"})</option>
+										<option value="partner">Partner</option>
+									</select>
+								</div>
+							</div>
+
+							{createForm.sourceType === "partner" && (
+								<div>
+									<label
+										style={{
+											display: "block",
+											fontSize: "0.75rem",
+											color: "var(--color-text-secondary)",
+											marginBottom: 4,
+										}}
+									>
+										Select Partner *
+									</label>
+									<select
+										className="input"
+										value={createForm.partnerId}
+										onChange={(e) =>
+											setCreateForm((p) => ({
+												...p,
+												partnerId: e.target.value,
+											}))
+										}
+									>
+										<option value="">Select Partner</option>
+										{partners.map((pt: PartnerOption) => (
+											<option key={pt._id} value={pt._id}>
+												{pt.companyName || pt.name || pt.personName}
+												{pt.partnerType ? ` (${pt.partnerType})` : ""}
+											</option>
+										))}
+									</select>
+									{!createForm.partnerId && (
+										<span
+											style={{
+												fontSize: "0.7rem",
+												color: "var(--color-danger)",
+												marginTop: 3,
+												display: "block",
+											}}
+										>
+											Please select a partner
+										</span>
+									)}
+								</div>
+							)}
+
+							{createForm.sourceType !== "partner" && (
+							/* Project */
+							<div>
+								<div>
+									<label
+										style={{
+											display: "block",
+											fontSize: "0.75rem",
+											color: "var(--color-text-secondary)",
+											marginBottom: 4,
+										}}
+									>
 										Project *
 									</label>
 									<select
@@ -2639,20 +2759,9 @@ const handlePincodeChange = async (value: string) => {
 											</option>
 										))}
 									</select>
-									{!createForm.campaignId && (
-										<span
-											style={{
-												fontSize: "0.7rem",
-												color: "var(--color-danger)",
-												marginTop: 3,
-												display: "block",
-											}}
-										>
-											Please select a project
-										</span>
-									)}
 								</div>
 							</div>
+							)}
 
 							{/* Priority */}
 							{/* <div
@@ -2677,7 +2786,8 @@ const handlePincodeChange = async (value: string) => {
 									updatingLead ||
 									!createForm.phone.trim() ||
 									!/^\d{10}$/.test(createForm.phone.trim()) ||
-									!createForm.campaignId
+									(createForm.sourceType !== "partner" && !createForm.campaignId) ||
+									(createForm.sourceType === "partner" && !createForm.partnerId)
 								}
 								onClick={handleCreateLead}
 							>

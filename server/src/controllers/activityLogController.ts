@@ -9,7 +9,7 @@ export const getCrmActivityLogs = async (req: AuthRequest, res: Response): Promi
         const tenantUserIds = await getTenantUserIds(req.user);
 
         const filter: any = {};
-        filter.entityType = { $in: [EntityType.CAMPAIGN, EntityType.LEAD] };
+        filter.entityType = { $in: [EntityType.CAMPAIGN, EntityType.LEAD, EntityType.PARTNER] };
         filter.user = { $in: tenantUserIds };
 
         if (entityType) filter.entityType = entityType;

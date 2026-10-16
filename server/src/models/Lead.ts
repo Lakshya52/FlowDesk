@@ -36,6 +36,8 @@ export interface ILead extends Document {
     website?: string;
     priority: 'very_high' | 'high' | 'medium' | 'low';
     source: string;
+    sourceType?: 'udyam' | 'self' | 'partner';
+    partnerId?: mongoose.Types.ObjectId;
     status: 'new' | 'attempted' | 'connected' | 'interested' | 'callback_scheduled' | 'meeting_scheduled' | 'not_interested' | 'not_reachable' | 'do_not_call' | 'closed_won' | 'closed_lost';
     callCount: number;
     lastCallAt?: Date;
@@ -80,6 +82,12 @@ const leadSchema = new Schema<ILead>(
             type: String,
             required: true,
         },
+        sourceType: {
+            type: String,
+            enum: ['udyam', 'self', 'partner'],
+            default: 'udyam',
+        },
+        partnerId: { type: Schema.Types.ObjectId, ref: 'Partner' },
         status: {
             type: String,
             enum: [
@@ -131,6 +139,7 @@ const leadSchema = new Schema<ILead>(
 );
 
 leadSchema.index({ campaignId: 1 });
+leadSchema.index({ partnerId: 1 });
 leadSchema.index({ tenantId: 1 });
 leadSchema.index({ tenantId: 1, name: 1 });
 leadSchema.index({ tenantId: 1, phone: 1 });

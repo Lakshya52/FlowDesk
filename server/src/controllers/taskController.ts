@@ -9,6 +9,7 @@ import { createNotification } from '../services/notificationService';
 import { NotificationType } from '../models/Notification';
 import { getTenantUserIds, getTenantId } from '../utils/tenant';
 import { emitTaskCreated, emitTaskUpdated, emitTaskDeleted } from '../services/taskSocketService';
+import { deleteAttachmentsFor } from '../utils/attachmentCleanup';
 
 const COMPLETED_BOARD_MESSAGE = 'This board is completed and read-only. Reopen it to make changes.';
 
@@ -462,6 +463,13 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
         }
 
         await task.deleteOne();
+
+        // Remove the task's files so they don't orphan in GridFS
+        try {
+            await deleteAttachmentsFor({ task: task._id });
+        } catch (err) {
+            console.error('[DELETE-TASK] Attachment cleanup failed:', err);
+        }
 
         await ActivityLog.create({
             action: 'Task deleted',

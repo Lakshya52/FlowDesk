@@ -18,6 +18,7 @@ export { default as CalendarEvent } from './CalendarEvent';
 export { default as Tenant } from './Tenant';
 export { default as RegistrationOtp } from './RegistrationOtp';
 export { default as Campaign } from './Campaign';
+export { default as Partner } from './Partner';
 export { default as Lead } from './Lead';
 export { default as FieldVisit } from './FieldVisit';
 export { default as LocationTrack } from './LocationTrack';

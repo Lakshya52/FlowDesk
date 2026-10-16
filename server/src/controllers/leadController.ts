@@ -2,6 +2,7 @@ import { Response } from "express";
 import mongoose from "mongoose";
 import Lead from "../models/Lead";
 import Campaign from "../models/Campaign";
+import Partner from "../models/Partner";
 import ActivityLog, { EntityType } from "../models/ActivityLog";
 import { AuthRequest } from "../middlewares/auth";
 import XLSX from "xlsx";
@@ -15,13 +16,49 @@ const getAccessibleCampaignIds = async (user: any, tenantId: string) => {
 const getTenantId = (user: any): string =>
 	(user.tenantId?._id || user.tenantId).toString();
 
+// ── Excel import helpers ──────────────────────────────────────────────
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LEAD_PRIORITIES = ["very high", "high", "medium", "low"];
+const LEAD_STATUSES = [
+	"new",
+	"attempted",
+	"connected",
+	"interested",
+	"callback_scheduled",
+	"meeting_scheduled",
+	"not_interested",
+	"not_reachable",
+	"do_not_call",
+	"closed_won",
+	"closed_lost",
+];
+
+const pickStr = (row: any, ...keys: string[]): string => {
+	for (const k of keys) {
+		const v = row[k];
+		if (v !== undefined && v !== null && String(v).trim() !== "")
+			return String(v).trim();
+	}
+	return "";
+};
+
+const escapeRegExp = (s: string): string =>
+	s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const panFromGstStr = (gst: string): string => {
+	const g = gst.trim().toUpperCase();
+	if (g.length !== 15) return "";
+	const pan = g.slice(2, 12);
+	return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : "";
+};
+
 export const getLeads = async (
 	req: AuthRequest,
 	res: Response,
 ): Promise<void> => {
 	try {
 		const tenantId = getTenantId(req.user);
-		const { campaignId, status, search, industry, source, priority, city, state, pincode } =
+		const { campaignId, partnerId, status, search, industry, source, priority, city, state, pincode } =
 			req.query;
 		const page = Math.max(1, parseInt(req.query.page as string) || 1);
 		const limit = Math.max(
@@ -68,6 +105,7 @@ export const getLeads = async (
 		}
 		if (industry) filter.industry = industry;
 		if (source) filter.source = source;
+		if (partnerId) filter.partnerId = partnerId;
 		if (priority) filter.priority = priority;
 		if (city) filter.city = city;
 		if (state) filter.state = state;
@@ -105,6 +143,7 @@ export const getLeads = async (
 		const [leads, total] = await Promise.all([
 			Lead.find(filter)
 				.populate("campaignId", "name")
+				.populate("partnerId", "companyName personName partnerType")
 				.populate("notes.createdBy", "name email avatar")
 				.sort({ createdAt: -1 })
 				.skip(skip)
@@ -132,6 +171,7 @@ export const getLead = async (
 	try {
 		const lead = await Lead.findById(req.params.id)
 			.populate("campaignId", "name")
+			.populate("partnerId", "companyName personName partnerType")
 			.populate("notes.createdBy", "name email avatar");
 
 		if (!lead) {
@@ -161,13 +201,44 @@ export const createLead = async (
 	try {
 		const tenantId = getTenantId(req.user);
 
-		const source =
-			req.user!.role === "admin" ? "Udyam Capital" : req.user!.name;
+		// Source attribution: udyam (default) | self (logged-in user) | partner (selected partner)
+		const sourceType = (req.body.sourceType || 'udyam') as 'udyam' | 'self' | 'partner';
+		let source = 'Udyam Capital';
+		let partnerId: any = undefined;
+		if (sourceType === 'self') {
+			source = req.user!.name;
+		} else if (sourceType === 'partner') {
+			if (!req.body.partnerId) {
+				res.status(400).json({ success: false, message: 'partnerId is required when source is partner' });
+				return;
+			}
+			const partner = await Partner.findOne({ _id: req.body.partnerId, tenantId });
+			if (!partner) {
+				res.status(400).json({ success: false, message: 'Partner not found' });
+				return;
+			}
+			partnerId = partner._id;
+			source = (partner as any).companyName || (partner as any).name || (partner as any).personName || 'Partner';
+		} else if (req.body.source && !req.body.sourceType) {
+			// Backward compat: explicit source (e.g. field_visit imports)
+			source = String(req.body.source);
+		}
 		if (!req.body.campaignId) delete req.body.campaignId;
+		if (!req.body.partnerId) delete req.body.partnerId;
+		// Auto-derive company PAN from GSTIN (chars 3–12) when PAN not given
+		if (!req.body.companyPan && req.body.companyGst) {
+			const g = String(req.body.companyGst).trim().toUpperCase();
+			if (g.length === 15) {
+				const derived = g.slice(2, 12);
+				if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(derived)) req.body.companyPan = derived;
+			}
+		}
 		const lead = await Lead.create({
 			...req.body,
 			tenantId,
 			source,
+			sourceType,
+			...(partnerId ? { partnerId } : { partnerId: undefined }),
 			status: "new",
 			callCount: 0,
 			followUpCount: 0,
@@ -180,7 +251,7 @@ export const createLead = async (
 		const populated = await Lead.findById(lead._id).populate(
 			"campaignId",
 			"name",
-		);
+		).populate("partnerId", "companyName personName partnerType");
 
 		await ActivityLog.create({
 			action: "Lead created",
@@ -218,12 +289,39 @@ export const updateLead = async (
 			delete sanitizedBody[field];
 		}
 		if (sanitizedBody.campaignId === '') sanitizedBody.campaignId = null;
+		if (sanitizedBody.partnerId === '') sanitizedBody.partnerId = null;
 		if (sanitizedBody.campaignId) {
 			const target = await Campaign.findOne({ _id: sanitizedBody.campaignId, tenantId: lead.tenantId });
 			if (!target) {
 				res.status(400).json({ success: false, message: 'Campaign not found' });
 				return;
 			}
+		}
+		// Source reassignment via sourceType/partnerId (direct `source` stays server-computed)
+		if (sanitizedBody.sourceType || sanitizedBody.partnerId !== undefined) {
+			const nextType = sanitizedBody.sourceType || (lead as any).sourceType || 'udyam';
+			if (!['udyam', 'self', 'partner'].includes(nextType)) {
+				res.status(400).json({ success: false, message: 'Invalid sourceType' });
+				return;
+			}
+			if (nextType === 'partner') {
+				const pid = sanitizedBody.partnerId !== undefined ? sanitizedBody.partnerId : (lead as any).partnerId;
+				if (!pid) {
+					res.status(400).json({ success: false, message: 'partnerId is required when source is partner' });
+					return;
+				}
+				const partner = await Partner.findOne({ _id: pid, tenantId: lead.tenantId });
+				if (!partner) {
+					res.status(400).json({ success: false, message: 'Partner not found' });
+					return;
+				}
+				sanitizedBody.partnerId = partner._id;
+				(lead as any).source = (partner as any).companyName || (partner as any).name || (partner as any).personName || 'Partner';
+			} else {
+				sanitizedBody.partnerId = null;
+				(lead as any).source = nextType === 'self' ? req.user!.name : 'Udyam Capital';
+			}
+			sanitizedBody.sourceType = nextType;
 		}
 		Object.assign(lead, sanitizedBody);
 
@@ -248,6 +346,7 @@ export const updateLead = async (
 
 		const populated = await Lead.findById(lead._id)
 			.populate("campaignId", "name")
+			.populate("partnerId", "companyName personName partnerType")
 			.populate("notes.createdBy", "name email avatar");
 
 		const changedFields = Object.keys(req.body);
@@ -601,6 +700,14 @@ export const importExcel = async (
 			return;
 		}
 
+		if (rows.length > 2000) {
+			res.status(400).json({
+				success: false,
+				message: "Excel file has too many rows (max 2000 per import)",
+			});
+			return;
+		}
+
 		const leads = [];
 		const errors = [];
 
@@ -626,92 +733,140 @@ export const importExcel = async (
 		]);
 		const existingPhoneSet = new Set(existingPhones.map((l: any) => l.phone));
 		const existingGstSet = new Set(existingGsts.map((l: any) => l.companyGst));
+		const seenPhones = new Set<string>();
+		const seenGsts = new Set<string>();
+
+		// Partner lookup cache for sourceType=partner rows
+		const partnerCache = new Map<string, any>();
+		const resolvePartner = async (key: string): Promise<any> => {
+			const k = key.trim().toLowerCase();
+			if (partnerCache.has(k)) return partnerCache.get(k);
+			const rx = new RegExp(`^${escapeRegExp(key.trim())}$`, "i");
+			const p = await Partner.findOne({
+				tenantId,
+				$or: [{ companyName: rx }, { personName: rx }, { name: rx }],
+			});
+			partnerCache.set(k, p || null);
+			return p || null;
+		};
 
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i];
+			const rowNo = i + 1;
 			try {
-				if (!row.name && !row.Name && !row.NAME) {
-					errors.push({ row: i + 1, message: "Missing name" });
+				const name = pickStr(row, "name", "Name", "NAME");
+				if (!name) {
+					errors.push({ row: rowNo, message: "Missing name (required)" });
 					continue;
 				}
 
-				const phone = String(row.phone || row.Phone || row.PHONE || "").trim();
-				if (phone && existingPhoneSet.has(phone)) {
-					errors.push({ row: i + 1, message: `Duplicate phone: ${phone}` });
+				// Phone → digits, must be 10 when present
+				const rawPhone = pickStr(row, "phone", "Phone", "PHONE");
+				const phone = rawPhone ? rawPhone.replace(/\D/g, "") : "";
+				if (rawPhone && phone.length !== 10) {
+					errors.push({ row: rowNo, message: `Invalid phone "${rawPhone}" (must be 10 digits)` });
+					continue;
+				}
+				if (phone && (existingPhoneSet.has(phone) || seenPhones.has(phone))) {
+					errors.push({ row: rowNo, message: `Duplicate phone: ${phone}` });
 					continue;
 				}
 
-				const gst = String(row.companyGst || row["Company GST"] || row.company_gst || row.GST || row.gst || "").trim().toUpperCase();
-				if (gst && existingGstSet.has(gst)) {
-					errors.push({ row: i + 1, message: `Duplicate GST: ${gst}` });
+				const rawAlt = pickStr(row, "alternatePhone", "Alternate Phone", "alternate_phone");
+				const alternatePhone = rawAlt ? rawAlt.replace(/\D/g, "") : "";
+				if (rawAlt && alternatePhone.length !== 10) {
+					errors.push({ row: rowNo, message: `Invalid alternate phone "${rawAlt}" (must be 10 digits)` });
 					continue;
 				}
 
-				const 				lead = await Lead.create({
+				const emailRaw = pickStr(row, "email", "Email", "EMAIL");
+				const email = emailRaw ? emailRaw.toLowerCase() : undefined;
+				if (email && !EMAIL_RE.test(email)) {
+					errors.push({ row: rowNo, message: `Invalid email "${emailRaw}"` });
+					continue;
+				}
+
+				const gst = pickStr(row, "companyGst", "Company GST", "company_gst", "GST", "gst").toUpperCase();
+				if (gst && gst.length !== 15) {
+					errors.push({ row: rowNo, message: `Invalid GST "${gst}" (must be 15 characters)` });
+					continue;
+				}
+				if (gst && (existingGstSet.has(gst) || seenGsts.has(gst))) {
+					errors.push({ row: rowNo, message: `Duplicate GST: ${gst}` });
+					continue;
+				}
+
+				// PAN auto-derived from GSTIN (chars 3–12) when not given
+				let rowPan = pickStr(row, "companyPan", "Company PAN", "company_pan").toUpperCase();
+				if (!rowPan && gst) rowPan = panFromGstStr(gst);
+
+				const pincode = pickStr(row, "pincode", "Pincode", "PINCODE").replace(/\D/g, "");
+				if (pincode && pincode.length !== 6) {
+					errors.push({ row: rowNo, message: `Invalid pincode "${pincode}" (must be 6 digits)` });
+					continue;
+				}
+
+				const priority = pickStr(row, "priority", "Priority", "PRIORITY").toLowerCase().replace(/_/g, " ") || "medium";
+				if (!LEAD_PRIORITIES.includes(priority)) {
+					errors.push({ row: rowNo, message: `Invalid priority (allowed: ${LEAD_PRIORITIES.join(", ")})` });
+					continue;
+				}
+
+				const status = pickStr(row, "status", "Status", "STATUS").toLowerCase().replace(/[\s-]+/g, "_") || "new";
+				if (!LEAD_STATUSES.includes(status)) {
+					errors.push({ row: rowNo, message: `Invalid status (allowed: ${LEAD_STATUSES.join(", ")})` });
+					continue;
+				}
+
+				// Source attribution: sourceType column wins, else legacy source label, else Udyam Capital
+				const typeRaw = pickStr(row, "sourceType", "Source Type", "source_type").toLowerCase();
+				const legacySource = pickStr(row, "source", "Source", "SOURCE");
+				let sourceType: "udyam" | "self" | "partner" = "udyam";
+				let source = "Udyam Capital";
+				let rowPartnerId: any = undefined;
+				if (typeRaw.startsWith("part")) {
+					const partnerKey = pickStr(row, "partner", "Partner", "PARTNER", "partnerName", "Partner Name", "referredBy", "Referred By");
+					if (!partnerKey) {
+						errors.push({ row: rowNo, message: 'sourceType is "partner" but no partner given (use the "partner" column)' });
+						continue;
+					}
+					const p = await resolvePartner(partnerKey);
+					if (!p) {
+						errors.push({ row: rowNo, message: `Partner not found: "${partnerKey}"` });
+						continue;
+					}
+					sourceType = "partner";
+					rowPartnerId = p._id;
+					source = p.companyName || p.name || p.personName || "Partner";
+				} else if (typeRaw === "self" || (typeRaw && typeRaw === req.user!.name.toLowerCase())) {
+					sourceType = "self";
+					source = req.user!.name;
+				} else if (legacySource) {
+					source = legacySource;
+				}
+
+				const lead = await Lead.create({
 					campaignId,
 					tenantId,
-					name: row.name || row.Name || row.NAME || "",
-					designation: row.designation || row.Designation || "",
-					phone:
-						row.phone || row.Phone || row.PHONE
-							? String(row.phone || row.Phone || row.PHONE)
-							: undefined,
-					alternatePhone:
-						row.alternatePhone ||
-						row["Alternate Phone"] ||
-						row.alternate_phone
-							? String(
-									row.alternatePhone ||
-										row["Alternate Phone"] ||
-										row.alternate_phone,
-								)
-							: undefined,
-					companyName:
-						row.companyName ||
-						row.Company ||
-						row["Company Name"] ||
-						row.company_name ||
-						"",
-					addressLine:
-						row.addressLine ||
-						row["Address Line"] ||
-						row.address_line ||
-						"",
-					city: row.city || row.City || "",
-					state: row.state || row.State || "",
-					pincode:
-						row.pincode || row.Pincode || row.PINCODE
-							? String(row.pincode || row.Pincode || row.PINCODE)
-							: undefined,
-					companyPan:
-						row.companyPan ||
-						row["Company PAN"] ||
-						row.company_pan ||
-						"",
-					companyGst: String(
-						row.companyGst ||
-						row["Company GST"] ||
-						row.company_gst ||
-						row.GST ||
-						row.gst ||
-						""
-					).trim().toUpperCase(),
-					industry: row.industry || row.Industry || "",
-					email:
-						row.email || row.Email || row.EMAIL
-							? String(
-									row.email || row.Email || row.EMAIL,
-								).toLowerCase()
-							: undefined,
-					website: row.website || row.Website || "",
-					priority: (row.priority || row.Priority || "medium")
-						.toLowerCase()
-						.replace("_", " "),
-					source:
-						req.user!.role === "admin"
-							? "Udyam Capital"
-							: req.user!.name,
-					status: row.status || "new",
+					name,
+					designation: pickStr(row, "designation", "Designation"),
+					phone: phone || undefined,
+					alternatePhone: alternatePhone || undefined,
+					companyName: pickStr(row, "companyName", "Company", "Company Name", "company_name"),
+					addressLine: pickStr(row, "addressLine", "Address Line", "address_line"),
+					city: pickStr(row, "city", "City"),
+					state: pickStr(row, "state", "State"),
+					pincode: pincode || undefined,
+					companyPan: rowPan,
+					companyGst: gst,
+					industry: pickStr(row, "industry", "Industry"),
+					email,
+					website: pickStr(row, "website", "Website"),
+					priority,
+					source,
+					sourceType,
+					...(rowPartnerId ? { partnerId: rowPartnerId } : {}),
+					status,
 					callCount: 0,
 					followUpCount: 0,
 					meetingCount: 0,
@@ -720,9 +875,11 @@ export const importExcel = async (
 					notes: [],
 				});
 
+				if (phone) seenPhones.add(phone);
+				if (gst) seenGsts.add(gst);
 				leads.push(lead);
 			} catch (err: any) {
-				errors.push({ row: i + 1, message: err.message });
+				errors.push({ row: rowNo, message: err.message });
 			}
 		}
 
@@ -739,6 +896,7 @@ export const importExcel = async (
 
 		res.status(201).json({
 			success: true,
+			total: rows.length,
 			imported: leads.length,
 			errors,
 			leads,
@@ -769,7 +927,9 @@ export const downloadSampleExcel = async (
 		"website",
 		"alternatePhone",
 		"priority",
-        "status"
+        "status",
+        "sourceType",
+        "partner"
 	];
 	const sampleData = [
     {
@@ -788,7 +948,9 @@ export const downloadSampleExcel = async (
         "website": "https://www.technova.in",
         "alternatePhone": "9876543211",
         "priority": "very_high",
-        "status": "new"
+        "status": "new",
+        "sourceType": "udyam",
+        "partner": ""
     },
     {
         "name": "Priya Mehta",
@@ -806,7 +968,9 @@ export const downloadSampleExcel = async (
         "website": "https://www.greenleaf.co.in",
         "alternatePhone": "9811122244",
         "priority": "high",
-        "status": "attempted"
+        "status": "attempted",
+        "sourceType": "self",
+        "partner": ""
     },
     {
         "name": "Arjun Patel",
@@ -824,7 +988,9 @@ export const downloadSampleExcel = async (
         "website": "https://www.apexmfg.com",
         "alternatePhone": "9898989899",
         "priority": "medium",
-        "status": "connected"
+        "status": "connected",
+        "sourceType": "partner",
+        "partner": "Acme Corp"
     },
     {
         "name": "Sneha Kapoor",
@@ -978,6 +1144,33 @@ export const downloadSampleExcel = async (
 
 	const colWidths = headers.map((h) => ({ wch: Math.max(h.length, 20) }));
 	ws["!cols"] = colWidths;
+	if (ws["!ref"]) (ws as any)["!autofilter"] = { ref: ws["!ref"] };
+
+	const instructions = [
+		["Lead Import – Instructions (read first, then fill the Leads sheet)"],
+		["Fill one lead per row on the Leads sheet. Do not rename the column headers."],
+		[],
+		["Column", "Required?", "Notes"],
+		["name", "Yes", "Full name of the lead"],
+		["phone", "No, but recommended", "10 digits; duplicates (in file or already saved) are skipped with an error"],
+		["email", "No", "Must be a valid email when given"],
+		["companyName", "No", "Company / organisation name"],
+		["designation", "No", "Job title"],
+		["industry", "No", "Free text"],
+		["addressLine / city / state / pincode", "No", "Pincode must be 6 digits when given"],
+		["companyPan", "No", "Auto-filled from companyGst when left blank"],
+		["companyGst", "No", "15 characters; duplicates are skipped with an error"],
+		["website / alternatePhone", "No", "Alternate phone must be 10 digits when given"],
+		["priority", "No", "One of: very high, high, medium, low (default medium)"],
+		["status", "No", "One of: new, attempted, connected, interested, callback_scheduled, meeting_scheduled, not_interested, not_reachable, do_not_call, closed_won, closed_lost (default new)"],
+		["sourceType", "No", "One of: udyam, self, partner (default udyam). udyam = Udyam Capital, self = you"],
+		["partner", "Only when sourceType is partner", "Must exactly match a partner company or person name"],
+		[],
+		["Limits", "", "Max 2000 rows per import. Rows with errors are skipped; the rest are imported."],
+	];
+	const wsHelp = XLSX.utils.aoa_to_sheet(instructions);
+	wsHelp["!cols"] = [{ wch: 34 }, { wch: 34 }, { wch: 90 }];
+	XLSX.utils.book_append_sheet(wb, wsHelp, "Instructions");
 
 	const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
@@ -998,7 +1191,7 @@ export const getLeadCounts = async (
 ): Promise<void> => {
 	try {
 		const tenantId = getTenantId(req.user);
-		const { campaignId, search, industry, source, priority, city, state, pincode } = req.query;
+		const { campaignId, partnerId, search, industry, source, priority, city, state, pincode } = req.query;
 
 		const baseFilter: any = { tenantId };
 		let campaignOr: any[] | null = null;
@@ -1030,6 +1223,7 @@ export const getLeadCounts = async (
 
 		if (industry) baseFilter.industry = industry;
 		if (source) baseFilter.source = source;
+		if (partnerId) baseFilter.partnerId = partnerId;
 		if (priority) baseFilter.priority = priority;
 		if (city) baseFilter.city = city;
 		if (state) baseFilter.state = state;

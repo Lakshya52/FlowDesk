@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
-import { Download, Clock, Mail, Calendar, Trash2, Loader2, HardDrive, Send, Plus } from 'lucide-react';
+import { Upload, Clock, Mail, Calendar, Trash2, Loader2, HardDrive, Send, Plus } from 'lucide-react';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -137,7 +137,7 @@ const BackupPage: React.FC = () => {
           disabled={loading}
           className="btn btn-primary"
         >
-          {loading ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> : <Download style={{ width: 16, height: 16 }} />}
+          {loading ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> : <Upload style={{ width: 16, height: 16 }} />}
           {loading ? 'Generating...' : 'Download Backup Now'}
         </button>
       </div>

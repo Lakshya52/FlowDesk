@@ -10,6 +10,7 @@ export enum EntityType {
     CONTACT = 'contact',
     TEAM = 'team',
     CAMPAIGN = 'campaign',
+    PARTNER = 'partner',
     LEAD = 'lead',
 }
 

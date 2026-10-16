@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-    ScrollText, Search, Filter, Loader2, Clock, Target, PhoneCall,
+    ScrollText, Search, Filter, Loader2, Clock, Target, PhoneCall, Handshake,
     RefreshCw, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,7 +13,7 @@ interface ActivityLog {
     _id: string;
     action: string;
     user: { _id: string; name: string; email: string; avatar?: string };
-    entityType: 'campaign' | 'lead';
+    entityType: 'campaign' | 'lead' | 'partner';
     entityId: string;
     metadata?: Record<string, any>;
     createdAt: string;
@@ -22,7 +22,16 @@ interface ActivityLog {
 const ENTITY_ICONS: Record<string, React.ReactNode> = {
     campaign: <Target size={14} />,
     lead: <PhoneCall size={14} />,
+    partner: <Handshake size={14} />,
 };
+
+const ENTITY_COLORS: Record<string, { border: string; bg: string; text: string }> = {
+    campaign: { border: 'var(--color-primary)', bg: 'var(--color-primary-light)', text: 'var(--color-primary)' },
+    lead: { border: '#22c55e', bg: '#dcfce7', text: '#16a34a' },
+    partner: { border: 'var(--color-warning)', bg: 'var(--color-warning-light)', text: 'var(--color-warning)' },
+};
+
+const entityColors = (t: string) => ENTITY_COLORS[t] || ENTITY_COLORS.lead;
 
 const formatDateShort = (d?: string) => {
     if (!d) return '';
@@ -97,7 +106,7 @@ const CrmLogs = () => {
         if (m.notePreview) rows.push({ label: 'Note Preview', value: m.notePreview });
         if (m.callCount) rows.push({ label: 'Call Count', value: String(m.callCount) });
         if (m.fields) rows.push({ label: 'Changed Fields', value: Array.isArray(m.fields) ? m.fields.join(', ') : m.fields });
-        if (m.count) rows.push({ label: 'Leads Imported', value: String(m.count) });
+        if (m.count) rows.push({ label: log.action.includes('partners imported') ? 'Partners Imported' : 'Leads Imported', value: String(m.count) });
         if (m.errors !== undefined) rows.push({ label: 'Errors', value: String(m.errors) });
 
         if (rows.length === 0) return null;
@@ -170,6 +179,7 @@ const CrmLogs = () => {
                         <option value="">All Types</option>
                         <option value="campaign">Campaigns</option>
                         <option value="lead">Leads</option>
+                        <option value="partner">Partners</option>
                     </select>
                 </div>
             </div>
@@ -183,7 +193,7 @@ const CrmLogs = () => {
                     <ScrollText size={48} style={{ color: 'var(--color-text-tertiary)', margin: '0 auto 16px', opacity: 0.3 }} />
                     <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: 8 }}>No Activity Logs</h3>
                     <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
-                        Campaign and lead activity will appear here as actions are performed.
+                        Campaign, lead and partner activity will appear here as actions are performed.
                     </p>
                 </div>
             ) : (
@@ -194,7 +204,7 @@ const CrmLogs = () => {
                         return (
                             <div key={log._id} className="card" style={{
                                 padding: '16px 20px',
-                                borderLeft: `4px solid ${log.entityType === 'campaign' ? 'var(--color-primary)' : '#22c55e'}`,
+                                borderLeft: `4px solid ${entityColors(log.entityType).border}`,
                                 cursor: hasMeta ? 'pointer' : 'default',
                                 borderRadius: 12,
                                 transition: 'box-shadow 0.15s',
@@ -222,8 +232,8 @@ const CrmLogs = () => {
                                         <span style={{
                                             display: 'inline-flex', alignItems: 'center', gap: 4,
                                             fontSize: '0.68rem', fontWeight: 600, padding: '3px 8px', borderRadius: 6,
-                                            background: log.entityType === 'campaign' ? 'var(--color-primary-light)' : '#dcfce7',
-                                            color: log.entityType === 'campaign' ? 'var(--color-primary)' : '#16a34a',
+                                            background: entityColors(log.entityType).bg,
+                                            color: entityColors(log.entityType).text,
                                             whiteSpace: 'nowrap',
                                         }}>
                                             {ENTITY_ICONS[log.entityType]}

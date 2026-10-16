@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import DrilldownModal from "../components/reports/DrilldownModal";
 import {
-  Download,
+  Upload,
   FileText,
   BarChart3,
   PieChart,
@@ -184,7 +184,7 @@ const ReportsPage = (): React.JSX.Element => {
                 disabled={exporting}
                 className="btn btn-primary h-12 px-6 gap-3 shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-bold text-sm disabled:opacity-60 disabled:pointer-events-none"
               >
-                <Download size={18} className={exporting ? "animate-bounce" : ""} />
+                <Upload size={16} className={exporting ? "animate-bounce" : ""} />
                 <span>{exporting ? "Exporting…" : "Export Report"}</span>
                 <ChevronDown
                   size={16}

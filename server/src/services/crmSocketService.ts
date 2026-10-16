@@ -23,3 +23,15 @@ export const emitCampaignUpdated = (tenantId: string, campaign: any) => {
 export const emitCampaignDeleted = (tenantId: string, campaignId: string) => {
   io.to(`tenant_${tenantId}`).emit("crm:campaign:deleted", campaignId);
 };
+
+export const emitPartnerCreated = (tenantId: string, partner: any) => {
+  io.to(`tenant_${tenantId}`).emit("crm:partner:created", partner);
+};
+
+export const emitPartnerUpdated = (tenantId: string, partner: any) => {
+  io.to(`tenant_${tenantId}`).emit("crm:partner:updated", partner);
+};
+
+export const emitPartnerDeleted = (tenantId: string, partnerId: string) => {
+  io.to(`tenant_${tenantId}`).emit("crm:partner:deleted", partnerId);
+};

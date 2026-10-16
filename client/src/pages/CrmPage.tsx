@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import {
   LayoutDashboard,
   Megaphone,
+  Handshake,
   PhoneCall,
   ClipboardList,
   ScrollText,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import CrmDashboard from "../components/crm/CrmDashboard";
 import Campaigns from "../components/crm/Campaigns";
+import Partners from "../components/crm/Partners";
 import DialQueue from "../components/crm/DialQueue";
 // import Plan from "../components/crm/Plan";
 import CrmLogs from "../components/crm/CrmLogs";
@@ -32,6 +34,13 @@ const SECTIONS = [
     icon: <Megaphone size={18} />,
     component: Campaigns,
     description: "Manage and track campaigns",
+  },
+  {
+    id: "partners",
+    label: "Partners",
+    icon: <Handshake size={18} />,
+    component: Partners,
+    description: "Manage and track partners",
   },
   {
     id: "dial",

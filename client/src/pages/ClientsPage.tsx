@@ -540,7 +540,7 @@ const ClientsPage: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap gap-2.5 items-center">
                     <button className="btn btn-secondary btn-sm" onClick={() => setShowImport(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <Upload size={16} />Import
+                        <Download size={16} />Import
                     </button>
 
                     <div style={{ position: 'relative' }}>
@@ -550,7 +550,7 @@ const ClientsPage: React.FC = () => {
                                 onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
                                 style={{ display: "flex", alignItems: "center", gap: 6 }}
                             >
-                                <Download size={16} />
+                                <Upload size={16} />
                                 {isSelectDataMode ? `Export Selected (${selectedCompanyIds.size})` : 'Export'}
                             </button>
 

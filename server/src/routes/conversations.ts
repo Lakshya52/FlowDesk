@@ -14,7 +14,7 @@ import {
     putConversationKeys
 } from '../controllers/conversationController';
 import { authenticate } from '../middlewares/auth';
-import { upload } from '../middlewares/upload';
+import { uploadDoc } from '../middlewares/upload';
 
 const router = Router();
 
@@ -28,7 +28,7 @@ router.get('/:id/messages', getMessages);
 router.get('/:id/keys', getConversationKeys);
 router.put('/:id/keys', putConversationKeys);
 router.post('/:id/read', markConversationRead);
-router.post('/:id/messages', upload.single('file'), sendMessage);
+router.post('/:id/messages', uploadDoc.single('file'), sendMessage);
 router.post('/messages/:messageId/react', toggleReaction);
 router.post('/messages/:messageId/forward', forwardMessage);
 router.put('/messages/:messageId', editMessage);

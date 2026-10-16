@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download, Search, FileSpreadsheet } from 'lucide-react';
+import { X, Upload, Search, FileSpreadsheet } from 'lucide-react';
 
 interface DrilldownModalProps {
     isOpen: boolean;
@@ -202,7 +202,7 @@ const DrilldownModal: React.FC<DrilldownModalProps> = ({ isOpen, onClose, title,
                             disabled={!rows.length}
                             className="h-10 px-5 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs font-bold uppercase tracking-wider text-text-secondary transition-all flex items-center gap-2.5 shadow-sm group/export disabled:opacity-50"
                         >
-                            <Download size={16} className="group-hover/export:translate-y-0.5 transition-transform" /> Export CSV
+                            <Upload size={16} className="group-hover/export:translate-y-0.5 transition-transform" /> Export CSV
                         </button>
                         <button
                             onClick={onClose}

@@ -4,6 +4,7 @@ import ActivityLog, { EntityType } from "../models/ActivityLog";
 import { AuthRequest } from "../middlewares/auth";
 import mongoose from "mongoose";
 import { uploadToGridFS, deleteFromGridFS } from "../utils/gridfs";
+import { checkFileAccess } from "../utils/fileAccess";
 import { getTenantUserIds } from "../utils/tenant";
 
 export const uploadFile = async (
@@ -118,6 +119,57 @@ export const downloadFile = async (
     );
 
     const downloadStream = bucket.openDownloadStreamByName(attachment.fileName);
+    downloadStream.pipe(res);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Tenant-checked download by GridFS filename. Used for sensitive files
+// (e.g. partner agreements) by clients that can send an Authorization
+// header. Filenames are unique per upload, so responses are immutable.
+export const downloadByName = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const access = await checkFileAccess(String(req.params.filename), req.user);
+    if (access === "not-found") {
+      res.status(404).json({ message: "File not found" });
+      return;
+    }
+    if (access === "forbidden") {
+      res.status(403).json({ message: "Not authorized to access this file" });
+      return;
+    }
+
+    if (!mongoose.connection.db) {
+      res.status(500).json({ message: "Database connection not established" });
+      return;
+    }
+
+    const filename = String(req.params.filename).replace(/^\/uploads\//, "");
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: "uploads",
+    });
+
+    const files = await bucket.find({ filename }).toArray();
+    if (!files || files.length === 0) {
+      res.status(404).json({ message: "File no longer exists in database" });
+      return;
+    }
+
+    const stored = files[0] as any;
+    if (stored.contentType) {
+      res.setHeader("Content-Type", stored.contentType);
+    } else {
+      res.setHeader("Content-Type", "application/octet-stream");
+    }
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+
+    const downloadStream = bucket.openDownloadStreamByName(filename);
     downloadStream.pipe(res);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
