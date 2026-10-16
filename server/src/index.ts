@@ -298,15 +298,20 @@ io.use(async (socket, next) => {
     const decoded = jwt.default.verify(
       token as string,
       process.env.JWT_SECRET!,
-    ) as { userId: string; tenantId: string };
+    ) as { sub?: string; userId?: string; tenantId?: string };
+    const { resolveTokenIdentity } = await import("./utils/token");
+    const identity = resolveTokenIdentity(decoded);
+    if (!identity) {
+      return next(new Error("Invalid token"));
+    }
     // Load role + active state so room guards and presence are trustworthy
     const User = (await import("./models/User")).default;
-    const user = await User.findById(decoded.userId).select("role isActive").lean();
+    const user = await User.findById(identity.userId).select("role isActive").lean();
     if (!user || !(user as any).isActive) {
       return next(new Error("User not found or inactive"));
     }
-    socket.data.userId = decoded.userId;
-    socket.data.tenantId = decoded.tenantId;
+    socket.data.userId = identity.userId;
+    socket.data.tenantId = identity.tenantId;
     socket.data.role = (user as any).role;
     next();
   } catch {

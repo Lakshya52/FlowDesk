@@ -2,6 +2,7 @@ import { Response } from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { encryptTokenSubject } from "../utils/token";
 import User from "../models/User";
 // import Company from '../models/Company';
 import Tenant from "../models/Tenant";
@@ -13,9 +14,11 @@ import {
 } from "../services/emailService";
 
 const generateToken = (userId: string, tenantId?: string): string => {
-	const payload: any = { userId };
-	if (tenantId) payload.tenantId = tenantId;
-	return jwt.sign(payload, process.env.JWT_SECRET!, {
+	// Opaque subject: userId/tenantId are AES-256-GCM encrypted so jwt.io
+	// only shows ciphertext, not raw IDs. Verified + decrypted in
+	// middlewares/auth.ts and the socket auth in index.ts.
+	const sub = encryptTokenSubject(userId, tenantId);
+	return jwt.sign({ sub }, process.env.JWT_SECRET!, {
 		expiresIn: process.env.JWT_EXPIRES_IN || "7d",
 	} as jwt.SignOptions);
 };

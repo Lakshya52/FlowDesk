@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import User, { IUser } from "../models/User";
+import { resolveTokenIdentity } from "../utils/token";
 
 export interface AuthRequest extends Request {
 	user?: IUser;
@@ -23,9 +24,15 @@ export const authenticate = async (
 		const decoded = jwt.verify(
 			token,
 			process.env.JWT_SECRET!,
-		) as { userId: string; tenantId: string };
+		) as { sub?: string; userId?: string; tenantId?: string };
 
-		const user = await User.findById(decoded.userId)
+		const identity = resolveTokenIdentity(decoded);
+		if (!identity) {
+			res.status(401).json({ message: "Invalid or expired token" });
+			return;
+		}
+
+		const user = await User.findById(identity.userId)
 			.select("-password")
 			.populate("tenantId");
 
@@ -35,8 +42,8 @@ export const authenticate = async (
 		}
 
 		// If tenantId was deleted from DB, fall back to the JWT value
-		if (!user.tenantId && decoded.tenantId) {
-			(user as any).tenantId = { _id: decoded.tenantId };
+		if (!user.tenantId && identity.tenantId) {
+			(user as any).tenantId = { _id: identity.tenantId };
 		}
 
 		req.user = user;
