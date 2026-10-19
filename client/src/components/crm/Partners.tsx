@@ -1277,17 +1277,12 @@ const Partners = () => {
 										<span className="flex-1 min-w-0">
 											Name
 										</span>
-										<span className="w-28 shrink-0">
+										<span className="w-24 shrink-0">
 											Phone
 										</span>
 										<span className="flex-1 min-w-0">
 											Company
 										</span>
-										{quickAddInvalidCount > 0 && (
-											<span className="w-16 shrink-0 text-right">
-												Status
-											</span>
-										)}
 									</div>
 									<div className="max-h-44 overflow-y-auto">
 										{quickAddParsed
@@ -1295,38 +1290,28 @@ const Partners = () => {
 											.map((r) => (
 												<div
 													key={r.row}
-													className={`px-3 py-1.5 text-[0.75rem] flex items-baseline gap-2 border-t border-(--color-border) first:border-t-0 ${r.error ? "text-(--color-danger)" : ""}`}
+													className={`px-3 py-1.5 text-[0.75rem] flex items-center gap-2 border-t border-(--color-border) first:border-t-0 ${r.error ? "text-(--color-danger)" : ""}`}
 												>
 													<span className="text-(--color-text-tertiary) text-[0.65rem] w-5 shrink-0 text-right">
 														{r.row}
 													</span>
 													{r.error ? (
-														<span className="truncate">
-															{r.name ||
-																"(empty)"}{" "}
-															— {r.error}
+														<span className="flex-1 min-w-0 truncate">
+															{r.name || "(empty)"} —{" "}
+															{r.error}
 														</span>
 													) : (
-														<span className="truncate text-(--color-text)">
-															<span className="font-semibold">
+														<>
+															<span className="flex-1 min-w-0 truncate font-semibold text-(--color-text)">
 																{r.name}
 															</span>
-															{r.phone && (
-																<span className="text-(--color-text-secondary)">
-																	{" "}
-																	· {r.phone}
-																</span>
-															)}
-															{r.companyName && (
-																<span className="text-(--color-text-secondary)">
-																	{" "}
-																	·{" "}
-																	{
-																		r.companyName
-																	}
-																</span>
-															)}
-														</span>
+															<span className="w-24 shrink-0 truncate text-(--color-text-secondary)">
+																{r.phone || "—"}
+															</span>
+															<span className="flex-1 min-w-0 truncate text-(--color-text-secondary)">
+																{r.companyName || "—"}
+															</span>
+														</>
 													)}
 												</div>
 											))}
