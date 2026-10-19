@@ -41,7 +41,7 @@ client/
 │   ├── components/
 │   │   ├── layout/             # AppLayout, Sidebar (navItems + allowedTabs), Header (Ctrl+K search + bell)
 │   │   ├── calendar/           # 13 files: CalendarSidebar/Toolbar, Month/Week/Day/Year/AgendaView, EventModal/Drawer/Chip, CalendarModal/ShareModal, ImportModal
-│   │   ├── crm/                # CrmDashboard, Campaigns, DialQueue, LeadDetailModal, FieldVisits/* (List/Map/RoutePlanner/CheckIn/Out/Expenses/Remarks), Schedule, Summary, CrmLogs
+│   │   ├── crm/                # CrmDashboard, Databases, DialQueue, LeadDetailModal, FieldVisits/* (List/Map/RoutePlanner/CheckIn/Out/Expenses/Remarks), Schedule, Summary, CrmLogs
 │   │   ├── assignments/        # assignment-scoped components
 │   │   ├── reports/            # FilterBar, EmployeeTracking/Workload/Activity/ProjectHealthReport, DrilldownModal, ReportStates
 │   │   └── common/             # Buddy (SSE stream), Avatar, AvatarCropModal, CameraCapture, SignaturePad, RichTextEditor, Modal, FilePreviewModal, CanvasNavigator, NoteExportMenu, Navbar, Footer, WhatsNewModal
@@ -90,7 +90,7 @@ npm run lint     # eslint .
 
 ## Key Patterns
 
-- **Socket:** `getSocket()` singleton `io(CLIENT_URL, { auth:{ token }})`; teardown `disconnectSocket()`. Subscriptions: `useTaskSocket` tenant `task_*/board_*` → invalidate `["tasks","boards"]`; `useCrmSocket` `lead_*/campaign_*`; `useFieldVisitSocket` `field_visit_*` → toast + refresh (`hooks/*`).
+- **Socket:** `getSocket()` singleton `io(CLIENT_URL, { auth:{ token }})`; teardown `disconnectSocket()`. Subscriptions: `useTaskSocket` tenant `task_*/board_*` → invalidate `["tasks","boards"]`; `useCrmSocket` `lead_*/database_*`; `useFieldVisitSocket` `field_visit_*` → toast + refresh (`hooks/*`).
 - **Location:** `useLocationTracking({ visitId, enabled })` `navigator.geolocation.watchPosition` every 5s → `POST /field-visits/:id/location {lat,lng,accuracy}` (`hooks/useLocationTracking.ts:11`).
 - **Reports:** `useReportQuery<T> L11` wraps `useQuery` 5-min cache for `GET /reports/*` + `exportReport` blob helper.
 - **Docs:** `Documentation.tsx:56` slug param renders `content.ts` markdown; `Releases.tsx:28` `categorizeAsset L56 / buildDownloads L98` OS buckets for `WhatsNewModal`.

@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export interface ICampaign extends Document {
+export interface IDatabase extends Document {
     name: string;
     purpose: string;
     description?: string;
@@ -11,7 +11,7 @@ export interface ICampaign extends Document {
     updatedAt: Date;
 }
 
-const campaignSchema = new Schema<ICampaign>(
+const databaseSchema = new Schema<IDatabase>(
     {
         name: { type: String, required: true, trim: true },
         purpose: { type: String, required: true, trim: true },
@@ -23,7 +23,7 @@ const campaignSchema = new Schema<ICampaign>(
     { timestamps: true }
 );
 
-campaignSchema.index({ tenantId: 1 });
-campaignSchema.index({ name: 1 });
+databaseSchema.index({ tenantId: 1 });
+databaseSchema.index({ name: 1 });
 
-export default mongoose.model<ICampaign>('Campaign', campaignSchema);
+export default mongoose.model<IDatabase>('Database', databaseSchema);

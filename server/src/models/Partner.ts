@@ -18,6 +18,10 @@ export interface IPartner extends Document {
     agreementFilePath?: string;
     agreementFileType?: string;
     agreementFileSize?: number;
+    // Agreement status (set via the "Is an agreement signed?" question on the form)
+    agreementSigned?: boolean;
+    // CA flag
+    isCA?: boolean;
     // Legacy (kept for old documents)
     name?: string;
     people?: mongoose.Types.ObjectId[];
@@ -43,6 +47,10 @@ const partnerSchema = new Schema<IPartner>(
         agreementFilePath: { type: String },
         agreementFileType: { type: String },
         agreementFileSize: { type: Number },
+        // Agreement status
+        agreementSigned: { type: Boolean, default: false },
+        // CA flag
+        isCA: { type: Boolean, default: false },
         // Legacy
         name: { type: String, trim: true },
         people: [{ type: Schema.Types.ObjectId, ref: 'User' }],

@@ -862,7 +862,7 @@ input, textarea, select, button, a-button, .btn, [role="button"], a {
   font-family: inherit !important;
   font-weight: 500 !important;
   line-height: 1.4 !important;
-  max-width: 360px !important;
+  max-width: min(360px, calc(100vw - 32px)) !important;
 }
 
 .app-toast > div:first-child {

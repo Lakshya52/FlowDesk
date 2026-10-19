@@ -115,6 +115,20 @@ interface NavBreakItem {
 
 type NavItem = NavLinkItem | NavBreakItem;
 
+/// True when `path` is inside the branch rooted at `to` (exact or child route).
+const isBranchPath = (path: string, to: string): boolean =>
+	path === to || path.startsWith(to + "/");
+
+// Stored permissions may still hold pre-rename tab paths — map them onto the
+// new routes so existing non-admin users keep access to renamed sections.
+const LEGACY_TAB_ALIASES: Record<string, string> = {
+	"/crm/conversions": "/crm/files",
+	"/crm/conversions/docs-structure": "/crm/files/docs-structure",
+};
+
+export const normalizeTab = (tab: string): string =>
+	LEGACY_TAB_ALIASES[tab] || tab;
+
 export const navItems: NavItem[] = [
 	{ to: "/dashboard", icon: LayoutDashboardIcon, label: "Dashboard" },
 	{
@@ -123,14 +137,37 @@ export const navItems: NavItem[] = [
 		label: "CRM",
 		subItems: [
 			{ to: "/crm/dashboard", label: "Overview" },
+			{ to: "/crm/databases", label: "Databases" },
 			{ to: "/crm/partners", label: "Channel Partners" },
-			{ to: "/crm/campaigns", label: "Campaigns" },
-			{ to: "/crm/dial", label: "Dial Queue" },
-			{ to: "/crm/schedule", label: "Work Schedule" },
-			// { to: "/crm/plan", label: "Plan" },
-			{ to: "/crm/field-visits", label: "Field Visits" },
-			/* will show to admins */ { to: "/crm/summary", label: "Summary" },
-			/* will show to admins */ { to: "/crm/logs", label: "Logs" },
+			{
+				to: "/crm/dial",
+				label: "Leads",
+				subItems: [
+					{ to: "/crm/dial/leads-overview", label: "Leads Overview" },
+					{ to: "/crm/dial", label: "Dial Queue" },
+				],
+			},
+			// { to: "/crm/schedule", label: "Work Schedule" }, // removed as of now dated 19-10-2026 
+			// { to: "/crm/field-visits", label: "Field Visits" }, // removed as of now dated 19-10-2026 
+			// { to: "/crm/plan", label: "Plan" }, // removed was very early stage and not used by anyone dated
+			{
+				to: "/crm/files",
+				label: "Conversions",
+				subItems: [
+					{
+						to: "/crm/files/overview",
+						label: "Conversion Overview",
+					},
+					{ to: "/crm/files", label: "Files" },
+					{
+						to: "/crm/files/docs-structure",
+						label: "Docs Structure",
+						adminOnly: true,
+					},
+				],
+			},
+			/* will show to admins */ // { to: "/crm/summary", label: "Summary" },
+			/* will show to admins */ // { to: "/crm/logs", label: "Logs" },
 		],
 	},
 	{ break: true },
@@ -165,6 +202,9 @@ export const navItems: NavItem[] = [
 			{ to: "/reports/workload", label: "Workload" },
 			{ to: "/reports/activity", label: "User Activity" },
 			{ to: "/reports/project-health", label: "Project Health" },
+
+			{ to: "/crm/summary", label: "CRM Summary" },
+			{ to: "/crm/logs", label: "CRM Logs" },
 		],
 	},
 	{ break: true },
@@ -177,9 +217,10 @@ export const getFirstAllowedRoute = (user: any): string => {
 	if (!user) return "/dashboard";
 	if (user.role === "admin") return "/dashboard";
 
-	const allowed =
+	const allowed = (
 		user.permissions?.allowedTabs ??
-		navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to);
+		navItems.filter((n): n is NavLinkItem => !n.break).map((n) => n.to)
+	).map(normalizeTab);
 
 	// Check parent items first
 	const firstParentMatch = navItems.find(
@@ -216,11 +257,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 		user?.role === "admin"
 			? navItems
 			: navItems.filter((item) => {
-					const allowedTabs =
+					const allowedTabs = (
 						user?.permissions?.allowedTabs ??
 						navItems
 							.filter((n): n is NavLinkItem => !n.break)
-							.map((n) => n.to);
+							.map((n) => n.to)
+					).map(normalizeTab);
 					if (item.break) return true;
 					if (allowedTabs.includes(item.to)) return true;
 					if (
@@ -234,10 +276,20 @@ const Sidebar: React.FC<SidebarProps> = ({
 				});
 
 	const toggleExpand = (to: string) => {
-		setExpandedItems((prev) => ({
-			...prev,
-			[to]: !prev[to],
-		}));
+		setExpandedItems((prev) => {
+			const next = { ...prev, [to]: !prev[to] };
+			// Collapsing a top-level section also resets its nested branches,
+			// so reopening it shows every level expanded again.
+			if (!next[to]) {
+				const parent = visibleNavItems.find(
+					(n): n is NavLinkItem => !n.break && n.to === to,
+				);
+				parent?.subItems?.forEach((sub) => {
+					if (sub.subItems?.length) delete next[sub.to];
+				});
+			}
+			return next;
+		});
 	};
 	const [hoveredItem, setHoveredItem] = useState<NavLinkItem | null>(null);
 	const [popupTop, setPopupTop] = useState(0);
@@ -751,11 +803,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 													sub.subItems.length > 0;
 												const isNestedExpanded =
 													expandedItems[sub.to] ??
-													(location.pathname.startsWith(
-														sub.to + "/",
-													) ||
-														location.pathname ===
-															sub.to);
+													true;
+												const isBranchActive =
+													isBranchPath(
+														location.pathname,
+														sub.to,
+													);
 												return (
 													<div
 														key={sub.to}
@@ -782,37 +835,21 @@ const Sidebar: React.FC<SidebarProps> = ({
 																	left: 0,
 																	top: 0,
 																	bottom:
-																		isLast &&
-																		!(
-																			hasNested &&
-																			isNestedExpanded
-																		)
+																		isLast
 																			? "50%"
 																			: "-4px",
 																	borderLeft:
 																		"2px solid var(--color-border)",
 																	borderBottom:
-																		isLast &&
-																		!(
-																			hasNested &&
-																			isNestedExpanded
-																		)
+																		isLast
 																			? "2px solid var(--color-border)"
 																			: "none",
 																	borderBottomLeftRadius:
-																		isLast &&
-																		!(
-																			hasNested &&
-																			isNestedExpanded
-																		)
+																		isLast
 																			? "8px"
 																			: "0",
 																	width:
-																		isLast &&
-																		!(
-																			hasNested &&
-																			isNestedExpanded
-																		)
+																		isLast
 																			? "20px"
 																			: "0",
 																}}
@@ -861,6 +898,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 																	<span
 																		style={{
 																			flex: 1,
+																			fontWeight:
+																				isBranchActive
+																					? 600
+																					: 500,
+																			color: isBranchActive
+																				? "var(--color-primary)"
+																				: "inherit",
 																		}}
 																	>
 																		{
@@ -940,7 +984,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 																<div
 																	style={{
 																		marginLeft:
-																			"44px",
+																			"0px",
 																		display:
 																			"flex",
 																		flexDirection:
@@ -982,44 +1026,63 @@ const Sidebar: React.FC<SidebarProps> = ({
 																								"center",
 																						}}
 																					>
-																						<div
-																							style={{
-																								position:
-																									"absolute",
-																								left: 0,
-																								top: 0,
-																								bottom: isNestedLast
-																									? "50%"
-																									: "-4px",
-																								borderLeft:
-																									"2px solid var(--color-border)",
-																								borderBottom:
-																									isNestedLast
-																										? "2px solid var(--color-border)"
-																										: "none",
-																								borderBottomLeftRadius:
-																									isNestedLast
-																										? "8px"
-																										: "0",
-																								width: isNestedLast
-																									? "20px"
-																									: "0",
-																							}}
-																						/>
-																						{!isNestedLast && (
+																																												{/* Main chain stem (x = 0): keeps the section's vertical line
+																						    unbroken while more items follow below. When this branch is
+																						    the last thing in the section, the chain already closed with
+																						    the elbow on the parent's own row, so no stem is drawn here. */}
+																						{!isLast && (
 																							<div
 																								style={{
-																									position:
-																										"absolute",
+																									position: "absolute",
 																									left: 0,
-																									top: "50%",
-																									width: "20px",
-																									borderTop:
-																										"2px solid var(--color-border)",
+																									top: 0,
+																									bottom: "-4px",
+																									borderLeft: "2px solid var(--color-border)",
 																								}}
 																							/>
 																						)}
+																																												{/* Branch from the parent item: drops from under the parent's
+																						    label (x = 36) - not from the stem - exactly like the main
+																						    chain hangs from its top-level item (e.g. CRM). The last
+																						    item of the branch always curves into its label with the
+																						    closing elbow. */}
+																						{isNestedLast ? (
+																							<div
+																								style={{
+																									position: "absolute",
+																									left: "36px",
+																									top: 0,
+																									bottom: "50%",
+																									borderLeft: "2px solid var(--color-border)",
+																									borderBottom: "2px solid var(--color-border)",
+																									borderBottomLeftRadius: "8px",
+																									width: "8px",
+																								}}
+																							/>
+																						) : (
+																							<>
+																								<div
+																									style={{
+																										position: "absolute",
+																										left: "36px",
+																										top: 0,
+																										bottom: "-4px",
+																										borderLeft: "2px solid var(--color-border)",
+																									}}
+																								/>
+																								<div
+																									style={{
+																										position: "absolute",
+																										left: "36px",
+																										top: "50%",
+																										width: "8px",
+																										borderTop: "2px solid var(--color-border)",
+																									}}
+																								/>
+																							</>
+																						)}
 																						<NavLink
+																							end
 																							to={
 																								nested.to
 																							}
@@ -1027,13 +1090,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 																								isActive,
 																							}) => ({
 																								marginLeft:
-																									"24px",
+																									"44px",
 																								padding:
 																									"7px 10px",
 																								borderRadius:
 																									"6px",
 																								fontSize:
-																									"0.75rem",
+																									"0.8125rem",
 																								fontWeight:
 																									isActive
 																										? 600
@@ -1115,10 +1178,39 @@ const Sidebar: React.FC<SidebarProps> = ({
 									user?.role === "manager",
 							)
 							.map((sub) => (
-								<NavLink
-									key={sub.to}
-									to={sub.to}
-									onClick={() => setHoveredItem(null)}
+								<React.Fragment key={sub.to}>
+									{sub.subItems?.length ? (
+										<div
+											style={{
+												display: "block",
+												padding: "8px 12px",
+												borderRadius: "6px",
+												fontSize: "0.875rem",
+												fontWeight:
+													isBranchPath(
+														location.pathname,
+														sub.to,
+													)
+														? 600
+														: 400,
+												color: isBranchPath(
+													location.pathname,
+													sub.to,
+												)
+													? "var(--color-primary)"
+													: "var(--color-text-secondary)",
+												whiteSpace: "nowrap",
+												cursor: "default",
+											}}
+										>
+											{sub.label}
+										</div>
+									) : (
+									<NavLink
+										to={sub.to}
+										onClick={() =>
+											setHoveredItem(null)
+										}
 									style={({ isActive }) => ({
 										display: "block",
 										padding: "8px 12px",
@@ -1155,6 +1247,46 @@ const Sidebar: React.FC<SidebarProps> = ({
 								>
 									{sub.label}
 								</NavLink>
+									)}
+								{sub.subItems
+									?.filter(
+										(n) =>
+											!n.adminOnly ||
+											user?.role === "admin" ||
+											user?.role === "manager",
+									)
+									.map((nested) => (
+										<NavLink
+											key={nested.to}
+											end
+											to={nested.to}
+											onClick={() =>
+												setHoveredItem(null)
+											}
+											style={({
+												isActive,
+											}) => ({
+												display: "block",
+												padding:
+													"7px 12px 7px 26px",
+												borderRadius: "6px",
+												fontSize: "0.875rem",
+												fontWeight: isActive
+													? 600
+													: 400,
+												color: isActive
+													? "var(--color-primary)"
+													: "var(--color-text-tertiary)",
+												textDecoration: "none",
+												whiteSpace: "nowrap",
+												transition:
+													"all 0.15s ease",
+											})}
+										>
+											{nested.label}
+										</NavLink>
+									))}
+								</React.Fragment>
 							))}
 					</div>
 				)}

@@ -15,10 +15,13 @@ export interface IMeetingLog {
     scheduledAt: Date;
     createdAt: Date;
     status: 'scheduled' | 'done' | 'canceled';
+    mode?: 'virtual' | 'physical';
+    location?: string;
+    link?: string;
 }
 
 export interface ILead extends Document {
-    campaignId: mongoose.Types.ObjectId;
+    databaseId: mongoose.Types.ObjectId;
     tenantId: mongoose.Types.ObjectId;
     name: string;
     designation?: string;
@@ -38,6 +41,8 @@ export interface ILead extends Document {
     source: string;
     sourceType?: 'udyam' | 'self' | 'partner';
     partnerId?: mongoose.Types.ObjectId;
+    product?: string;
+    productId?: mongoose.Types.ObjectId;
     status: 'new' | 'attempted' | 'connected' | 'interested' | 'callback_scheduled' | 'meeting_scheduled' | 'not_interested' | 'not_reachable' | 'do_not_call' | 'closed_won' | 'closed_lost';
     callCount: number;
     lastCallAt?: Date;
@@ -46,6 +51,10 @@ export interface ILead extends Document {
     scheduleType?: 'follow_up' | 'meeting';
     meetingStatus?: 'scheduled' | 'done' | 'canceled';
     meetingAt?: Date;
+    // A meeting is either online (link) or in person (location).
+    meetingMode?: 'virtual' | 'physical';
+    meetingLocation?: string;
+    meetingLink?: string;
     followUpCount: number;
     meetingCount: number;
     followUpLogs: IFollowUpLog[];
@@ -57,7 +66,7 @@ export interface ILead extends Document {
 
 const leadSchema = new Schema<ILead>(
     {
-        campaignId: { type: Schema.Types.ObjectId, ref: 'Campaign' },
+        databaseId: { type: Schema.Types.ObjectId, ref: 'Database' },
         tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true },
         name: { type: String, required: true, trim: true },
         designation: { type: String, trim: true },
@@ -88,6 +97,10 @@ const leadSchema = new Schema<ILead>(
             default: 'udyam',
         },
         partnerId: { type: Schema.Types.ObjectId, ref: 'Partner' },
+        // Product the partner gave this lead for (id filled when the name
+        // matches a LoanProduct in the catalog)
+        product: { type: String, trim: true },
+        productId: { type: Schema.Types.ObjectId, ref: 'LoanProduct' },
         status: {
             type: String,
             enum: [
@@ -112,6 +125,9 @@ const leadSchema = new Schema<ILead>(
         scheduleType: { type: String, enum: ['follow_up', 'meeting'] },
         meetingStatus: { type: String, enum: ['scheduled', 'done', 'canceled'], default: 'scheduled' },
         meetingAt: { type: Date },
+        meetingMode: { type: String, enum: ['virtual', 'physical'] },
+        meetingLocation: { type: String, trim: true },
+        meetingLink: { type: String, trim: true },
         followUpCount: { type: Number, default: 0 },
         meetingCount: { type: Number, default: 0 },
         followUpLogs: [
@@ -125,6 +141,9 @@ const leadSchema = new Schema<ILead>(
                 scheduledAt: { type: Date, required: true },
                 createdAt: { type: Date, default: Date.now },
                 status: { type: String, enum: ['scheduled', 'done', 'canceled'], default: 'scheduled' },
+                mode: { type: String, enum: ['virtual', 'physical'] },
+                location: { type: String, trim: true },
+                link: { type: String, trim: true },
             },
         ],
         notes: [
@@ -138,7 +157,7 @@ const leadSchema = new Schema<ILead>(
     { timestamps: true }
 );
 
-leadSchema.index({ campaignId: 1 });
+leadSchema.index({ databaseId: 1 });
 leadSchema.index({ partnerId: 1 });
 leadSchema.index({ tenantId: 1 });
 leadSchema.index({ tenantId: 1, name: 1 });

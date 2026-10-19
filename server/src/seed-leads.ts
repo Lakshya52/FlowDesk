@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import Lead from './models/Lead';
-import Campaign from './models/Campaign';
+import Database from './models/Database';
 import Tenant from './models/Tenant';
 import User from './models/User';
 
@@ -122,22 +122,22 @@ const seedLeads = async () => {
             console.log(`Found tenant: ${tenant._id}`);
         }
 
-        let campaign = await Campaign.findOne();
-        if (!campaign) {
+        let database = await Database.findOne();
+        if (!database) {
             const adminUser = await User.findOne();
             if (!adminUser) {
                 console.error('No users found. Run seed.ts first.');
                 process.exit(1);
             }
-            campaign = await Campaign.create({
-                name: 'Default Campaign',
-                purpose: 'Sample campaign for seed data',
+            database = await Database.create({
+                name: 'Default Database',
+                purpose: 'Sample database for seed data',
                 tenantId: tenant._id,
                 createdBy: adminUser._id,
             });
-            console.log(`Created campaign: ${campaign._id}`);
+            console.log(`Created database: ${database._id}`);
         } else {
-            console.log(`Found campaign: ${campaign._id}`);
+            console.log(`Found database: ${database._id}`);
         }
 
         const users = await User.find();
@@ -160,7 +160,7 @@ const seedLeads = async () => {
             const hasCall = Math.random() < 0.6;
 
             const lead: Record<string, unknown> = {
-                campaignId: campaign!._id,
+                databaseId: database!._id,
                 tenantId: tenant!._id,
                 name: `${first} ${last}`,
                 followUpCount: 0,
@@ -181,7 +181,7 @@ const seedLeads = async () => {
                 email: randomEmail(first, last),
                 website: Math.random() < 0.3 ? `https://www.${first.toLowerCase()}${last.toLowerCase()}.com` : undefined,
                 priority,
-                source: pick(['Udyam Capital', 'Website', 'Referral', 'LinkedIn', 'Cold Call', 'Email Campaign', 'Trade Show', 'Partner']),
+                source: pick(['Udyam Capital', 'Website', 'Referral', 'LinkedIn', 'Cold Call', 'Email Marketing', 'Trade Show', 'Partner']),
                 status,
                 callCount: hasCall ? randInt(1, 15) : 0,
                 lastCallAt: hasCall ? new Date(Date.now() - randInt(0, 90) * 24 * 60 * 60 * 1000) : undefined,

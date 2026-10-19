@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import {
-    getLeads, getLead, createLead, updateLead, deleteLead,
+    getLeads, getLead, createLead, updateLead, deleteLead, bulkCreateLeads,
     addNote, updateNote, deleteNote, recordCall, importExcel, downloadSampleExcel,
+    downloadPartnerSampleExcel,
     getUpcomingFollowups, updateMeetingStatus, getLeadCounts, getLeadStats,
     getLeadFilterOptions,
 } from '../controllers/leadController';
@@ -17,6 +18,9 @@ router.use(authenticate);
 
 // Specific routes before parameterized routes
 router.post('/import/excel', upload.single('file'), importExcel);
+// Partner-scoped sample template (all rows are imported for this partner)
+router.get('/import/sample/partner/:partnerId', downloadPartnerSampleExcel);
+router.post('/bulk', bulkCreateLeads);
 router.get('/upcoming', getUpcomingFollowups);
 
 router.get('/stats', getLeadStats);

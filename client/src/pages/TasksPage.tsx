@@ -24,6 +24,7 @@ import {
 import { format, differenceInDays } from "date-fns";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTaskSocket } from "../hooks/useTaskSocket";
+import toast from "react-hot-toast";
 
 const PRIORITY_LABELS: Record<string, string> = {
 	low: "Low",
@@ -113,8 +114,6 @@ const TasksPage: React.FC = () => {
 		colKey: string;
 		index: number;
 	} | null>(null);
-	const [toastMsg, setToastMsg] = useState<string | null>(null);
-	const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	useEffect(() => {
 		const handleClickOutside = (e: MouseEvent) => {
@@ -310,7 +309,7 @@ const TasksPage: React.FC = () => {
 			queryClient.invalidateQueries({
 				queryKey: ["board", activeBoardId],
 			});
-			showToast("Invitation sent");
+			showToast("Invitation sent", "success");
 		} catch (e: any) {
 			showToast(e.response?.data?.message || "Failed to invite");
 		} finally {
@@ -325,7 +324,7 @@ const TasksPage: React.FC = () => {
 			await api.delete(`/boards/${activeBoardId}/members/${memberId}`);
 			queryClient.invalidateQueries({ queryKey: ["board", activeBoardId] });
 			queryClient.invalidateQueries({ queryKey: ["boards"] });
-			showToast("Member removed");
+			showToast("Member removed", "success");
 		} catch (e: any) {
 			showToast(e.response?.data?.message || "Failed to remove member");
 		}
@@ -350,7 +349,7 @@ const TasksPage: React.FC = () => {
 				queryKey: ["board", activeBoardId],
 			});
 			queryClient.invalidateQueries({ queryKey: ["boards"] });
-			showToast("Invitation revoked");
+			showToast("Invitation revoked", "success");
 		} catch (e: any) {
 			showToast(e.response?.data?.message || "Failed to revoke invitation");
 		}
@@ -444,10 +443,9 @@ const TasksPage: React.FC = () => {
 		setSearch("");
 	};
 
-	const showToast = (msg: string) => {
-		setToastMsg(msg);
-		if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-		toastTimerRef.current = setTimeout(() => setToastMsg(null), 3000);
+	const showToast = (msg: string, type: "success" | "error" = "error") => {
+		if (type === "success") toast.success(msg);
+		else toast.error(msg);
 	};
 
 	const downloadFile = async (fileId: string, originalName: string) => {
@@ -4190,28 +4188,6 @@ const TasksPage: React.FC = () => {
 				</div>
 			)}
 
-			{toastMsg && (
-				<div
-					style={{
-						position: "fixed",
-						bottom: 24,
-						left: "50%",
-						transform: "translateX(-50%)",
-						background: "#1e293b",
-						color: "#f1f5f9",
-						padding: "10px 20px",
-						borderRadius: 8,
-						fontSize: "0.8125rem",
-						fontWeight: 500,
-						zIndex: 2000,
-						boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-						animation: "toastIn 0.3s ease",
-					}}
-				>
-					{toastMsg}
-				</div>
-			)}
-
 			<style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -4234,10 +4210,6 @@ const TasksPage: React.FC = () => {
         }
         .drop-ghost {
           animation: dropGhostExpand 0.6s ease-out forwards;
-        }
-        @keyframes toastIn {
-          0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
-          100% { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
       `}</style>
 		</div>

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import ExcelJS from 'exceljs';
 import Lead from '../models/Lead';
 import CalendarEvent from '../models/CalendarEvent';
-import Campaign from '../models/Campaign';
+import Database from '../models/Database';
 import ActivityLog, { EntityType } from '../models/ActivityLog';
 import User from '../models/User';
 import Team from '../models/Team';
@@ -90,14 +90,14 @@ export const getCrmSummary = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Leads — if targetUserId, scope to campaigns they are associated with
+    // Leads — if targetUserId, scope to databases they are associated with
     let leadMatch: any = { tenantId: new mongoose.Types.ObjectId(tenantId) };
     if (targetUserId) {
-      const userCampaigns = await Campaign.find({
+      const userDatabases = await Database.find({
         $or: [{ createdBy: targetUserId }, { people: targetUserId }],
       }).distinct('_id');
-      if (userCampaigns.length > 0) {
-        leadMatch.campaignId = { $in: userCampaigns };
+      if (userDatabases.length > 0) {
+        leadMatch.databaseId = { $in: userDatabases };
       }
     }
 
@@ -343,11 +343,11 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
 
     let leadMatch: any = { tenantId: new mongoose.Types.ObjectId(tenantId) };
     if (targetUserId) {
-      const userCampaigns = await Campaign.find({
+      const userDatabases = await Database.find({
         $or: [{ createdBy: targetUserId }, { people: targetUserId }],
       }).distinct('_id');
-      if (userCampaigns.length > 0) {
-        leadMatch.campaignId = { $in: userCampaigns };
+      if (userDatabases.length > 0) {
+        leadMatch.databaseId = { $in: userDatabases };
       }
     }
 
@@ -388,10 +388,10 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
             { $group: { _id: '$status', count: { $sum: 1 } } },
             { $sort: { count: -1 } },
           ],
-          campaignPerformance: [
+          databasePerformance: [
             {
               $group: {
-                _id: '$campaignId',
+                _id: '$databaseId',
                 total: { $sum: 1 },
                 new: { $sum: { $cond: [{ $eq: ['$status', 'new'] }, 1, 0] } },
                 attempted: { $sum: { $cond: [{ $eq: ['$status', 'attempted'] }, 1, 0] } },
@@ -406,8 +406,8 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
                 lost: { $sum: { $cond: [{ $eq: ['$status', 'closed_lost'] }, 1, 0] } },
               },
             },
-            { $lookup: { from: 'campaigns', localField: '_id', foreignField: '_id', as: 'campaign' } },
-            { $unwind: { path: '$campaign', preserveNullAndEmptyArrays: true } },
+            { $lookup: { from: 'databases', localField: '_id', foreignField: '_id', as: 'database' } },
+            { $unwind: { path: '$database', preserveNullAndEmptyArrays: true } },
             { $sort: { total: -1 } },
           ],
           trendData: [
@@ -421,8 +421,8 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
           ],
           callActivity: [
             { $match: { callCount: { $gt: 0 } } },
-            { $lookup: { from: 'campaigns', localField: 'campaignId', foreignField: '_id', as: 'campaign' } },
-            { $unwind: { path: '$campaign', preserveNullAndEmptyArrays: true } },
+            { $lookup: { from: 'databases', localField: 'databaseId', foreignField: '_id', as: 'database' } },
+            { $unwind: { path: '$database', preserveNullAndEmptyArrays: true } },
             { $sort: { lastCallAt: -1 } },
             { $limit: 10000 },
             {
@@ -430,7 +430,7 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
                 name: 1, phone: 1, alternatePhone: 1, email: 1,
                 companyName: 1, city: 1, state: 1, industry: 1,
                 priority: 1, status: 1, callCount: 1, callDuration: 1,
-                lastCallAt: 1, campaignName: '$campaign.name',
+                lastCallAt: 1, databaseName: '$database.name',
               },
             },
           ],
@@ -498,11 +498,11 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
       ]),
       Lead.aggregate([
         { $match: { ...leadMatch, createdAt: { $gte: start, $lte: end } } },
-        { $lookup: { from: 'campaigns', localField: 'campaignId', foreignField: '_id', as: 'campaign' } },
-        { $unwind: { path: '$campaign', preserveNullAndEmptyArrays: true } },
+        { $lookup: { from: 'databases', localField: 'databaseId', foreignField: '_id', as: 'database' } },
+        { $unwind: { path: '$database', preserveNullAndEmptyArrays: true } },
         {
           $group: {
-            _id: '$campaign.createdBy',
+            _id: '$database.createdBy',
             total: { $sum: 1 },
             contacted: { $sum: { $cond: [{ $in: ['$status', ['connected', 'interested', 'callback_scheduled', 'meeting_scheduled']] }, 1, 0] } },
             connected: { $sum: { $cond: [{ $eq: ['$status', 'connected'] }, 1, 0] } },
@@ -520,7 +520,7 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
       (async () => {
         const activityMatch: any = {
           createdAt: { $gte: start, $lte: end },
-          entityType: { $in: [EntityType.CAMPAIGN, EntityType.LEAD, EntityType.PARTNER] },
+          entityType: { $in: [EntityType.DATABASE, EntityType.LEAD, EntityType.PARTNER] },
           user: { $in: exportMemberIds },
         };
         if (targetUserId) activityMatch.user = targetUserId;
@@ -555,7 +555,7 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
     const cur = facetResults.overview?.[0] || { total: 0, new: 0, attempted: 0, connected: 0, interested: 0, callbackScheduled: 0, meetingScheduled: 0, notInterested: 0, notReachable: 0, doNotCall: 0, closedWon: 0, closedLost: 0, callDuration: 0, callCount: 0 };
     const prev = prevAgg[0] || { total: 0, contacted: 0, won: 0 };
     const statusData = facetResults.statusBreakdown || [];
-    const campaignData = facetResults.campaignPerformance || [];
+    const databaseData = facetResults.databasePerformance || [];
     const callActivity = facetResults.callActivity || [];
     const chartRaw = facetResults.trendData || [];
 
@@ -735,25 +735,25 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
         tcr++;
       });
 
-      // ── Sheet 3: Campaign Performance ──
-      const campaignSheet = workbook.addWorksheet('Campaign Performance');
+      // ── Sheet 3: Database Performance ──
+      const databaseSheet = workbook.addWorksheet('Database Performance');
       let cpr = 1;
-      cpr = addTitle(campaignSheet, 'Campaign Performance Report', cpr, 12);
-      cpr = addSubtitle(campaignSheet, dateRangeLabel, cpr, 12);
+      cpr = addTitle(databaseSheet, 'Database Performance Report', cpr, 12);
+      cpr = addSubtitle(databaseSheet, dateRangeLabel, cpr, 12);
       cpr += 1;
-      cpr = addTableHeaders(campaignSheet, [
-        { header: 'Campaign', width: 24 }, { header: 'Total', width: 10 },
+      cpr = addTableHeaders(databaseSheet, [
+        { header: 'Database', width: 24 }, { header: 'Total', width: 10 },
         { header: 'New', width: 10 }, { header: 'Attempted', width: 12 },
         { header: 'Connected', width: 12 }, { header: 'Interested', width: 12 },
         { header: 'Callback', width: 12 }, { header: 'Meeting', width: 12 },
         { header: 'Won', width: 10 }, { header: 'Lost', width: 10 },
         { header: 'Contact Rate', width: 14 }, { header: 'Conversion Rate', width: 16 },
       ], cpr);
-      campaignData.forEach((d: any) => {
+      databaseData.forEach((d: any) => {
         const ct = (d.connected || 0) + (d.interested || 0) + (d.callbackScheduled || 0) + (d.meetingScheduled || 0);
         const wn = d.won || 0;
-        addDataRow(campaignSheet, [
-          d.campaign?.name || 'Unknown', d.total, d.new || 0, d.attempted || 0,
+        addDataRow(databaseSheet, [
+          d.database?.name || 'Unknown', d.total, d.new || 0, d.attempted || 0,
           d.connected || 0, d.interested || 0, d.callbackScheduled || 0, d.meetingScheduled || 0,
           wn, d.lost || 0,
           d.total > 0 ? `${Math.round((ct / d.total) * 100)}%` : '—',
@@ -791,7 +791,7 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
         { header: 'Alternate Phone', width: 16 }, { header: 'Email', width: 24 },
         { header: 'Company', width: 20 }, { header: 'City', width: 14 },
         { header: 'State', width: 14 }, { header: 'Industry', width: 16 },
-        { header: 'Priority', width: 12 }, { header: 'Campaign', width: 20 },
+        { header: 'Priority', width: 12 }, { header: 'Database', width: 20 },
         { header: 'Call Count', width: 12 }, { header: 'Call Duration', width: 14 },
         { header: 'Last Call', width: 18 }, { header: 'Status', width: 16 },
       ], calr);
@@ -799,7 +799,7 @@ export const exportCrmSummary = async (req: AuthRequest, res: Response): Promise
         addDataRow(callSheet, [
           d.name, d.phone || '—', d.alternatePhone || '—', d.email || '—',
           d.companyName || '—', d.city || '—', d.state || '—', d.industry || '—',
-          d.priority || '—', d.campaignName || '—',
+          d.priority || '—', d.databaseName || '—',
           d.callCount, fmtDuration(d.callDuration || 0),
           d.lastCallAt ? new Date(d.lastCallAt).toISOString().slice(0, 16).replace('T', ' ') : '—',
           statusLabels[d.status] || d.status,

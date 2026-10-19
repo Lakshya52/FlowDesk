@@ -1,27 +1,55 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Phone, Building, Loader2, ArrowRight, Settings } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip } from 'recharts';
+import { Phone, Building, Loader2, ArrowRight } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip, PieChart, Pie } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
-import Modal from '../common/Modal';
 import { useAuthStore } from '../../store/authStore';
 import { useCrmSocket } from '../../hooks/useCrmSocket';
 
-interface Lead {
+// ── Types ────────────────────────────────────────────────────────────────
+
+interface DatabaseItem {
+    _id: string;
+    name: string;
+    leadCount?: number;
+}
+
+interface PartnerItem {
+    _id: string;
+    companyName?: string;
+    name?: string;
+    personName?: string;
+    leadCount?: number;
+}
+
+interface UpcomingItem {
     _id: string;
     name: string;
     phone?: string;
     companyName?: string;
-    status: string;
-    priority: string;
-    callCount: number;
-    callDuration: number;
-    lastCallAt?: string;
-    campaignId?: { _id: string; name: string };
-    createdAt: string;
-    source: string;
+    scheduleType?: 'follow_up' | 'meeting';
+    meetingAt?: string;
+    nextFollowupAt?: string;
 }
+
+interface ActiveVisit {
+    _id: string;
+    employeeId?: { name?: string };
+    clientName?: string;
+    checkInTime?: string;
+}
+
+interface CaseFileCounts {
+    all: number;
+    in_process: number;
+    closed: number;
+    lost: number;
+}
+
+// ── Leads lifecycle constants (shared look with Leads Overview) ──────────
+// The chart here is read-only: status colors are customized on the Leads
+// Overview page and stored per-user, so both charts always match.
 
 const STATUS_LABELS: Record<string, string> = {
     new: 'New',
@@ -70,10 +98,14 @@ function loadStatusColors(uid?: string): Record<string, string> {
     return out;
 }
 
-// const AVATAR_COLORS = ['#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'];
+// CaseFile statuses — same palette as the CaseFiles page.
+const CASE_FILE_META: { key: keyof CaseFileCounts; label: string; color: string }[] = [
+    { key: 'in_process', label: 'In Process', color: '#3b82f6' },
+    { key: 'closed', label: 'Sanctioned', color: '#22c55e' },
+    { key: 'lost', label: 'Lost', color: '#ef4444' },
+];
 
-// const getInitials = (name: string) =>
-//     name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+// ── Small helpers ────────────────────────────────────────────────────────
 
 const formatDuration = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -82,99 +114,68 @@ const formatDuration = (seconds: number) => {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
-const formatDateShort = (d?: string) => {
-    if (!d) return 'Never';
-    const date = new Date(d);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const hours = Math.floor(diff / 3600000);
-    if (hours < 1) return 'Just now';
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+const getItemDate = (lead: UpcomingItem): Date | null => {
+    const d = lead.scheduleType === "meeting" || lead.meetingAt ? lead.meetingAt : lead.nextFollowupAt;
+    return d ? new Date(d) : null;
 };
 
-// Color settings dialog keeps a local draft while picking so the dashboard
-// chart doesn't re-render on every native-picker tick (the lag). Parent
-// state — and the chart — update once on Done.
-function LifecycleColorDialog({ open, initialColors, userName, onClose, onApply }: {
-    open: boolean;
-    initialColors: Record<string, string>;
-    userName?: string;
-    onClose: () => void;
-    onApply: (c: Record<string, string>) => void;
-}) {
-    const [draft, setDraft] = useState<Record<string, string>>({ ...initialColors });
-    const wasOpen = useRef(false);
-    if (open && !wasOpen.current) setDraft({ ...initialColors });
-    wasOpen.current = open;
+const formatRelativeDateTime = (d?: string): { label: string; time: string; isOverdue: boolean } => {
+    if (!d) return { label: "—", time: "", isOverdue: false };
+    const date = new Date(d);
+    const now = new Date();
+    const isOverdue = date < now;
 
-    return (
-        <Modal isOpen={open} onClose={onClose} zIndex={4960}>
-            <div className="card animate-fade-in w-full" style={{ maxWidth: 'min(420px, calc(100vw - 32px))', padding: 0, overflow: 'hidden', borderRadius: 16, maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
-                <div className="px-5 py-4 border-b border-(--color-border) flex items-center gap-2.5 bg-(--color-surface)">
-                    <div className="w-9 h-9 rounded-xl bg-(--color-primary-light) flex items-center justify-center">
-                        <Settings size={18} className="text-(--color-primary)" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-base font-bold m-0">Lifecycle colors</h3>
-                        <p className="text-[0.72rem] text-(--color-text-tertiary) mt-0.5 m-0">
-                            Saved for {userName || 'your account'} on this device
-                        </p>
-                    </div>
-                </div>
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((targetDay.getTime() - today.getTime()) / 86400000);
 
-                <div className="p-4 overflow-y-auto">
-                    <div className="grid grid-cols-3 gap-2">
-                        {STATUS_ORDER.map(key => (
-                            <label key={key} className="flex flex-col items-center gap-1 cursor-pointer m-0 p-2 rounded-lg hover-bg" title={STATUS_LABELS[key] || key}>
-                                {/* Square swatch: native color inputs carry a UA-fixed
-                                    height that ignores aspect-ratio, so the visible
-                                    square is a div with the picker overlaid invisibly. */}
-                                <div style={{ width: '100%', aspectRatio: '1 / 1', padding: 3, border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-surface)', position: 'relative', cursor: 'pointer' }}>
-                                    <div style={{ width: '100%', height: '100%', borderRadius: 6, background: draft[key] }} />
-                                    <input
-                                        type="color"
-                                        value={draft[key]}
-                                        onChange={e => setDraft(prev => ({ ...prev, [key]: e.target.value }))}
-                                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', padding: 0, border: 'none' }}
-                                    />
-                                </div>
-                                <span className="text-[0.68rem] font-medium text-(--color-text) truncate w-full text-center">{STATUS_LABELS[key] || key}</span>
-                                <span className="text-[0.62rem] text-(--color-text-tertiary) uppercase">{draft[key]}</span>
-                            </label>
-                        ))}
-                    </div>
-                </div>
+    const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
 
-                <div className="px-5 py-4 border-t border-(--color-border) flex justify-between gap-2 bg-(--color-surface)">
-                    <button className="btn btn-secondary btn-sm" onClick={() => setDraft({ ...DEFAULT_STATUS_COLORS })}>
-                        Reset to defaults
-                    </button>
-                    <button className="btn btn-primary btn-sm" onClick={() => { onApply(draft); onClose(); }}>
-                        Done
-                    </button>
-                </div>
-            </div>
-        </Modal>
-    );
-}
+    let label: string;
+    if (diffDays === 0) label = "Today";
+    else if (diffDays === 1) label = "Tomorrow";
+    else if (diffDays < 0) label = `${Math.abs(diffDays)}d overdue`;
+    else if (diffDays < 7) label = date.toLocaleDateString("en-IN", { weekday: "short" });
+    else label = date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+
+    return { label, time: timeStr, isOverdue };
+};
+
+const formatAgo = (t?: string) => {
+    if (!t) return '';
+    const mins = Math.max(0, Math.floor((Date.now() - new Date(t).getTime()) / 60000));
+    if (mins < 60) return `${mins}m ago`;
+    return `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
+};
+
+const partnerName = (p: PartnerItem) => p.companyName || p.name || p.personName || 'Unnamed';
+
+const clickableRowProps = (onClick: () => void) => ({
+    onClick,
+    style: { border: '1px solid var(--color-border)', borderRadius: 8, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, cursor: 'pointer', transition: 'all 0.2s ease' } as CSSProperties,
+    onMouseEnter: (e: ReactMouseEvent<HTMLDivElement>) => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; },
+    onMouseLeave: (e: ReactMouseEvent<HTMLDivElement>) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.boxShadow = 'none'; },
+});
+
+const InlineSpinner = () => (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+        <Loader2 size={22} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+    </div>
+);
+
+const EmptyText = ({ children }: { children: string }) => (
+    <div style={{ padding: 20, textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.85rem' }}>
+        {children}
+    </div>
+);
+
+// ── Component ────────────────────────────────────────────────────────────
 
 const CrmDashboard = () => {
     const navigate = useNavigate();
     useCrmSocket();
     const { user } = useAuthStore();
-    const [statusColors, setStatusColors] = useState<Record<string, string>>(() => loadStatusColors(user?._id));
-    const [showColorSettings, setShowColorSettings] = useState(false);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(statusColorKey(user?._id), JSON.stringify(statusColors));
-        } catch {
-            // storage full/blocked — colors still apply for this session
-        }
-    }, [statusColors, user?._id]);
+    const [statusColors] = useState<Record<string, string>>(() => loadStatusColors(user?._id));
 
     const { data: stats, isLoading } = useQuery({
         queryKey: ["leads", "stats"],
@@ -184,19 +185,45 @@ const CrmDashboard = () => {
         },
     });
 
-    const { data: priorityLeads = [] } = useQuery({
-        queryKey: ["leads", "priority", "very_high"],
+    const { data: caseFileStats, isLoading: caseFilesLoading } = useQuery({
+        queryKey: ["case-file-stats"],
         queryFn: async () => {
-            const res = await api.get('/leads', { params: { priority: 'very high', limit: 5 } });
-            return (res.data.success ? res.data.leads : []) as Lead[];
+            const res = await api.get('/case-files/stats');
+            return (res.data.success ? res.data.counts : null) as CaseFileCounts | null;
         },
     });
 
-    const total = stats?.total || 0;
-    const won = stats?.won || 0;
-    const lost = stats?.lost || 0;
-    const activeLeads = stats?.active || 0;
-    const successRate = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
+    const { data: databases = [], isLoading: databasesLoading } = useQuery({
+        queryKey: ["databases"],
+        queryFn: async () => {
+            const res = await api.get('/databases');
+            return (res.data.success ? res.data.databases : []) as DatabaseItem[];
+        },
+    });
+
+    const { data: partners = [], isLoading: partnersLoading } = useQuery({
+        queryKey: ["partners", "overview"],
+        queryFn: async () => {
+            const res = await api.get('/partners');
+            return (res.data.success ? res.data.partners : []) as PartnerItem[];
+        },
+    });
+
+    const { data: upcoming = [], isLoading: upcomingLoading } = useQuery({
+        queryKey: ["leads", "upcoming", "dashboard"],
+        queryFn: async () => {
+            const res = await api.get('/leads/upcoming', { params: { limit: 5 } });
+            return (res.data.success ? res.data.leads : []) as UpcomingItem[];
+        },
+    });
+
+    const { data: activeVisits = [], isLoading: visitsLoading } = useQuery({
+        queryKey: ["field-visits", "active"],
+        queryFn: async () => {
+            const res = await api.get('/field-visits/active');
+            return (res.data.visits || []) as ActiveVisit[];
+        },
+    });
 
     if (isLoading) {
         return (
@@ -206,51 +233,78 @@ const CrmDashboard = () => {
         );
     }
 
+    // ── Derived values ──────────────────────────────────────────────────
+
+    const total = stats?.total || 0;
+    const won = stats?.won || 0;
+    const lost = stats?.lost || 0;
+    const activeLeads = stats?.active || 0;
+    const successRate = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
+
+    const inProcess = caseFileStats?.in_process || 0;
+    const closedCaseFiles = caseFileStats?.closed || 0;
+
+    const statusCounts: Record<string, number> = stats?.statusCounts || {};
+    const lifecycleData = STATUS_ORDER.map(s => ({
+        name: STATUS_LABELS[s] || s,
+        value: statusCounts[s] || 0,
+        color: statusColors[s] || '#94a3b8',
+    }));
+
+    const caseFileData = CASE_FILE_META
+        .map(m => ({ key: m.key, name: m.label, value: caseFileStats?.[m.key] || 0, color: m.color }))
+        .filter(d => d.value > 0);
+
+    const topDatabases = [...databases].sort((a, b) => (b.leadCount || 0) - (a.leadCount || 0)).slice(0, 4);
+    const totalDbLeads = databases.reduce((sum, d) => sum + (d.leadCount || 0), 0);
+
+    const topPartners = [...partners].sort((a, b) => (b.leadCount || 0) - (a.leadCount || 0)).slice(0, 4);
+    const totalPartnerLeads = partners.reduce((sum, p) => sum + (p.leadCount || 0), 0);
+
     const kpis = [
+        {
+            label: 'Total Leads',
+            value: String(total),
+            subtitle: `${activeLeads} active`,
+            subtitleColor: 'var(--color-primary)',
+            to: '/crm/dial',
+        },
         {
             label: 'Converted Leads',
             value: String(won),
             subtitle: `${total > 0 ? Math.round(won / total * 100) : 0}% of total`,
             subtitleColor: 'var(--color-success)',
-            bg: 'var(--color-success-light)',
-            color: 'var(--color-success)',
+            to: '/crm/files',
         },
         {
             label: 'Lost Leads',
             value: String(lost),
             subtitle: `${total > 0 ? Math.round(lost / total * 100) : 0}% of total`,
             subtitleColor: 'var(--color-danger)',
-            bg: 'var(--color-danger-light)',
-            color: 'var(--color-danger)',
-        },
-        {
-            label: 'Active Leads',
-            value: String(activeLeads),
-            bg: 'var(--color-primary-light)',
-            color: 'var(--color-primary)',
+            to: '/crm/dial',
         },
         {
             label: 'Success Rate',
             value: `${successRate}%`,
-            bg: 'var(--color-info-light)',
-            color: 'var(--color-info)',
+            subtitle: `Won ${won} · Lost ${lost}`,
+            subtitleColor: 'var(--color-text-tertiary)',
+            to: '/crm/dial/leads-overview',
         },
         {
-            label: 'Call Duration',
+            label: 'Files In Process',
+            value: String(inProcess),
+            subtitle: `${closedCaseFiles} closed`,
+            subtitleColor: 'var(--color-info)',
+            to: '/crm/files',
+        },
+        {
+            label: 'Call Time',
             value: formatDuration(stats?.totalCallDuration || 0),
-            bg: '#f3e8ff',
-            color: '#8b5cf6',
+            subtitle: 'total talk time',
+            subtitleColor: 'var(--color-text-tertiary)',
+            to: '/crm/dial/leads-overview',
         },
     ];
-
-    const statusCounts: Record<string, number> = stats?.statusCounts || {};
-
-    const lifecycleData = STATUS_ORDER.map(s => ({
-        name: STATUS_LABELS[s] || s,
-        value: statusCounts[s] || 0,
-        color: statusColors[s] || '#94a3b8',
-        statusKey: s,
-    }));
 
     return (
         <div style={{ maxWidth: 1200 }}>
@@ -258,112 +312,149 @@ const CrmDashboard = () => {
                 <div>
                     <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>Overview</h1>
                     <p style={{ color: "var(--color-text-secondary)", fontSize: "0.875rem", marginTop: 4 }}>
-                        Here's an overview of your CRM leads and queues.
+                        A full snapshot of your CRM — leads, caseFiles, databases, partners and field activity.
                     </p>
                 </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, marginBottom: 32 }}>
+            {/* ── KPI cards (click to open the related page) ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 20, marginBottom: 24 }}>
                 {kpis.map((kpi, idx) => (
                     <div
                         key={idx}
                         className="card animate-fade-in"
-                        style={{ padding: "24px", transition: "transform 0.2s ease, box-shadow 0.2s ease", overflow: "hidden" }}
+                        onClick={() => navigate(kpi.to)}
+                        style={{ padding: "20px", transition: "transform 0.2s ease, box-shadow 0.2s ease", overflow: "hidden", cursor: "pointer" }}
                         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.08)"; }}
                         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
                     >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <div>
-                                <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
-                                    {kpi.label}
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                                    <div style={{ fontSize: "2.25rem", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: "var(--color-text)" }}>
-                                        {kpi.value}
-                                    </div>
-                                    {kpi.subtitle && (
-                                        <span style={{ fontSize: "0.875rem", fontWeight: 500, color: kpi.subtitleColor }}>{kpi.subtitle}</span>
-                                    )}
-                                </div>
-                            </div>
+                        <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10, minHeight: 30 }}>
+                            {kpi.label}
+                        </div>
+                        <div style={{ fontSize: "2rem", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: "var(--color-text)" }}>
+                            {kpi.value}
+                        </div>
+                        <div style={{ fontSize: "0.75rem", fontWeight: 500, color: kpi.subtitleColor, marginTop: 7 }}>
+                            {kpi.subtitle}
                         </div>
                     </div>
                 ))}
             </div>
 
-            <div className="card" style={{ padding: "20px", marginBottom: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <h3 style={{ fontSize: "0.875rem", fontWeight: 600, margin: 0 }}>Leads Lifecycle</h3>
-                    <button
-                        onClick={() => setShowColorSettings(true)}
-                        className="btn btn-ghost btn-sm"
-                        title="Customize lifecycle colors"
-                        aria-label="Customize lifecycle colors"
-                        style={{ color: 'var(--color-text-tertiary)' }}
-                    >
-                        <Settings size={14} />
-                    </button>
+            {/* ── Leads pipeline + CaseFiles breakdown ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-5 mb-6">
+                <div className="card" style={{ padding: "20px", minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                        <h3 style={{ fontSize: "0.875rem", fontWeight: 600, margin: 0 }}>Leads Pipeline</h3>
+                        <Link className='text-[0.8rem] flex items-center justify-center gap-2' to="/crm/dial">View All <ArrowRight size={18} /></Link>
+                    </div>
+                    <div style={{ height: 240, marginBottom: 20 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={lifecycleData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                <XAxis
+                                    dataKey="name"
+                                    tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+                                    angle={-20}
+                                    textAnchor="end"
+                                />
+                                <YAxis
+                                    tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
+                                    allowDecimals={false}
+                                />
+                                <Tooltip
+                                    contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: "0.8125rem" }}
+                                />
+                                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                    {lifecycleData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 8px', fontSize: '0.72rem', fontWeight: 500 }}>
+                        {lifecycleData.map((item, idx) => (
+                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, color: item.color }}>
+                                <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: item.color }} />
+                                <span>{item.name} ({item.value})</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-                <div style={{ height: 260, marginBottom: 24 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={lifecycleData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                            <XAxis
-                                dataKey="name"
-                                tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
-                                angle={-20}
-                                textAnchor="end"
-                            />
-                            <YAxis
-                                tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
-                                allowDecimals={false}
-                            />
-                            <Tooltip
-                                contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: "0.8125rem" }}
-                            />
-                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                                {lifecycleData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
+
+                <div className="card" style={{ padding: "20px", minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                        <h3 style={{ fontSize: "0.875rem", fontWeight: 600, margin: 0 }}>Files</h3>
+                        <Link className='text-[0.8rem] flex items-center justify-center gap-2' to="/crm/files">View All <ArrowRight size={18} /></Link>
+                    </div>
+                    {caseFilesLoading ? (
+                        <InlineSpinner />
+                    ) : (caseFileStats?.all || 0) === 0 ? (
+                        <EmptyText>No files yet — mark a lead as Closed Won to start one.</EmptyText>
+                    ) : (
+                        <>
+                            <div style={{ position: 'relative', height: 220 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={caseFileData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={88} paddingAngle={4} stroke="none">
+                                            {caseFileData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: "0.8125rem" }}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                                    <div style={{ fontSize: '1.6rem', fontWeight: 800, lineHeight: 1, color: 'var(--color-text)' }}>
+                                        {caseFileStats?.all || 0}
+                                    </div>
+                                    <div style={{ fontSize: '0.66rem', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>
+                                        Total
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+                                {CASE_FILE_META.map(m => (
+                                    <div key={m.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-text-secondary)' }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.color }} />
+                                            {m.label}
+                                        </span>
+                                        <strong style={{ color: 'var(--color-text)' }}>{caseFileStats?.[m.key] || 0}</strong>
+                                    </div>
                                 ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 8px', fontSize: '0.75rem', fontWeight: 500 }}>
-                    {lifecycleData.map((item, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, color: item.color }}>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: item.color }} />
-                            <span>{item.name} ({item.value})</span>
-                        </div>
-                    ))}
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
-            <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 32 }}>
+            {/* ── Upcoming follow-ups & meetings ── */}
+            <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--color-border)' }}>
-                    <h3 style={{ fontSize: "0.875rem", fontWeight: 600 }}>Very High Priority Leads</h3>
-                    <Link className='text-[0.8rem] flex items-center justify-center gap-2' to="/crm/dial">View All <ArrowRight size={18} /></Link>
+                    <h3 style={{ fontSize: "0.875rem", fontWeight: 600 }}>Upcoming Follow-ups &amp; Meetings</h3>
+                    <Link className='text-[0.8rem] flex items-center justify-center gap-2' to="/crm/schedule">View All <ArrowRight size={18} /></Link>
                 </div>
-                <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {priorityLeads.length === 0 ? (
-                        <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
-                            No very high priority leads
-                        </div>
-                    ) : (
-                        priorityLeads.map((lead) => (
-                            <div
-                                key={lead._id}
-                                onClick={() => navigate(`/crm/dial?leadId=${lead._id}`)}
-                                style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'all 0.2s ease' }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.boxShadow = 'none'; }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {upcomingLoading ? (
+                    <InlineSpinner />
+                ) : upcoming.length === 0 ? (
+                    <EmptyText>Nothing scheduled — follow-ups and meetings will appear here.</EmptyText>
+                ) : (
+                    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {upcoming.map((lead) => {
+                            const isMeeting = lead.scheduleType === 'meeting' || !!lead.meetingAt;
+                            const date = getItemDate(lead);
+                            const rel = formatRelativeDateTime(date ? date.toISOString() : undefined);
+                            return (
+                                <div key={lead._id} {...clickableRowProps(() => navigate(`/crm/dial?leadId=${lead._id}`))}>
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>{lead.name}</span>
-                                            <span className={`badge badge-${lead.status === 'new' ? 'todo' : lead.status === 'closed_won' ? 'done' : lead.status === 'closed_lost' ? 'not_started' : 'in_progress'}`} style={{ fontSize: '0.6rem', padding: '1px 6px' }}>
-                                                {lead.status.replace(/_/g, ' ')}
+                                            <span className={`badge ${isMeeting ? 'badge-in_progress' : 'badge-review'}`} style={{ fontSize: '0.6rem', padding: '1px 6px' }}>
+                                                {isMeeting ? 'Meeting' : 'Follow-up'}
                                             </span>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-3.5 text-[0.75rem] text-(--color-text-secondary) mt-0.5">
@@ -377,26 +468,121 @@ const CrmDashboard = () => {
                                                     <Building size={11} /> {lead.companyName}
                                                 </span>
                                             )}
-                                            <span>Calls: {lead.callCount}</span>
-                                            <span>Added {formatDateShort(lead.createdAt)}</span>
                                         </div>
                                     </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: rel.isOverdue ? 'var(--color-danger)' : 'var(--color-text)' }}>
+                                                {rel.label}
+                                            </div>
+                                            {rel.time && (
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>{rel.time}</div>
+                                            )}
+                                        </div>
+                                        <ArrowRight size={16} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                                    </div>
                                 </div>
-                                <ArrowRight size={16} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* ── Databases · Partners · Field visits ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20, marginBottom: 32 }}>
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--color-border)' }}>
+                        <h3 style={{ fontSize: "0.875rem", fontWeight: 600 }}>Databases</h3>
+                        <Link className='text-[0.8rem] flex items-center justify-center gap-2' to="/crm/databases">View All <ArrowRight size={18} /></Link>
+                    </div>
+                    {databasesLoading ? (
+                        <InlineSpinner />
+                    ) : databases.length === 0 ? (
+                        <EmptyText>No databases yet</EmptyText>
+                    ) : (
+                        <div style={{ padding: 16 }}>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>
+                                <strong style={{ color: 'var(--color-text)', fontSize: '1.1rem' }}>{databases.length}</strong> databases ·{' '}
+                                <strong style={{ color: 'var(--color-text)', fontSize: '1.1rem' }}>{totalDbLeads}</strong> leads
                             </div>
-                        ))
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {topDatabases.map(db => (
+                                    <div key={db._id} {...clickableRowProps(() => navigate('/crm/databases'))}>
+                                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{db.name}</span>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{db.leadCount || 0} leads</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--color-border)' }}>
+                        <h3 style={{ fontSize: "0.875rem", fontWeight: 600 }}>Channel Partners</h3>
+                        <Link className='text-[0.8rem] flex items-center justify-center gap-2' to="/crm/partners">View All <ArrowRight size={18} /></Link>
+                    </div>
+                    {partnersLoading ? (
+                        <InlineSpinner />
+                    ) : partners.length === 0 ? (
+                        <EmptyText>No channel partners yet</EmptyText>
+                    ) : (
+                        <div style={{ padding: 16 }}>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>
+                                <strong style={{ color: 'var(--color-text)', fontSize: '1.1rem' }}>{partners.length}</strong> partners ·{' '}
+                                <strong style={{ color: 'var(--color-text)', fontSize: '1.1rem' }}>{totalPartnerLeads}</strong> referred leads
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {topPartners.map(p => (
+                                    <div key={p._id} {...clickableRowProps(() => navigate('/crm/partners'))}>
+                                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{partnerName(p)}</span>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{p.leadCount || 0} leads</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--color-border)' }}>
+                        <h3 style={{ fontSize: "0.875rem", fontWeight: 600 }}>Field Visits</h3>
+                        <Link className='text-[0.8rem] flex items-center justify-center gap-2' to="/crm/field-visits">View All <ArrowRight size={18} /></Link>
+                    </div>
+                    {visitsLoading ? (
+                        <InlineSpinner />
+                    ) : (
+                        <div style={{ padding: 16 }}>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: activeVisits.length > 0 ? 12 : 0 }}>
+                                <strong style={{ color: activeVisits.length > 0 ? 'var(--color-success)' : 'var(--color-text)', fontSize: '1.1rem' }}>{activeVisits.length}</strong> active now
+                            </div>
+                            {activeVisits.length === 0 ? (
+                                <div style={{ padding: '4px 0 8px', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.8rem' }}>
+                                    No active field visits right now
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {activeVisits.slice(0, 3).map(v => (
+                                        <div key={v._id} {...clickableRowProps(() => navigate('/crm/field-visits'))}>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {v.employeeId?.name || 'Employee'}
+                                                </div>
+                                                {v.clientName && (
+                                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {v.clientName}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', flexShrink: 0 }}>{formatAgo(v.checkInTime)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
-
-            {/* ── Lifecycle color settings ── */}
-            <LifecycleColorDialog
-                open={showColorSettings}
-                initialColors={statusColors}
-                userName={user?.name}
-                onClose={() => setShowColorSettings(false)}
-                onApply={setStatusColors}
-            />
         </div>
     );
 };

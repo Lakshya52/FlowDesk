@@ -62,9 +62,9 @@ FlowDesk/
 │   └── package.json        # 4.2.0
 ├── server/
 │   ├── src/
-│   │   ├── routes/         # 27 route files (auth, assignments, tasks, boards, chat, conversations, calendar*, leads, companies, campaigns, fieldVisits, dashboard, reports, etc.)
+│   │   ├── routes/         # 27 route files (auth, assignments, tasks, boards, chat, conversations, calendar*, leads, companies, databases, fieldVisits, dashboard, reports, etc.)
 │   │   ├── controllers/    # 24 controllers
-│   │   ├── models/         # 26 models (User, Tenant, Assignment, Task, Board, Team, Company, Contact, Lead, Campaign, FieldVisit, LocationTrack, Calendar, CalendarEvent, Conversation, Message, CanvasNote, etc.)
+│   │   ├── models/         # 26 models (User, Tenant, Assignment, Task, Board, Team, Company, Contact, Lead, Database, FieldVisit, LocationTrack, Calendar, CalendarEvent, Conversation, Message, CanvasNote, etc.)
 │   │   ├── services/       # recurringTaskService, backupScheduleService, emailService, notificationService, *SocketService, fieldVisitHeartbeatService
 │   │   ├── middlewares/    # authenticate, authorize, upload (multer memory 10MB), errorHandler
 │   │   └── index.ts        # Express + Socket.io + GridFS + cron bootstrap (628 lines)
@@ -87,7 +87,7 @@ FlowDesk/
 | **Real-time Presence & Chat** | Socket auth JWT, `activeUsers` Set, `user_status_change` broadcast, typing indicators, `mark_messages_read/delivered` ticks. Assignment chat + E2EE DM (`deliveredTo/readBy/reactions/forward/edit`, `encryptedKeyWraps`, key-heal) | `index.ts:290`, `ChatMessage.ts:16`, `Conversation.ts:32`, `Message.ts:39` |
 | **Canvas** | Private infinite canvas (`CanvasNote x/y/width/height/color/connections`) | `CanvasNote.ts:20`, `routes/canvas.ts:9`, `CanvasPage.tsx` |
 | **Calendar** | 5 views (Year/Month/Week/Day/Agenda), visibility, share `pending/accepted/rejected`, archive, `reminders`, `recurrenceRule`, Google OAuth sync (`/import/google-calendar/auth-url`, `sync-one`, `sync` 2500 events) | `Calendar.ts:26`, `CalendarEvent.ts:55`, `routes/googleCalendarImport.ts:20` |
-| **CRM** | Campaigns + Leads 11-stage funnel (`new→closed_won/lost`), dial queue `recordCall`, notes timeline, `meetingStatus`, Excel import, counts/stats (`/leads/counts|stats|upcoming`), summary export | `Lead.ts:58`, `Campaign.ts:16`, `routes/leads.ts:14`, `LeadDetailModal.tsx` |
+| **CRM** | Databases + Leads 11-stage funnel (`new→closed_won/lost`), dial queue `recordCall`, notes timeline, `meetingStatus`, Excel import, counts/stats (`/leads/counts|stats|upcoming`), summary export | `Lead.ts:58`, `Database.ts:16`, `routes/leads.ts:14`, `LeadDetailModal.tsx` |
 | **Companies & Contacts** | Unlimited hierarchy `parentCompanyId`, `industry/phone/address`, Contacts `isPrimary`, import/export Excel/PDF, bulk email to primary contacts | `Company.ts:32`, `Contact.ts:20`, `routes/companies.ts:27`, `BulkEmailPage.tsx:19` |
 | **Field Visits** | Geo check-in/out selfie+`Point[lng,lat]`, live `LocationTrack path[]`, heartbeat `STALE_AFTER 5m / 60s` lost/restored toasts, route TSP optimizer, expenses receipts, approve/reject, admin live map | `FieldVisit.ts:70`, `LocationTrack.ts:33`, `routes/fieldVisits.ts:29`, `services/fieldVisitHeartbeatService.ts:9` |
 | **Teams** | Create (admin), `members[]` + `manager`, join requests approve/reject | `Team.ts:17`, `routes/teams.ts:12` |

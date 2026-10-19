@@ -29,6 +29,13 @@ const panFromGst = (gst?: string): string | undefined => {
     return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : undefined;
 };
 
+// Coerces boolean-ish form-data values ("true", "1", "yes", "on", …) to Boolean.
+const toBooleanFlag = (v: any): boolean => {
+    if (typeof v === 'boolean') return v;
+    const s = String(v ?? '').trim().toLowerCase();
+    return s === 'true' || s === '1' || s === 'yes' || s === 'y' || s === 'on';
+};
+
 // Agreement upload guard: explicit type + size check (multer's shared
 // fileFilter runs first, this gives a tighter cap + clearer error).
 const AGREEMENT_MAX_BYTES = 10 * 1024 * 1024; // 10MB
@@ -54,6 +61,11 @@ const agreementError = (file: Express.Multer.File): string | null => {
 };
 
 export const createPartner = async (req: AuthRequest, res: Response): Promise<void> => {
+    const currentUser = req.user!;
+    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+        res.status(403).json({ success: false, message: 'Only Admin or Manager can perform this action' });
+        return;
+    }
     let uploadedFile: string | null = null;
     try {
         const {
@@ -66,6 +78,8 @@ export const createPartner = async (req: AuthRequest, res: Response): Promise<vo
             gst,
             purpose,
             description,
+            isCA,
+            agreementSigned,
         } = req.body;
 
         if (!personName || !String(personName).trim()) {
@@ -122,6 +136,8 @@ export const createPartner = async (req: AuthRequest, res: Response): Promise<vo
         const trimmedCompany = companyName ? String(companyName).trim() : undefined;
         const normGst = normalizeUpper(gst);
         const normPan = normalizeUpper(pan) || panFromGst(normGst);
+        const isCACandidate = toBooleanFlag(isCA);
+        const agreementSignedFlag = toBooleanFlag(agreementSigned);
 
         const partner = await Partner.create({
             partnerType,
@@ -133,6 +149,9 @@ export const createPartner = async (req: AuthRequest, res: Response): Promise<vo
             gst: normGst,
             purpose: purpose ? String(purpose).trim() : undefined,
             description: description ? String(description).trim() : undefined,
+            isCA: isCACandidate,
+            // Uploading an agreement document implies the agreement is signed
+            agreementSigned: (req as any).file ? true : agreementSignedFlag,
             // Legacy alias so old UI/indexes keep working
             name: trimmedCompany || String(personName).trim(),
             tenantId,
@@ -168,20 +187,38 @@ export const getPartners = async (req: AuthRequest, res: Response): Promise<void
         const limit = Math.max(1, parseInt(req.query.limit as string) || 100000);
         const skip = (page - 1) * limit;
         const search = String(req.query.search || '').trim();
+        const isCAParam = String(req.query.isCA || '').toLowerCase();
 
         const filter: any = { tenantId };
         if (search) {
             const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const rx = new RegExp(escaped, 'i');
-            filter.$or = [
+            const searchOr: any[] = [
                 { companyName: rx },
                 { name: rx },
                 { personName: rx },
                 { phone: rx },
                 { email: rx },
+                { pan: rx },
+                { gst: rx },
                 { purpose: rx },
                 { description: rx },
             ];
+            // Phone-friendly search: "98765 43210", "98765-43210" and
+            // "+91 98765 43210" should still match a stored 10-digit number.
+            const digits = search.replace(/\D/g, '');
+            if (digits && digits !== search) {
+                searchOr.push({ phone: new RegExp(digits) });
+            }
+            if (digits.length > 10) {
+                searchOr.push({ phone: new RegExp(digits.slice(-10)) });
+            }
+            filter.$or = searchOr;
+        }
+        if (isCAParam === 'true' || isCAParam === '1') {
+            filter.isCA = true;
+        } else if (isCAParam === 'false' || isCAParam === '0') {
+            filter.isCA = { $ne: true };
         }
 
         const [partners, total] = await Promise.all([
@@ -237,6 +274,11 @@ export const getPartner = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 export const updatePartner = async (req: AuthRequest, res: Response): Promise<void> => {
+    const currentUser = req.user!;
+    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+        res.status(403).json({ success: false, message: 'Only Admin or Manager can perform this action' });
+        return;
+    }
     // Tracks GridFS files so failures never orphan or lose agreements:
     // - uploadedFile: newly uploaded file, deleted if save fails
     // - replacedFile: previous file, deleted only after save succeeds
@@ -313,6 +355,12 @@ export const updatePartner = async (req: AuthRequest, res: Response): Promise<vo
         }
         if (sanitizedBody.purpose !== undefined) sanitizedBody.purpose = String(sanitizedBody.purpose || '').trim() || undefined;
         if (sanitizedBody.description !== undefined) sanitizedBody.description = String(sanitizedBody.description || '').trim() || undefined;
+        if (sanitizedBody.isCA !== undefined) {
+            sanitizedBody.isCA = toBooleanFlag(sanitizedBody.isCA);
+        }
+        if (sanitizedBody.agreementSigned !== undefined) {
+            sanitizedBody.agreementSigned = toBooleanFlag(sanitizedBody.agreementSigned);
+        }
 
         Object.assign(partner, sanitizedBody);
 
@@ -332,6 +380,8 @@ export const updatePartner = async (req: AuthRequest, res: Response): Promise<vo
             (partner as any).agreementFilePath = `/uploads/${filename}`;
             (partner as any).agreementFileType = file.mimetype;
             (partner as any).agreementFileSize = file.size;
+            // A stored document implies the agreement is signed
+            (partner as any).agreementSigned = true;
         } else if (req.body.removeAgreement === 'true' || req.body.removeAgreement === true) {
             if ((partner as any).agreementFileName) {
                 replacedFile = (partner as any).agreementFileName;
@@ -381,6 +431,11 @@ const pick = (row: any, ...keys: string[]): string => {
 };
 
 export const importPartnerExcel = async (req: AuthRequest, res: Response): Promise<void> => {
+    const currentUser = req.user!;
+    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+        res.status(403).json({ success: false, message: 'Only Admin or Manager can import partners' });
+        return;
+    }
     try {
         if (!req.file) {
             res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -476,6 +531,12 @@ export const importPartnerExcel = async (req: AuthRequest, res: Response): Promi
                     }
                 }
 
+                const rawCA = pick(row, 'isCA', 'Is CA', 'is_ca', 'CA', 'CA Firm', 'Is CA Firm', 'ca firm').toLowerCase();
+                const isCA = ['true', '1', 'yes', 'y', 'on', 'ca', 'cafirm', 'ca firm'].includes(rawCA);
+
+                const rawAgreement = pick(row, 'agreementSigned', 'Agreement Signed', 'agreement_signed', 'Is Agreement Signed', 'isAgreementSigned', 'Agreement').toLowerCase();
+                const agreementSigned = toBooleanFlag(rawAgreement) || rawAgreement === 'signed';
+
                 const partner = await Partner.create({
                     tenantId,
                     createdBy: req.user!._id,
@@ -488,6 +549,8 @@ export const importPartnerExcel = async (req: AuthRequest, res: Response): Promi
                     gst: gstVal,
                     purpose: pick(row, 'purpose', 'Purpose', 'Role') || undefined,
                     description: pick(row, 'description', 'Description') || undefined,
+                    isCA,
+                    agreementSigned,
                     name: companyName || personName,
                 });
 
@@ -522,7 +585,7 @@ export const importPartnerExcel = async (req: AuthRequest, res: Response): Promi
 
 export const downloadPartnerSampleExcel = async (_req: AuthRequest, res: Response): Promise<void> => {
     const wb = XLSX.utils.book_new();
-    const headers = ['partnerType', 'companyName', 'personName', 'phone', 'email', 'gst', 'pan', 'purpose', 'description'];
+    const headers = ['partnerType', 'companyName', 'personName', 'phone', 'email', 'gst', 'pan', 'purpose', 'description', 'isCA', 'agreementSigned'];
     const sampleData = [
         {
             partnerType: 'company',
@@ -534,6 +597,8 @@ export const downloadPartnerSampleExcel = async (_req: AuthRequest, res: Respons
             pan: 'ABCDE1234F',
             purpose: 'Channel partner for west region',
             description: 'Handles enterprise referrals',
+            isCA: 'false',
+            agreementSigned: 'true',
         },
         {
             partnerType: 'individual',
@@ -545,6 +610,8 @@ export const downloadPartnerSampleExcel = async (_req: AuthRequest, res: Respons
             pan: '',
             purpose: 'Freelance referrer',
             description: '',
+            isCA: 'true',
+            agreementSigned: 'false',
         },
     ];
 
@@ -568,6 +635,8 @@ export const downloadPartnerSampleExcel = async (_req: AuthRequest, res: Respons
         ['gst', 'No', '15 characters'],
         ['pan', 'No', 'Auto-filled from gst when left blank'],
         ['purpose / description', 'No', 'Free text'],
+        ['isCA', 'No', 'true/false, 1/0, yes/no (marks as CA or CA Firm depending on partnerType)'],
+        ['agreementSigned', 'No', 'Yes/No (true/1/on also accepted). Marks the agreement as signed. A document cannot be attached via Excel — open the partner afterwards to upload the agreement file.'],
         [],
         ['Limits', '', 'Max 1000 rows per import. Rows with errors are skipped; the rest are imported.'],
     ];
@@ -583,6 +652,11 @@ export const downloadPartnerSampleExcel = async (_req: AuthRequest, res: Respons
 };
 
 export const deletePartner = async (req: AuthRequest, res: Response): Promise<void> => {
+    const currentUser = req.user!;
+    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+        res.status(403).json({ success: false, message: 'Only Admin or Manager can perform this action' });
+        return;
+    }
     try {
         const tenantId = (req.user as any).tenantId?._id || (req.user as any).tenantId;
         const partner = await Partner.findOneAndDelete({ _id: req.params.id, tenantId });

@@ -19,7 +19,7 @@ interface LeadOption {
   state?: string;
 }
 
-interface Campaign {
+interface Database {
   _id: string;
   name: string;
   purpose: string;
@@ -40,7 +40,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
   const [loadingVisit, setLoadingVisit] = useState(!!preSelectedId);
 
   const [showCreateLead, setShowCreateLead] = useState(false);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [databases, setDatabases] = useState<Database[]>([]);
   const [newLead, setNewLead] = useState({
     name: "",
     phone: "",
@@ -48,7 +48,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
     city: "",
     state: "",
     addressLine: "",
-    campaignId: "",
+    databaseId: "",
   });
   const [creatingLead, setCreatingLead] = useState(false);
 
@@ -116,17 +116,17 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
     }
   };
 
-  const fetchCampaigns = async () => {
+  const fetchDatabases = async () => {
     try {
-      const res = await api.get("/campaigns", { params: { limit: 200 } });
-      setCampaigns(res.data.campaigns || []);
+      const res = await api.get("/databases", { params: { limit: 200 } });
+      setDatabases(res.data.databases || []);
     } catch {
-      toast.error("Failed to load campaigns");
+      toast.error("Failed to load databases");
     }
   };
 
   const openCreateLead = () => {
-    fetchCampaigns();
+    fetchDatabases();
     setShowCreateLead(true);
   };
 
@@ -144,7 +144,7 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
         city: newLead.city.trim(),
         state: newLead.state.trim(),
         addressLine: newLead.addressLine.trim(),
-        campaignId: newLead.campaignId,
+        databaseId: newLead.databaseId,
         source: "field_visit",
       });
       const created = res.data.lead;
@@ -241,14 +241,14 @@ const FieldVisitCheckIn: React.FC<Props> = ({ visitId: preSelectedId, onComplete
           <h2 className="text-lg font-semibold mb-4 text-(--color-text)">Create New Lead</h2>
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Campaign (optional)</label>
+              <label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Database (optional)</label>
               <select
-                value={newLead.campaignId}
-                onChange={(e) => setNewLead((p) => ({ ...p, campaignId: e.target.value }))}
+                value={newLead.databaseId}
+                onChange={(e) => setNewLead((p) => ({ ...p, databaseId: e.target.value }))}
                 className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
               >
-                <option value="">Select campaign...</option>
-                {campaigns.map((c) => (
+                <option value="">Select database...</option>
+                {databases.map((c) => (
                   <option key={c._id} value={c._id}>{c.name}</option>
                 ))}
               </select>

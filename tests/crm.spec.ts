@@ -7,11 +7,11 @@ test.describe('CRM Page', () => {
     await login(page, creds.email, creds.password);
   });
 
-  test('CRM loads with sidebar tabs — verify Dashboard, Campaigns, Dial Queue, Schedule, Plan, Summary, Logs tabs', async ({page} : {page :any}) => {
+  test('CRM loads with sidebar tabs — verify Dashboard, Databases, Dial Queue, Schedule, Plan, Summary, Logs tabs', async ({page} : {page :any}) => {
     await page.goto('/#/crm');
     await page.waitForLoadState('networkidle');
 
-    const tabs = ['Dashboard', 'Campaigns', 'Dial Queue', 'Schedule', 'Plan', 'Summary', 'Logs'];
+    const tabs = ['Dashboard', 'Databases', 'Dial Queue', 'Schedule', 'Plan', 'Summary', 'Logs'];
     for (const tab of tabs) {
       const link = page.getByRole('link', { name: new RegExp(tab, 'i') }).or(
         page.getByRole('button', { name: new RegExp(tab, 'i') })
@@ -23,10 +23,10 @@ test.describe('CRM Page', () => {
     }
   });
 
-  test('Campaigns page — navigate to campaigns, verify list', async ({page} : {page :any}) => {
-    await page.goto('/#/crm/campaigns');
+  test('Databases page — navigate to databases, verify list', async ({page} : {page :any}) => {
+    await page.goto('/#/crm/databases');
     await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('heading', { name: /campaigns/i }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: /databases/i }).first()).toBeVisible();
   });
 
   test('Leads/Dial Queue — navigate to leads, verify lead list/table', async ({page} : {page :any}) => {

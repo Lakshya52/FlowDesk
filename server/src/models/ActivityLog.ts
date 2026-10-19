@@ -9,9 +9,10 @@ export enum EntityType {
     COMPANY = 'company',
     CONTACT = 'contact',
     TEAM = 'team',
-    CAMPAIGN = 'campaign',
+    DATABASE = 'database',
     PARTNER = 'partner',
     LEAD = 'lead',
+    CASE_FILE = 'conversion', // legacy stored value — existing logs use it
 }
 
 export interface IActivityLog extends Document {

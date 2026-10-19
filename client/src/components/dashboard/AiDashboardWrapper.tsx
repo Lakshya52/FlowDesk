@@ -64,7 +64,7 @@ const AiDashboardWrapper: React.FC<AiDashboardWrapperProps> = ({ children }) => 
     if (/(calendar|schedule|event|meeting)/.test(q)) return "/calendar";
     if (/(client|compan)/.test(q)) return "/clients";
     if (/(chat|message)/.test(q)) return "/chat";
-    if (/(crm|lead|campaign|deal)/.test(q)) return "/crm/dashboard";
+    if (/(crm|lead|database|deal)/.test(q)) return "/crm/dashboard";
     return null;
   };
 

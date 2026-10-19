@@ -25,6 +25,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const blobUrlRef = useRef<string | null>(null);
 
+  // Blob URL for authenticated image/video sources: plain <img>/<video> tags
+  // cannot send the Authorization header that /api/files/by-name/* requires.
+  const [mediaBlobUrl, setMediaBlobUrl] = useState<string | null>(null);
+  const mediaBlobUrlRef = useRef<string | null>(null);
+
   // Excel state
   const [excelData, setExcelData] = useState<{
     sheetNames: string[];
@@ -114,6 +119,62 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
+      }
+    };
+  }, [isOpen, fileUrl, fileType, fileName]);
+
+  // Fetch images/videos with the auth header and render them through a blob
+  // URL. Public /uploads/* URLs pass through the same fetch, so this works
+  // for both legacy and tenant-checked sources.
+  useEffect(() => {
+    if (!isOpen || !fileUrl) return;
+
+    const ext = fileName.split(".").pop()?.toLowerCase() || "";
+    const isMediaFile =
+      fileType.startsWith("image/") ||
+      fileType.startsWith("video/") ||
+      [
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "svg",
+        "mp4",
+        "webm",
+        "ogg",
+        "mov",
+      ].includes(ext);
+    if (!isMediaFile) return;
+
+    if (mediaBlobUrlRef.current) {
+      URL.revokeObjectURL(mediaBlobUrlRef.current);
+      mediaBlobUrlRef.current = null;
+    }
+    setMediaBlobUrl(null);
+
+    let cancelled = false;
+    fetch(fileUrl, { headers: authHeaders() })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        mediaBlobUrlRef.current = url;
+        setMediaBlobUrl(url);
+      })
+      .catch((err) => {
+        // Fall back to the direct URL (works for public /uploads/* paths)
+        console.error("Media fetch error:", err);
+      });
+
+    return () => {
+      cancelled = true;
+      if (mediaBlobUrlRef.current) {
+        URL.revokeObjectURL(mediaBlobUrlRef.current);
+        mediaBlobUrlRef.current = null;
       }
     };
   }, [isOpen, fileUrl, fileType, fileName]);
@@ -366,7 +427,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       >
         {isImage ? (
           <img
-            src={fileUrl}
+            src={mediaBlobUrl || fileUrl}
             alt={fileName}
             style={{
               maxWidth: "100%",
@@ -386,7 +447,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <video
             controls
             autoPlay
-            src={fileUrl}
+            src={mediaBlobUrl || fileUrl}
             style={{
               maxWidth: "100%",
               maxHeight: "100%",

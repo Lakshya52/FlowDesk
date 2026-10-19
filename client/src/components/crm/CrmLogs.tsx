@@ -13,20 +13,20 @@ interface ActivityLog {
     _id: string;
     action: string;
     user: { _id: string; name: string; email: string; avatar?: string };
-    entityType: 'campaign' | 'lead' | 'partner';
+    entityType: 'database' | 'lead' | 'partner';
     entityId: string;
     metadata?: Record<string, any>;
     createdAt: string;
 }
 
 const ENTITY_ICONS: Record<string, React.ReactNode> = {
-    campaign: <Target size={14} />,
+    database: <Target size={14} />,
     lead: <PhoneCall size={14} />,
     partner: <Handshake size={14} />,
 };
 
 const ENTITY_COLORS: Record<string, { border: string; bg: string; text: string }> = {
-    campaign: { border: 'var(--color-primary)', bg: 'var(--color-primary-light)', text: 'var(--color-primary)' },
+    database: { border: 'var(--color-primary)', bg: 'var(--color-primary-light)', text: 'var(--color-primary)' },
     lead: { border: '#22c55e', bg: '#dcfce7', text: '#16a34a' },
     partner: { border: 'var(--color-warning)', bg: 'var(--color-warning-light)', text: 'var(--color-warning)' },
 };
@@ -132,7 +132,7 @@ const CrmLogs = () => {
                     <ScrollText size={20} style={{ color: 'var(--color-primary)' }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text)', margin: 0 }}>Activity Logs</h1>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text)', margin: 0 }}>CRM Activity Logs</h1>
                     <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{total} total entries</p>
                 </div>
                 <button
@@ -177,7 +177,7 @@ const CrmLogs = () => {
                         onChange={e => setFilterEntity(e.target.value)}
                     >
                         <option value="">All Types</option>
-                        <option value="campaign">Campaigns</option>
+                        <option value="database">Databases</option>
                         <option value="lead">Leads</option>
                         <option value="partner">Partners</option>
                     </select>
@@ -193,7 +193,7 @@ const CrmLogs = () => {
                     <ScrollText size={48} style={{ color: 'var(--color-text-tertiary)', margin: '0 auto 16px', opacity: 0.3 }} />
                     <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: 8 }}>No Activity Logs</h3>
                     <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
-                        Campaign, lead and partner activity will appear here as actions are performed.
+                        Database, lead and partner activity will appear here as actions are performed.
                     </p>
                 </div>
             ) : (

@@ -252,7 +252,7 @@ const Summary = () => {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-7">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-(--color-text)">
-            Summary
+            CRM Summary
           </h1>
           <p className="text-sm text-(--color-text-secondary) mt-0.5">
             CRM performance overview for the selected period

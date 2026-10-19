@@ -4,7 +4,7 @@ import FieldVisit from "../models/FieldVisit";
 import LocationTrack from "../models/LocationTrack";
 import Company from "../models/Company";
 import Lead from "../models/Lead";
-import Campaign from "../models/Campaign";
+import Database from "../models/Database";
 import Tenant from "../models/Tenant";
 import { AuthRequest } from "../middlewares/auth";
 import { uploadToGridFS } from "../utils/gridfs";

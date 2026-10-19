@@ -1,13 +1,13 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
-import Campaign from '../models/Campaign';
+import Database from '../models/Database';
 import Lead from '../models/Lead';
 import ActivityLog, { EntityType } from '../models/ActivityLog';
 import { AuthRequest } from '../middlewares/auth';
 import XLSX from 'xlsx';
-import { emitCampaignCreated, emitCampaignUpdated, emitCampaignDeleted } from '../services/crmSocketService';
+import { emitDatabaseCreated, emitDatabaseUpdated, emitDatabaseDeleted } from '../services/crmSocketService';
 
-export const createCampaign = async (req: AuthRequest, res: Response): Promise<void> => {
+export const createDatabase = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { name, purpose, description, people } = req.body;
         const tenantId = (req.user as any).tenantId?._id || (req.user as any).tenantId;
@@ -15,7 +15,7 @@ export const createCampaign = async (req: AuthRequest, res: Response): Promise<v
         const creatorId = req.user!._id;
         const peopleWithCreator = [...new Set([creatorId.toString(), ...(people || [])])];
 
-        const campaign = await Campaign.create({
+        const database = await Database.create({
             name,
             purpose,
             description,
@@ -25,25 +25,25 @@ export const createCampaign = async (req: AuthRequest, res: Response): Promise<v
         });
 
         await ActivityLog.create({
-            action: 'Campaign created',
+            action: 'Database created',
             user: req.user!._id,
-            entityType: EntityType.CAMPAIGN,
-            entityId: campaign._id,
-            metadata: { name: campaign.name },
+            entityType: EntityType.DATABASE,
+            entityId: database._id,
+            metadata: { name: database.name },
         });
 
-        const populated = await Campaign.findById(campaign._id).populate('people', 'name email avatar').populate('createdBy', 'name email avatar');
+        const populated = await Database.findById(database._id).populate('people', 'name email avatar').populate('createdBy', 'name email avatar');
 
         const tenantId2 = (req.user as any).tenantId?._id || (req.user as any).tenantId;
-        emitCampaignCreated(tenantId2, populated);
+        emitDatabaseCreated(tenantId2, populated);
 
-        res.status(201).json({ success: true, campaign: populated });
+        res.status(201).json({ success: true, database: populated });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }
 };
 
-export const getCampaigns = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getDatabases = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const tenantId = (req.user as any).tenantId?._id || (req.user as any).tenantId;
 
@@ -56,50 +56,50 @@ export const getCampaigns = async (req: AuthRequest, res: Response): Promise<voi
             ];
         }
 
-        const campaigns = await Campaign.find(filter)
+        const databases = await Database.find(filter)
             .populate('people', 'name email avatar')
             .populate('createdBy', 'name email avatar')
             .sort({ createdAt: -1 });
 
-        const campaignIds = campaigns.map(c => c._id);
+        const databaseIds = databases.map(c => c._id);
         const leadCounts = await Lead.aggregate([
-            { $match: { campaignId: { $in: campaignIds }, tenantId: new mongoose.Types.ObjectId(tenantId) } },
-            { $group: { _id: '$campaignId', count: { $sum: 1 } } },
+            { $match: { databaseId: { $in: databaseIds }, tenantId: new mongoose.Types.ObjectId(tenantId) } },
+            { $group: { _id: '$databaseId', count: { $sum: 1 } } },
         ]);
         const countMap: Record<string, number> = {};
         leadCounts.forEach(lc => { countMap[lc._id.toString()] = lc.count; });
-        const campaignsWithCounts = campaigns.map(c => ({
+        const databasesWithCounts = databases.map(c => ({
             ...c.toObject(),
             leadCount: countMap[c._id.toString()] || 0,
         }));
 
-        res.json({ success: true, campaigns: campaignsWithCounts });
+        res.json({ success: true, databases: databasesWithCounts });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-export const getCampaign = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getDatabase = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const campaign = await Campaign.findById(req.params.id).populate('people', 'name email avatar');
+        const database = await Database.findById(req.params.id).populate('people', 'name email avatar');
 
-        if (!campaign) {
-            res.status(404).json({ success: false, message: 'Campaign not found' });
+        if (!database) {
+            res.status(404).json({ success: false, message: 'Database not found' });
             return;
         }
 
-        res.json({ success: true, campaign });
+        res.json({ success: true, database });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-export const updateCampaign = async (req: AuthRequest, res: Response): Promise<void> => {
+export const updateDatabase = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const campaign = await Campaign.findById(req.params.id);
+        const database = await Database.findById(req.params.id);
 
-        if (!campaign) {
-            res.status(404).json({ success: false, message: 'Campaign not found' });
+        if (!database) {
+            res.status(404).json({ success: false, message: 'Database not found' });
             return;
         }
 
@@ -110,38 +110,38 @@ export const updateCampaign = async (req: AuthRequest, res: Response): Promise<v
 		for (const field of protectedFields) {
 			delete sanitizedBody[field];
 		}
-		Object.assign(campaign, sanitizedBody);
+		Object.assign(database, sanitizedBody);
 
 		if (req.body.people) {
-            const creatorId = campaign.createdBy.toString();
+            const creatorId = database.createdBy.toString();
             if (!req.body.people.includes(creatorId)) {
                 req.body.people.push(creatorId);
             }
-            campaign.people = [...new Set(req.body.people)] as mongoose.Types.ObjectId[];
+            database.people = [...new Set(req.body.people)] as mongoose.Types.ObjectId[];
         }
 
-        await campaign.save();
+        await database.save();
 
-        const populated = await Campaign.findById(campaign._id).populate('people', 'name email avatar');
+        const populated = await Database.findById(database._id).populate('people', 'name email avatar');
 
         const tenantId = (req.user as any).tenantId?._id || (req.user as any).tenantId;
-        emitCampaignUpdated(tenantId, populated);
+        emitDatabaseUpdated(tenantId, populated);
 
         await ActivityLog.create({
-            action: 'Campaign updated',
+            action: 'Database updated',
             user: req.user!._id,
-            entityType: EntityType.CAMPAIGN,
-            entityId: campaign._id,
-            metadata: { name: campaign.name, fields: changedFields },
+            entityType: EntityType.DATABASE,
+            entityId: database._id,
+            metadata: { name: database.name, fields: changedFields },
         });
 
-        res.json({ success: true, campaign: populated });
+        res.json({ success: true, database: populated });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }
 };
 
-export const importCampaignExcel = async (req: AuthRequest, res: Response): Promise<void> => {
+export const importDatabaseExcel = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         if (!req.file) {
             res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -158,7 +158,7 @@ export const importCampaignExcel = async (req: AuthRequest, res: Response): Prom
             return;
         }
 
-        const campaigns = [];
+        const databases = [];
         const errors = [];
 
         for (let i = 0; i < rows.length; i++) {
@@ -174,7 +174,7 @@ export const importCampaignExcel = async (req: AuthRequest, res: Response): Prom
                     ? people.split(',').map((p: string) => p.trim()).filter(Boolean)
                     : [];
 
-                const campaign = await Campaign.create({
+                const database = await Database.create({
                     tenantId,
                     createdBy: req.user!._id,
                     name: row.name || row.Name || row.NAME || '',
@@ -183,17 +183,17 @@ export const importCampaignExcel = async (req: AuthRequest, res: Response): Prom
                     people: peopleIds,
                 });
 
-                campaigns.push(campaign);
+                databases.push(database);
             } catch (err: any) {
                 errors.push({ row: i + 1, message: err.message });
             }
         }
 
-        if (campaigns.length > 0) emitCampaignCreated(tenantId, campaigns[0]);
+        if (databases.length > 0) emitDatabaseCreated(tenantId, databases[0]);
 
         res.status(201).json({
             success: true,
-            imported: campaigns.length,
+            imported: databases.length,
             errors,
         });
     } catch (error: any) {
@@ -201,7 +201,7 @@ export const importCampaignExcel = async (req: AuthRequest, res: Response): Prom
     }
 };
 
-export const downloadCampaignSampleExcel = async (_req: AuthRequest, res: Response): Promise<void> => {
+export const downloadDatabaseSampleExcel = async (_req: AuthRequest, res: Response): Promise<void> => {
     const wb = XLSX.utils.book_new();
     const headers = ['name', 'purpose', 'description', 'people'];
     const sampleData = [
@@ -220,7 +220,7 @@ export const downloadCampaignSampleExcel = async (_req: AuthRequest, res: Respon
     ];
 
     const ws = XLSX.utils.json_to_sheet(sampleData, { header: headers });
-    XLSX.utils.book_append_sheet(wb, ws, 'Campaigns');
+    XLSX.utils.book_append_sheet(wb, ws, 'Databases');
 
     const colWidths = headers.map(h => ({ wch: Math.max(h.length, 25) }));
     ws['!cols'] = colWidths;
@@ -228,52 +228,52 @@ export const downloadCampaignSampleExcel = async (_req: AuthRequest, res: Respon
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="campaign-import-template.xlsx"');
+    res.setHeader('Content-Disposition', 'attachment; filename="database-import-template.xlsx"');
     res.send(buffer);
 };
 
-export const deleteCampaign = async (req: AuthRequest, res: Response): Promise<void> => {
+export const deleteDatabase = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const tenantId3 = (req.user as any).tenantId?._id || (req.user as any).tenantId;
-        const campaign = await Campaign.findOneAndDelete({ _id: req.params.id, tenantId: tenantId3 });
+        const database = await Database.findOneAndDelete({ _id: req.params.id, tenantId: tenantId3 });
 
-        if (!campaign) {
-            res.status(404).json({ success: false, message: 'Campaign not found' });
+        if (!database) {
+            res.status(404).json({ success: false, message: 'Database not found' });
             return;
         }
 
-        // Optional cascade: ?deleteLeads=true removes the campaign's leads as well.
-        // Otherwise kept leads are unlinked (campaignId unset) so they don't point
-        // at a deleted campaign and stay visible under the "no campaign" filter.
+        // Optional cascade: ?deleteLeads=true removes the database's leads as well.
+        // Otherwise kept leads are unlinked (databaseId unset) so they don't point
+        // at a deleted database and stay visible under the "no database" filter.
         const deleteLeads = req.query.deleteLeads === 'true' || (req.body as any)?.deleteLeads === true;
         let deletedLeads = 0;
         let keptLeads = 0;
         if (deleteLeads) {
-            const r = await Lead.deleteMany({ campaignId: campaign._id, tenantId: tenantId3 });
+            const r = await Lead.deleteMany({ databaseId: database._id, tenantId: tenantId3 });
             deletedLeads = r.deletedCount ?? 0;
         } else {
             const r = await Lead.updateMany(
-                { campaignId: campaign._id, tenantId: tenantId3 },
-                { $unset: { campaignId: 1 } },
+                { databaseId: database._id, tenantId: tenantId3 },
+                { $unset: { databaseId: 1 } },
             );
             keptLeads = (r as any).modifiedCount ?? 0;
         }
 
-        emitCampaignDeleted(tenantId3, req.params.id as string);
+        emitDatabaseDeleted(tenantId3, req.params.id as string);
 
         await ActivityLog.create({
-            action: 'Campaign deleted',
+            action: 'Database deleted',
             user: req.user!._id,
-            entityType: EntityType.CAMPAIGN,
-            entityId: campaign._id,
-            metadata: { name: campaign.name, deleteLeads, deletedLeads, keptLeads },
+            entityType: EntityType.DATABASE,
+            entityId: database._id,
+            metadata: { name: database.name, deleteLeads, deletedLeads, keptLeads },
         });
 
         res.json({
             success: true,
             message: deleteLeads
-                ? `Campaign deleted with ${deletedLeads} lead${deletedLeads !== 1 ? 's' : ''}`
-                : 'Campaign deleted successfully',
+                ? `Database deleted with ${deletedLeads} lead${deletedLeads !== 1 ? 's' : ''}`
+                : 'Database deleted successfully',
             deletedLeads,
             keptLeads,
         });

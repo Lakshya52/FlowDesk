@@ -8,12 +8,17 @@ import {
   ClipboardList,
   ScrollText,
   CalendarClock,
+  BadgeCheck,
   MapPin,
 } from "lucide-react";
 import CrmDashboard from "../components/crm/CrmDashboard";
-import Campaigns from "../components/crm/Campaigns";
+import LeadsOverview from "../components/crm/LeadsOverview";
+import Databases from "../components/crm/Databases";
 import Partners from "../components/crm/Partners";
 import DialQueue from "../components/crm/DialQueue";
+import Files from "../components/crm/Files";
+import ConversionsOverview from "../components/crm/ConversionsOverview";
+import DocsStructure from "../components/crm/DocsStructure";
 // import Plan from "../components/crm/Plan";
 import CrmLogs from "../components/crm/CrmLogs";
 import Schedule from "../components/crm/Schedule";
@@ -29,11 +34,11 @@ const SECTIONS = [
     description: "CRM overview & key metrics",
   },
   {
-    id: "campaigns",
-    label: "Campaigns",
+    id: "databases",
+    label: "Databases",
     icon: <Megaphone size={18} />,
-    component: Campaigns,
-    description: "Manage and track campaigns",
+    component: Databases,
+    description: "Manage and track databases",
   },
   {
     id: "partners",
@@ -48,6 +53,13 @@ const SECTIONS = [
     icon: <PhoneCall size={18} />,
     component: DialQueue,
     description: "Outbound calling queue",
+  },
+  {
+    id: "files",
+    label: "Files",
+    icon: <BadgeCheck size={18} />,
+    component: Files,
+    description: "Loan files, document checklists & closure",
   },
   {
     id: "schedule",
@@ -75,7 +87,7 @@ const SECTIONS = [
     label: "Logs",
     icon: <ScrollText size={18} />,
     component: CrmLogs,
-    description: "Campaign & lead activity logs",
+    description: "Database & lead activity logs",
   },
   {
     id: "field-visits",
@@ -86,15 +98,37 @@ const SECTIONS = [
   },
 ];
 
+// Sub-pages that live one level deeper, e.g. /crm/dial/leads-overview.
+// They reuse existing components — no separate pages are created.
+const SUBSECTIONS: Record<string, Record<string, React.ComponentType>> = {
+  dial: {
+    "leads-overview": LeadsOverview,
+  },
+  files: {
+    overview: ConversionsOverview,
+    "docs-structure": DocsStructure,
+  },
+};
+
 const CrmPage = (): React.JSX.Element => {
-  const { section } = useParams<{ section: string }>();
+  const { section, subsection } = useParams<{
+    section: string;
+    subsection?: string;
+  }>();
   const activeSection = section || "dashboard";
   const activeSectionData = SECTIONS.find((s) => s.id === activeSection);
-  const ActiveComponent = activeSectionData?.component || CrmDashboard;
+  const subsectionComponent = subsection
+    ? SUBSECTIONS[activeSection]?.[subsection]
+    : undefined;
+  const ActiveComponent =
+    subsectionComponent || activeSectionData?.component || CrmDashboard;
+  const viewKey = subsection
+    ? `${activeSection}/${subsection}`
+    : activeSection;
 
   useEffect(() => {
     document.getElementById("main-content-scroll")?.scrollTo(0, 0);
-  }, [activeSection]);
+  }, [viewKey]);
 
   return (
     <div className="h-full bg-(--color-bg)">
@@ -122,7 +156,7 @@ const CrmPage = (): React.JSX.Element => {
       </div> */}
 
       {/* <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-12 mt-6 sm:mt-8"> */}
-        <div className="animate-fade-in" key={activeSection}>
+        <div className="animate-fade-in" key={viewKey}>
           <ActiveComponent />
         </div>
       {/* </div> */}

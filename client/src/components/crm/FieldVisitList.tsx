@@ -121,7 +121,7 @@ const FieldVisitList: React.FC<Props> = ({
 	const [scheduleTime, setScheduleTime] = useState("10:00");
 	const [scheduling, setScheduling] = useState(false);
 	const [scheduleShowCreateLead, setScheduleShowCreateLead] = useState(false);
-	const [scheduleCampaigns, setScheduleCampaigns] = useState<any[]>([]);
+	const [scheduleDatabases, setScheduleDatabases] = useState<any[]>([]);
 	const [scheduleNewLead, setScheduleNewLead] = useState({
 		name: "",
 		phone: "",
@@ -129,7 +129,7 @@ const FieldVisitList: React.FC<Props> = ({
 		city: "",
 		state: "",
 		addressLine: "",
-		campaignId: "",
+		databaseId: "",
 	});
 	const [scheduleCreatingLead, setScheduleCreatingLead] = useState(false);
 
@@ -229,7 +229,7 @@ const FieldVisitList: React.FC<Props> = ({
 				city: scheduleNewLead.city.trim(),
 				state: scheduleNewLead.state.trim(),
 				addressLine: scheduleNewLead.addressLine.trim(),
-				campaignId: scheduleNewLead.campaignId,
+				databaseId: scheduleNewLead.databaseId,
 				source: "field_visit",
 			});
 			const created = res.data.lead;
@@ -1132,14 +1132,14 @@ const FieldVisitList: React.FC<Props> = ({
 								<h4 className="text-sm font-semibold text-(--color-text) mb-3">Create New Lead</h4>
 								<div className="space-y-3">
 									<div>
-										<label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Campaign (optional)</label>
+										<label className="block text-xs font-medium text-(--color-text-tertiary) mb-1">Database (optional)</label>
 										<select
-											value={scheduleNewLead.campaignId}
-											onChange={(e) => setScheduleNewLead((p) => ({ ...p, campaignId: e.target.value }))}
+											value={scheduleNewLead.databaseId}
+											onChange={(e) => setScheduleNewLead((p) => ({ ...p, databaseId: e.target.value }))}
 											className="w-full px-3 py-2 border border-(--color-border) rounded-lg text-sm"
 										>
-											<option value="">Select campaign...</option>
-											{scheduleCampaigns.map((c) => (
+											<option value="">Select database...</option>
+											{scheduleDatabases.map((c) => (
 												<option key={c._id} value={c._id}>{c.name}</option>
 											))}
 										</select>
@@ -1316,8 +1316,8 @@ const FieldVisitList: React.FC<Props> = ({
 								{!scheduleSelectedLead && (
 									<button
 										onClick={() => {
-											api.get("/campaigns")
-												.then((r) => setScheduleCampaigns(r.data.campaigns || []))
+											api.get("/databases")
+												.then((r) => setScheduleDatabases(r.data.databases || []))
 												.catch(() => {});
 											setScheduleShowCreateLead(true);
 										}}

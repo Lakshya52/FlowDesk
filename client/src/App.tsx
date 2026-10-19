@@ -3,7 +3,7 @@ import React from "react";
 import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
-import { getFirstAllowedRoute, navItems } from "./components/layout/Sidebar";
+import { getFirstAllowedRoute, navItems, normalizeTab } from "./components/layout/Sidebar";
 import { useAuthStore } from "./store/authStore";
 // import { WifiOff } from "lucide-react";
 // import axios from 'axios';
@@ -189,8 +189,14 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       {/* <OfflineBanner /> */}
       <Toaster
-        position="top-right"
-        containerStyle={{ zIndex: 5000 }}
+        position="top-center"
+        containerStyle={{
+          zIndex: 5000,
+          // Clear the app header (~65px) and the landing navbar (~80px) so
+          // toasts never cover navigation controls.
+          top: "calc(env(safe-area-inset-top) + 88px)",
+        }}
+        gutter={10}
         toastOptions={{
           className: "app-toast",
           style: {
@@ -229,7 +235,7 @@ const RouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === 'admin') return <>{children}</>;
 
-  const allowed = user.permissions?.allowedTabs ?? [];
+  const allowed = (user.permissions?.allowedTabs ?? []).map(normalizeTab);
 
   // console.log('[RouteGuard]', location.pathname, '| allowedTabs:', allowed, '| includes /tasks:', allowed.includes('/tasks'));
 
@@ -325,6 +331,15 @@ const AppInner: React.FC = () => {
           <Route
             path="/crm"
             element={<Navigate to="/crm/dashboard" replace />}
+          />
+          {/* Legacy paths — the Conversions page was renamed to Files. */}
+          <Route
+            path="/crm/conversions"
+            element={<Navigate to="/crm/files" replace />}
+          />
+          <Route
+            path="/crm/conversions/docs-structure"
+            element={<Navigate to="/crm/files/docs-structure" replace />}
           />
           <Route path="/crm/:section/:subsection" element={<RouteGuard><CrmPage /></RouteGuard>} />
           <Route path="/crm/:section" element={<RouteGuard><CrmPage /></RouteGuard>} />

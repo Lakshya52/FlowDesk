@@ -25,31 +25,66 @@ export const useCrmSocket = () => {
 
     const invalidateLeads = () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      // Partner cards show live lead counts and the detail panel lists
+      // referred leads — keep them in sync whenever a lead changes.
+      queryClient.invalidateQueries({ queryKey: ["partners"] });
+      queryClient.invalidateQueries({ queryKey: ["partner"] });
+      queryClient.invalidateQueries({ queryKey: ["partner-leads"] });
       queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     };
 
-    const invalidateCampaigns = () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    const invalidateDatabases = () => {
+      queryClient.invalidateQueries({ queryKey: ["databases"] });
       queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     };
 
     const invalidatePartners = () => {
       queryClient.invalidateQueries({ queryKey: ["partners"] });
+      queryClient.invalidateQueries({ queryKey: ["partner"] });
+      queryClient.invalidateQueries({ queryKey: ["partner-leads"] });
+      // Renaming/deleting a partner also affects its leads (source label,
+      // partnerId unlink), so refresh those views too.
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     };
 
     socket.on("crm:lead:created", invalidateLeads);
     socket.on("crm:lead:updated", invalidateLeads);
     socket.on("crm:lead:deleted", invalidateLeads);
-    socket.on("crm:campaign:created", invalidateCampaigns);
-    socket.on("crm:campaign:updated", invalidateCampaigns);
-    socket.on("crm:campaign:deleted", invalidateCampaigns);
+    socket.on("crm:database:created", invalidateDatabases);
+    socket.on("crm:database:updated", invalidateDatabases);
+    socket.on("crm:database:deleted", invalidateDatabases);
     socket.on("crm:partner:created", invalidatePartners);
     socket.on("crm:partner:updated", invalidatePartners);
     socket.on("crm:partner:deleted", invalidatePartners);
 
+    const invalidateCaseFiles = () => {
+      queryClient.invalidateQueries({ queryKey: ["case-files"] });
+      queryClient.invalidateQueries({ queryKey: ["case-file-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+      // CaseFiles mirror won leads — keep lead views in sync too.
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    };
+
+    const invalidateCaseFilesStructure = () => {
+      queryClient.invalidateQueries({ queryKey: ["case-files"] });
+      queryClient.invalidateQueries({ queryKey: ["case-file-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-products"] });
+      queryClient.invalidateQueries({ queryKey: ["doc-statuses"] });
+    };
+
+    socket.on("crm:case-file:created", invalidateCaseFiles);
+    socket.on("crm:case-file:updated", invalidateCaseFiles);
+    socket.on("crm:case-file:deleted", invalidateCaseFiles);
+    socket.on("crm:loan-product:created", invalidateCaseFilesStructure);
+    socket.on("crm:loan-product:updated", invalidateCaseFilesStructure);
+    socket.on("crm:loan-product:deleted", invalidateCaseFilesStructure);
+    socket.on("crm:doc-status:changed", invalidateCaseFilesStructure);
+
     const invalidateFieldVisitReports = () => {
       queryClient.invalidateQueries({ queryKey: ["field-visit-reports"] });
+      // CRM Overview shows a live "active now" field-visits tile.
+      queryClient.invalidateQueries({ queryKey: ["field-visits"] });
     };
 
     socket.on("field-visit:created", invalidateFieldVisitReports);
@@ -63,12 +98,19 @@ export const useCrmSocket = () => {
       socket.off("crm:lead:created", invalidateLeads);
       socket.off("crm:lead:updated", invalidateLeads);
       socket.off("crm:lead:deleted", invalidateLeads);
-      socket.off("crm:campaign:created", invalidateCampaigns);
-      socket.off("crm:campaign:updated", invalidateCampaigns);
-      socket.off("crm:campaign:deleted", invalidateCampaigns);
+      socket.off("crm:database:created", invalidateDatabases);
+      socket.off("crm:database:updated", invalidateDatabases);
+      socket.off("crm:database:deleted", invalidateDatabases);
       socket.off("crm:partner:created", invalidatePartners);
       socket.off("crm:partner:updated", invalidatePartners);
       socket.off("crm:partner:deleted", invalidatePartners);
+      socket.off("crm:case-file:created", invalidateCaseFiles);
+      socket.off("crm:case-file:updated", invalidateCaseFiles);
+      socket.off("crm:case-file:deleted", invalidateCaseFiles);
+      socket.off("crm:loan-product:created", invalidateCaseFilesStructure);
+      socket.off("crm:loan-product:updated", invalidateCaseFilesStructure);
+      socket.off("crm:loan-product:deleted", invalidateCaseFilesStructure);
+      socket.off("crm:doc-status:changed", invalidateCaseFilesStructure);
       socket.off("field-visit:created", invalidateFieldVisitReports);
       socket.off("field-visit:updated", invalidateFieldVisitReports);
       socket.off("field-visit:checked-in", invalidateFieldVisitReports);

@@ -20,7 +20,7 @@ import LeadDetailModal, {
 	STATUS_OPTIONS,
 } from "./LeadDetailModal";
 
-interface Campaign {
+interface Database {
 	_id: string;
 	name: string;
 }
@@ -49,11 +49,14 @@ interface MeetingLog {
 	scheduledAt: string;
 	createdAt: string;
 	status: "scheduled" | "done" | "canceled";
+	mode?: "virtual" | "physical";
+	location?: string;
+	link?: string;
 }
 
 export interface Lead {
 	_id: string;
-	campaignId: Campaign | string;
+	databaseId: Database | string;
 	tenantId: string;
 	name: string;
 	designation?: string;
@@ -73,6 +76,7 @@ export interface Lead {
 	source: string;
 	sourceType?: "udyam" | "self" | "partner";
 	partnerId?: { _id: string; companyName?: string; name?: string; personName?: string; partnerType?: string } | string;
+	product?: string;
 	status:
 		| "new"
 		| "attempted"
@@ -92,6 +96,9 @@ export interface Lead {
 	scheduleType?: "follow_up" | "meeting";
 	meetingStatus?: "scheduled" | "done" | "canceled";
 	meetingAt?: string;
+	meetingMode?: "virtual" | "physical";
+	meetingLocation?: string;
+	meetingLink?: string;
 	followUpCount: number;
 	meetingCount: number;
 	followUpLogs: FollowUpLog[];
@@ -112,6 +119,16 @@ const INDIAN_STATES = [
 	"Ladakh", "Lakshadweep", "Puducherry",
 ];
 
+// Applied-filter highlight: an indigo ring + tint on a dropdown so a
+// forgotten filter stands out at a glance.
+const APPLIED_FILTER_STYLE = {
+	borderColor: "var(--color-primary)",
+	boxShadow: "0 0 0 2px rgba(99, 102, 241, 0.14)",
+	background: "var(--color-primary-light)",
+	color: "var(--color-primary)",
+	fontWeight: 600,
+};
+
 
 
 const DialQueue = () => {
@@ -124,7 +141,7 @@ const DialQueue = () => {
 	useCrmSocket();
 
 	const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-	const [filterCampaign, setFilterCampaign] = useState("");
+	const [filterDatabase, setFilterDatabase] = useState("");
 	const [filterStatus, setFilterStatus] = useState("");
 	const [searchInput, setSearchInput] = useState("");
 	const [searchQuery, setSearchQuery] = useState("");
@@ -135,6 +152,20 @@ const DialQueue = () => {
 	const [filterState, setFilterState] = useState("");
 	const [filterPincode, setFilterPincode] = useState("");
 	const [showFilters, setShowFilters] = useState(false);
+
+	// How many dropdown filters are currently applied — drives the highlight
+	// on the Filters button and the per-select styling, so a forgotten filter
+	// is obvious at a glance.
+	const activeFilterCount = [
+		filterDatabase,
+		filterStatus,
+		filterIndustry,
+		filterSource,
+		filterPriority,
+		filterCity,
+		filterState,
+		filterPincode,
+	].filter(Boolean).length;
 
 	const [activeTab, setActiveTab] = useState<
 		"all" | "archived" | "meeting_scheduled" | "closed_won"
@@ -151,9 +182,9 @@ const DialQueue = () => {
 	const [showCreateForm, setShowCreateForm] = useState(false);
 	const [importing, setImporting] = useState(false);
 	const [importStep, setImportStep] = useState<
-		"campaign" | "upload" | "result"
-	>("campaign");
-	const [importCampaignId, setImportCampaignId] = useState("");
+		"database" | "upload" | "result"
+	>("database");
+	const [importDatabaseId, setImportDatabaseId] = useState("");
 	const [importResult, setImportResult] = useState<{
 		imported: number;
 		errors: any[];
@@ -165,30 +196,27 @@ const DialQueue = () => {
 	const [isCalling, setIsCalling] = useState(false);
 	const [callDuration, setCallDuration] = useState(0);
 
-	const [followupDate, setFollowupDate] = useState("");
-	const [schedulingFollowup, setSchedulingFollowup] = useState(false);
-	const [scheduleType, setScheduleType] = useState<"follow_up" | "meeting">(
-		"follow_up",
-	);
 	const [showAllContactDetails, setShowAllContactDetails] = useState(false);
 	const [isEditingLead, setIsEditingLead] = useState(false);
 	const [editForm, setEditForm] = useState<
 		Record<string, string | undefined>
 	>({});
 
-	const [showProjectModal, setShowProjectModal] = useState(false);
-	const [creatingProject, setCreatingProject] = useState(false);
-	const [allUsers, setAllUsers] = useState<any[]>([]);
-	const [projectForm, setProjectForm] = useState({
-		title: "",
-		clientName: "",
-		assignmentType: "transactional" as "transactional" | "recurring",
-		description: "",
-		priority: "medium" as "low" | "medium" | "high" | "urgent",
-		startDate: new Date().toISOString().split("T")[0],
-		dueDate: "",
-		noDueDate: false,
-		team: [] as string[],
+	const [showConvertModal, setShowConvertModal] = useState(false);
+	const [convertingLead, setConvertingLead] = useState(false);
+	const [convertForm, setConvertForm] = useState({
+		productId: "",
+		notes: "",
+	});
+
+	// Products for the Convert Lead modal — the docs checklist template source
+	const { data: loanProducts = [] } = useQuery<any[]>({
+		queryKey: ["loan-products"],
+		queryFn: async () => {
+			const res = await api.get("/loan-products");
+			return res.data.products || [];
+		},
+		enabled: showConvertModal,
 	});
 
 	const [createForm, setCreateForm] = useState({
@@ -206,7 +234,7 @@ const DialQueue = () => {
 		industry: "",
 		website: "",
 		alternatePhone: "",
-		campaignId: "",
+		databaseId: "",
 		priority: "medium" as Lead["priority"],
 		sourceType: "udyam" as "udyam" | "self" | "partner",
 		partnerId: "",
@@ -246,16 +274,6 @@ const handlePincodeChange = async (value: string) => {
 		setCallDuration(0);
 		if (selectedLead) {
 			setIsEditingLead(false);
-			const hasMeeting = selectedLead.meetingAt;
-			const hasFollowup = selectedLead.nextFollowupAt;
-			const dateStr = hasMeeting || hasFollowup;
-			setFollowupDate(
-				dateStr ? new Date(dateStr).toISOString().slice(0, 16) : "",
-			);
-			setScheduleType(
-				selectedLead.scheduleType ||
-					(selectedLead.meetingAt ? "meeting" : "follow_up"),
-			);
 		}
 	}, [selectedLead]);
 
@@ -309,7 +327,7 @@ const handlePincodeChange = async (value: string) => {
 			page,
 			pageSize,
 			activeTab,
-			filterCampaign,
+			filterDatabase,
 			filterStatus,
 			searchQuery,
 			filterIndustry,
@@ -323,7 +341,7 @@ const handlePincodeChange = async (value: string) => {
 			page,
 			pageSize,
 			activeTab,
-			filterCampaign,
+			filterDatabase,
 			filterStatus,
 			searchQuery,
 			filterIndustry,
@@ -340,7 +358,7 @@ const handlePincodeChange = async (value: string) => {
 			queryKey: ["leads", leadsParams],
 			queryFn: async () => {
 				const params: any = { page: page, limit: pageSize };
-				if (filterCampaign) params.campaignId = filterCampaign;
+				if (filterDatabase) params.databaseId = filterDatabase;
 				const tabStatus = getTabStatusParam(activeTab);
 				if (tabStatus) {
 					params.status = tabStatus;
@@ -367,11 +385,11 @@ const handlePincodeChange = async (value: string) => {
 	const leads = leadsData.leads;
 	const totalPages = leadsData.totalPages;
 
-	const { data: campaigns = [] } = useQuery({
-		queryKey: ["campaigns"],
+	const { data: databases = [] } = useQuery({
+		queryKey: ["databases"],
 		queryFn: async () => {
-			const { data } = await api.get("/campaigns");
-			return data.success ? data.campaigns : [];
+			const { data } = await api.get("/databases");
+			return data.success ? data.databases : [];
 		},
 	});
 
@@ -385,11 +403,11 @@ const handlePincodeChange = async (value: string) => {
 
 	const filterOptionsContext = useMemo(
 		() => ({
-			filterCampaign,
+			filterDatabase,
 			searchQuery,
 			tabStatus: getTabStatusParam(activeTab),
 		}),
-		[filterCampaign, searchQuery, activeTab],
+		[filterDatabase, searchQuery, activeTab],
 	);
 
 	const { data: filterOptions = { industries: [], sources: [], cities: [], states: [], pincodes: [] } } =
@@ -397,7 +415,7 @@ const handlePincodeChange = async (value: string) => {
 			queryKey: ["leads", "filter-options", filterOptionsContext],
 			queryFn: async () => {
 				const params: any = {};
-				if (filterCampaign) params.campaignId = filterCampaign;
+				if (filterDatabase) params.databaseId = filterDatabase;
 				if (searchQuery) params.search = searchQuery;
 				const tabStatus = getTabStatusParam(activeTab);
 				if (tabStatus) params.status = tabStatus;
@@ -411,7 +429,7 @@ const handlePincodeChange = async (value: string) => {
 
 	const countsParams = useMemo(
 		() => ({
-			filterCampaign,
+			filterDatabase,
 			searchQuery,
 			filterIndustry,
 			filterSource,
@@ -421,7 +439,7 @@ const handlePincodeChange = async (value: string) => {
 			filterPincode,
 		}),
 		[
-			filterCampaign,
+			filterDatabase,
 			searchQuery,
 			filterIndustry,
 			filterSource,
@@ -443,7 +461,7 @@ const handlePincodeChange = async (value: string) => {
 		queryKey: ["leads", "counts", countsParams],
 		queryFn: async () => {
 			const params: any = {};
-			if (filterCampaign) params.campaignId = filterCampaign;
+			if (filterDatabase) params.databaseId = filterDatabase;
 			if (searchQuery) params.search = searchQuery;
 			if (filterIndustry) params.industry = filterIndustry;
 			if (filterSource) params.source = filterSource;
@@ -463,7 +481,7 @@ const handlePincodeChange = async (value: string) => {
 		setPage(1);
 	}, [
 		activeTab,
-		filterCampaign,
+		filterDatabase,
 		filterStatus,
 		searchQuery,
 		filterIndustry,
@@ -487,12 +505,25 @@ const handlePincodeChange = async (value: string) => {
 		}
 	}, [location.search]);
 
-	// Set campaign filter from URL param (e.g. from Campaigns page card click)
+	// Set database filter from URL param (e.g. from Databases page card click)
 	useEffect(() => {
 		const params = new URLSearchParams(location.search);
-		const campaignId = params.get("campaignId");
-		if (campaignId) {
-			setFilterCampaign(campaignId);
+		const databaseId = params.get("databaseId");
+		if (databaseId) {
+			setFilterDatabase(databaseId);
+			navigate("/crm/dial", { replace: true });
+		}
+	}, [location.search]);
+
+	// Set status filter from URL param (e.g. from Leads Overview status tiles)
+	useEffect(() => {
+		const params = new URLSearchParams(location.search);
+		const status = params.get("status");
+		if (status) {
+			// Tab filters override the status dropdown — reset to "all" so the
+			// requested status actually applies.
+			setActiveTab("all");
+			setFilterStatus(status);
 			navigate("/crm/dial", { replace: true });
 		}
 	}, [location.search]);
@@ -547,11 +578,11 @@ const handlePincodeChange = async (value: string) => {
 		return () => document.removeEventListener("keydown", handleEsc);
 	}, [selectedLead]);
 
-	const getCampaignName = (campaignId: any): string => {
-		if (!campaignId) return "—";
-		if (typeof campaignId === "object" && campaignId.name)
-			return campaignId.name;
-		const found = campaigns.find((c: any) => c._id === campaignId);
+	const getDatabaseName = (databaseId: any): string => {
+		if (!databaseId) return "—";
+		if (typeof databaseId === "object" && databaseId.name)
+			return databaseId.name;
+		const found = databases.find((c: any) => c._id === databaseId);
 		return found?.name || "—";
 	};
 
@@ -590,34 +621,13 @@ const handlePincodeChange = async (value: string) => {
 		});
 	};
 
-	const fetchUsersAndTeams = async () => {
-		try {
-			const { data } = await api.get("/auth/users?all=true");
-			setAllUsers(data.users || []);
-		} catch (err) {
-			console.error("Failed to fetch users", err);
-		}
-	};
-
 	const handleStatusChange = async (
 		leadId: string,
 		status: Lead["status"],
 	) => {
 		if (status === "closed_won" && selectedLead) {
-			setProjectForm({
-				title: `Converted - ${selectedLead.companyName || selectedLead.name || "Lead"}`,
-				clientName: selectedLead.companyName || "",
-				assignmentType: "transactional",
-				// description: `Project from lead: ${selectedLead.name || ""}${selectedLead.companyName ? ` (${selectedLead.companyName})` : ""}`,
-				description: `Successfully converted : ${selectedLead.name || ""}${selectedLead.companyName ? ` (${selectedLead.companyName})` : ""}`,
-				priority: "medium",
-				startDate: new Date().toISOString().split("T")[0],
-				dueDate: "",
-				noDueDate: false,
-				team: [],
-			});
-			fetchUsersAndTeams();
-			setShowProjectModal(true);
+			setConvertForm({ productId: "", notes: "" });
+			setShowConvertModal(true);
 			return;
 		}
 		setUpdatingLead(true);
@@ -634,45 +644,36 @@ const handlePincodeChange = async (value: string) => {
 		}
 	};
 
-	const handleCreateProject = async () => {
-		if (!projectForm.title.trim() || !projectForm.clientName.trim()) {
-			toast.error("Title and Company Name are required");
-			return;
-		}
-		setCreatingProject(true);
+	const handleConvertLead = async () => {
+		if (!selectedLead) return;
+		setConvertingLead(true);
 		try {
-			await api.post("/assignments", {
-				title: projectForm.title.trim(),
-				clientName: projectForm.clientName.trim(),
-				description: projectForm.description.trim(),
-				priority: projectForm.priority,
-				status: "not_started",
-				startDate: projectForm.startDate,
-				dueDate: projectForm.dueDate || null,
-				team: [...projectForm.team, currentUser?._id].filter(Boolean),
-				isRecurring: projectForm.assignmentType === "recurring",
-			});
-
-			const { data } = await api.put(`/leads/${selectedLead!._id}`, {
-				status: "closed_won",
+			const { data } = await api.post("/case-files", {
+				leadId: selectedLead._id,
+				productId: convertForm.productId || undefined,
+				notes: convertForm.notes.trim() || undefined,
 			});
 			if (data.success) {
-				setSelectedLead(data.lead);
+				setSelectedLead((prev) =>
+					prev ? { ...prev, status: "closed_won" } : prev,
+				);
 				queryClient.invalidateQueries({ queryKey: ["leads"] });
-				toast.success("Project created & lead closed as won");
-				setShowProjectModal(false);
+				queryClient.invalidateQueries({ queryKey: ["case-files"] });
+				queryClient.invalidateQueries({ queryKey: ["case-file-stats"] });
+				toast.success("Lead converted — tracked in Files");
+				setShowConvertModal(false);
 			}
 		} catch (err: any) {
 			toast.error(
-				err?.response?.data?.message || "Failed to create project",
+				err?.response?.data?.message || "Failed to convert lead",
 			);
 		} finally {
-			setCreatingProject(false);
+			setConvertingLead(false);
 		}
 	};
 
-	const handleCancelProject = () => {
-		setShowProjectModal(false);
+	const handleCancelConvert = () => {
+		setShowConvertModal(false);
 	};
 
 	const handleRecordCall = async (
@@ -750,39 +751,9 @@ const handlePincodeChange = async (value: string) => {
 		}
 	};
 
-	const handleScheduleFollowup = async () => {
-		if (!selectedLead || !followupDate) return;
-		setSchedulingFollowup(true);
-		try {
-			const payload: any = {
-				scheduleType,
-			};
-			if (scheduleType === "meeting") {
-				payload.meetingAt = followupDate;
-				payload.status = "meeting_scheduled";
-				payload.meetingStatus = "scheduled";
-			} else {
-				payload.nextFollowupAt = followupDate;
-				payload.status = "callback_scheduled";
-			}
-			const { data } = await api.put(
-				`/leads/${selectedLead._id}`,
-				payload,
-			);
-			if (data.success) {
-				setSelectedLead(data.lead);
-				queryClient.invalidateQueries({ queryKey: ["leads"] });
-			}
-		} catch (err) {
-			console.error("Failed to schedule follow-up", err);
-		} finally {
-			setSchedulingFollowup(false);
-		}
-	};
-
 	const handleCreateLead = async () => {
 		if (!createForm.name.trim()) return;
-		if (createForm.sourceType !== "partner" && !createForm.campaignId) {
+		if (createForm.sourceType !== "partner" && !createForm.databaseId) {
 			alert("Please select a project before creating a lead.");
 			return;
 		}
@@ -835,7 +806,7 @@ const handlePincodeChange = async (value: string) => {
 					industry: "",
 					website: "",
 					alternatePhone: "",
-					campaignId: "",
+					databaseId: "",
 					priority: "medium",
 					sourceType: "udyam",
 					partnerId: "",
@@ -857,11 +828,11 @@ const handlePincodeChange = async (value: string) => {
 		}
 		setUpdatingLead(true);
 		try {
-			// "" means "No campaign" — send null so the lead is unassigned
+			// "" means "No database" — send null so the lead is unassigned
 			// instead of failing ObjectId validation server-side.
 			const payload: Record<string, string | null | undefined> = {
 				...editForm,
-				campaignId: editForm.campaignId || null,
+				databaseId: editForm.databaseId || null,
 				partnerId: editForm.sourceType === "partner" ? (editForm.partnerId || null) : null,
 			};
 			const { data } = await api.put(
@@ -872,7 +843,7 @@ const handlePincodeChange = async (value: string) => {
 				setSelectedLead(data.lead);
 				setIsEditingLead(false);
 				queryClient.invalidateQueries({ queryKey: ["leads"] });
-				queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+				queryClient.invalidateQueries({ queryKey: ["databases"] });
 			}
 		} catch (err: unknown) {
 			const apiErr = err as {
@@ -914,7 +885,7 @@ const handlePincodeChange = async (value: string) => {
 		try {
 			const formData = new FormData();
 			formData.append("file", file);
-			formData.append("campaignId", importCampaignId || "");
+			formData.append("databaseId", importDatabaseId || "");
 
 			const { data } = await api.post("/leads/import/excel", formData, {
 				headers: { "Content-Type": "multipart/form-data" },
@@ -968,7 +939,7 @@ const handlePincodeChange = async (value: string) => {
 							letterSpacing: "-0.02em",
 						}}
 					>
-						Dial Queue
+						Leads / Dial Queue
 					</h1>
 					{/* <p
 						style={{
@@ -992,7 +963,7 @@ const handlePincodeChange = async (value: string) => {
 									queryKey: ["leads"],
 								}),
 								queryClient.invalidateQueries({
-									queryKey: ["campaigns"],
+									queryKey: ["databases"],
 								}),
 							]);
 							toast.success("Refreshed");
@@ -1149,6 +1120,7 @@ const handlePincodeChange = async (value: string) => {
 
 					type="button"
 					onClick={() => setShowFilters((prev) => !prev)}
+					title={activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount > 1 ? "s" : ""} applied` : "Show filters"}
 					// className="lg:hidden flex items-center justify-center gap-2 w-full bg-(--color-primary)"
 					// style={{
 					// 	padding: "8px 12px",
@@ -1168,6 +1140,25 @@ const handlePincodeChange = async (value: string) => {
 						<Filter size={14} className="" />
 					)}
 					{showFilters ? "Close Filters" : "Filters"}
+					{activeFilterCount > 0 && (
+						<span
+							style={{
+								background: "var(--color-surface)",
+								color: "var(--color-primary)",
+								borderRadius: 999,
+								minWidth: 20,
+								height: 20,
+								padding: "0 6px",
+								display: "inline-flex",
+								alignItems: "center",
+								justifyContent: "center",
+								fontSize: "0.72rem",
+								fontWeight: 800,
+							}}
+						>
+							{activeFilterCount}
+						</span>
+					)}
 					
 				</button>
 
@@ -1177,19 +1168,20 @@ const handlePincodeChange = async (value: string) => {
 						showFilters ? "flex" : "hidden"
 					} lg:flex flex-row flex-wrap items-center justify-start gap-2`}
 				>
-					{/* campaign selection filter dropdown */}
+					{/* database selection filter dropdown */}
 					<select
 						className="input flex-1 sm:max-w-37.5 min-w-37.5 cursor-pointer"
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
+							...(filterDatabase ? APPLIED_FILTER_STYLE : {}),
 						}}
-						value={filterCampaign}
-						onChange={(e) => setFilterCampaign(e.target.value)}
+						value={filterDatabase}
+						onChange={(e) => setFilterDatabase(e.target.value)}
 					>
-						<option value="">All Campaigns</option>
-						<option value="__none__">No Campaign</option>
-						{campaigns.map((c: any) => (
+						<option value="">All Databases</option>
+						<option value="__none__">No Database</option>
+						{databases.map((c: any) => (
 							<option key={c._id} value={c._id}>
 								{c.name}
 							</option>
@@ -1201,6 +1193,7 @@ const handlePincodeChange = async (value: string) => {
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
+							...(filterStatus ? APPLIED_FILTER_STYLE : {}),
 						}}
 						value={filterStatus}
 						onChange={(e) => setFilterStatus(e.target.value)}
@@ -1218,6 +1211,7 @@ const handlePincodeChange = async (value: string) => {
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
+							...(filterIndustry ? APPLIED_FILTER_STYLE : {}),
 						}}
 						value={filterIndustry}
 						onChange={(e) => setFilterIndustry(e.target.value)}
@@ -1235,6 +1229,7 @@ const handlePincodeChange = async (value: string) => {
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
+							...(filterSource ? APPLIED_FILTER_STYLE : {}),
 						}}
 						value={filterSource}
 						onChange={(e) => setFilterSource(e.target.value)}
@@ -1252,6 +1247,7 @@ const handlePincodeChange = async (value: string) => {
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
+							...(filterPriority ? APPLIED_FILTER_STYLE : {}),
 						}}
 						value={filterPriority}
 						onChange={(e) => setFilterPriority(e.target.value)}
@@ -1268,6 +1264,7 @@ const handlePincodeChange = async (value: string) => {
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
+							...(filterCity ? APPLIED_FILTER_STYLE : {}),
 						}}
 						value={filterCity}
 						onChange={(e) => setFilterCity(e.target.value)}
@@ -1285,6 +1282,7 @@ const handlePincodeChange = async (value: string) => {
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
+							...(filterState ? APPLIED_FILTER_STYLE : {}),
 						}}
 						value={filterState}
 						onChange={(e) => setFilterState(e.target.value)}
@@ -1302,6 +1300,7 @@ const handlePincodeChange = async (value: string) => {
 						style={{
 							padding: "6px 10px",
 							fontSize: "0.8rem",
+							...(filterPincode ? APPLIED_FILTER_STYLE : {}),
 						}}
 						value={filterPincode}
 						onChange={(e) => setFilterPincode(e.target.value)}
@@ -1316,7 +1315,7 @@ const handlePincodeChange = async (value: string) => {
 					<button
 						type="button"
 						onClick={() => {
-							setFilterCampaign("");
+							setFilterDatabase("");
 							setFilterStatus("");
 							setFilterIndustry("");
 							setFilterSource("");
@@ -1330,9 +1329,10 @@ const handlePincodeChange = async (value: string) => {
 							setPage(1);
 						}}
 						className="flex items-center gap-1 bg-(--color-surface) border border-(--color-border) rounded-lg px-3 py-1.5 text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg) hover:text-(--color-text) transition-colors cursor-pointer"
+						style={activeFilterCount > 0 ? { borderColor: "var(--color-primary)", color: "var(--color-primary)" } : undefined}
 					>
 						<X size={12} />
-						Reset Filters
+						Reset Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
 					</button>
 				</div>
 				<div
@@ -1631,11 +1631,6 @@ const handlePincodeChange = async (value: string) => {
 				setEditForm={setEditForm}
 				showAllContactDetails={showAllContactDetails}
 				setShowAllContactDetails={setShowAllContactDetails}
-				followupDate={followupDate}
-				setFollowupDate={setFollowupDate}
-				schedulingFollowup={schedulingFollowup}
-				scheduleType={scheduleType}
-				setScheduleType={setScheduleType}
 				newNote={newNote}
 				setNewNote={setNewNote}
 				updatingLead={updatingLead}
@@ -1649,16 +1644,15 @@ const handlePincodeChange = async (value: string) => {
 				currentUserId={currentUser?._id}
 				currentUserName={currentUser?.name}
 				partners={partners}
-				handleScheduleFollowup={handleScheduleFollowup}
 				getInitials={getInitials}
-				getCampaignName={getCampaignName}
-				campaigns={campaigns}
+				getDatabaseName={getDatabaseName}
+				databases={databases}
 				formatDate={formatDate}
 				formatDateShort={formatDateShort}
 				formatDuration={formatDuration}
 			/>
 
-			<Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportResult(null); setImportStep("campaign"); setImportCampaignId(""); }} zIndex={4950}>
+			<Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportResult(null); setImportStep("database"); setImportDatabaseId(""); }} zIndex={4950}>
 					<div
 						className="card animate-fade-in w-full"
 						style={{
@@ -1723,8 +1717,8 @@ const handlePincodeChange = async (value: string) => {
 											margin: "2px 0 0",
 										}}
 									>
-										{importStep === "campaign"
-											? "Select a target campaign"
+										{importStep === "database"
+											? "Select a target database"
 											: importStep === "upload"
 												? "Upload an Excel file"
 												: "Import complete"}
@@ -1747,8 +1741,8 @@ const handlePincodeChange = async (value: string) => {
 								onClick={() => {
 									setShowImportModal(false);
 									setImportResult(null);
-									setImportStep("campaign");
-									setImportCampaignId("");
+									setImportStep("database");
+									setImportDatabaseId("");
 								}}
 							>
 								<X size={16} />
@@ -1882,8 +1876,8 @@ const handlePincodeChange = async (value: string) => {
 									onClick={() => {
 										setShowImportModal(false);
 										setImportResult(null);
-										setImportStep("campaign");
-										setImportCampaignId("");
+										setImportStep("database");
+										setImportDatabaseId("");
 									}}
 								>
 									Done
@@ -1907,23 +1901,23 @@ const handlePincodeChange = async (value: string) => {
 											borderRadius: 8,
 										}}
 										onClick={() => {
-											setImportStep("campaign");
+											setImportStep("database");
 											setImportResult(null);
 										}}
 									>
 										← Back
 									</button>
-									{importCampaignId && (
+									{importDatabaseId && (
 										<span
 											style={{
 												fontSize: "0.78rem",
 												color: "var(--color-text-secondary)",
 											}}
 										>
-											Campaign:{" "}
-											{campaigns.find(
+											Database:{" "}
+											{databases.find(
 												(c: any) =>
-													c._id === importCampaignId,
+													c._id === importDatabaseId,
 											)?.name || "Unknown"}
 										</span>
 									)}
@@ -2026,7 +2020,7 @@ const handlePincodeChange = async (value: string) => {
 							</div>
 						) : (
 							<div style={{ padding: 24 }}>
-								{campaigns.length === 0 ? (
+								{databases.length === 0 ? (
 									<div
 										style={{
 											textAlign: "center",
@@ -2061,7 +2055,7 @@ const handlePincodeChange = async (value: string) => {
 												margin: "0 0 6px",
 											}}
 										>
-											No campaigns yet
+											No databases yet
 										</h4>
 										<p
 											style={{
@@ -2070,7 +2064,7 @@ const handlePincodeChange = async (value: string) => {
 												margin: "0 0 20px",
 											}}
 										>
-											Create a campaign before importing
+											Create a database before importing
 											leads
 										</p>
 										<button
@@ -2081,7 +2075,7 @@ const handlePincodeChange = async (value: string) => {
 												fontWeight: 600,
 											}}
 											onClick={() => {
-												navigate("/crm/campaigns");
+												navigate("/crm/databases");
 												setShowImportModal(false);
 											}}
 										>
@@ -2099,7 +2093,7 @@ const handlePincodeChange = async (value: string) => {
 												marginBottom: 6,
 											}}
 										>
-											Select Campaign
+											Select Database
 										</label>
 										<select
 											className="input"
@@ -2110,17 +2104,17 @@ const handlePincodeChange = async (value: string) => {
 												borderRadius: 8,
 												marginBottom: 20,
 											}}
-											value={importCampaignId}
+											value={importDatabaseId}
 											onChange={(e) =>
-												setImportCampaignId(
+												setImportDatabaseId(
 													e.target.value,
 												)
 											}
 										>
 											<option value="">
-												No Campaign
+												No Database
 											</option>
-											{campaigns.map((c: any) => (
+											{databases.map((c: any) => (
 												<option
 													key={c._id}
 													value={c._id}
@@ -2130,7 +2124,7 @@ const handlePincodeChange = async (value: string) => {
 											))}
 										</select>
 										<button
-											disabled={!importCampaignId}
+											disabled={!importDatabaseId}
 											className="btn btn-primary"
 											style={{
 												width: "100%",
@@ -2672,7 +2666,7 @@ const handlePincodeChange = async (value: string) => {
 												...p,
 												sourceType: e.target.value as "udyam" | "self" | "partner",
 												partnerId: e.target.value === "partner" ? p.partnerId : "",
-												campaignId: e.target.value === "partner" ? "" : p.campaignId,
+												databaseId: e.target.value === "partner" ? "" : p.databaseId,
 											}))
 										}
 									>
@@ -2744,16 +2738,16 @@ const handlePincodeChange = async (value: string) => {
 									</label>
 									<select
 										className="input"
-										value={createForm.campaignId}
+										value={createForm.databaseId}
 										onChange={(e) =>
 											setCreateForm((p) => ({
 												...p,
-												campaignId: e.target.value,
+												databaseId: e.target.value,
 											}))
 										}
 									>
 										<option value="">Select Project</option>
-										{campaigns.map((c: any) => (
+										{databases.map((c: any) => (
 											<option key={c._id} value={c._id}>
 												{c.name}
 											</option>
@@ -2786,7 +2780,7 @@ const handlePincodeChange = async (value: string) => {
 									updatingLead ||
 									!createForm.phone.trim() ||
 									!/^\d{10}$/.test(createForm.phone.trim()) ||
-									(createForm.sourceType !== "partner" && !createForm.campaignId) ||
+									(createForm.sourceType !== "partner" && !createForm.databaseId) ||
 									(createForm.sourceType === "partner" && !createForm.partnerId)
 								}
 								onClick={handleCreateLead}
@@ -2800,424 +2794,185 @@ const handlePincodeChange = async (value: string) => {
 					</div>
 			</Modal>
 
-			{/* Create Project Modal on Closed Won (can open above the lead modal, hence +10) */}
-			<Modal isOpen={showProjectModal} onClose={handleCancelProject} zIndex={4960}>
+			{/* Convert Lead Modal on Closed Won (can open above the lead modal, hence +10) */}
+			<Modal
+				isOpen={showConvertModal}
+				onClose={handleCancelConvert}
+				zIndex={4960}
+			>
+				<div
+					className="card animate-fade-in"
+					style={{
+						width: "min(560px, calc(100vw - 32px))",
+						padding: 28,
+						maxHeight: "90vh",
+						overflow: "auto",
+					}}
+				>
 					<div
-						className="card animate-fade-in"
 						style={{
-							width: "min(560px, calc(100vw - 32px))",
-							padding: 28,
-							maxHeight: "90vh",
-							overflow: "auto",
+							display: "flex",
+							justifyContent: "space-between",
+							alignItems: "center",
+							marginBottom: 20,
 						}}
 					>
+						<h2
+							style={{
+								fontSize: "1.125rem",
+								fontWeight: 700,
+								margin: 0,
+							}}
+						>
+							Convert Lead
+						</h2>
+						<button
+							onClick={handleCancelConvert}
+							style={{
+								background: "none",
+								border: "none",
+								cursor: "pointer",
+								color: "var(--color-text-secondary)",
+								padding: 4,
+							}}
+						>
+							<X size={18} />
+						</button>
+					</div>
+
+					<div
+						style={{
+							padding: "10px 12px",
+							borderRadius: 10,
+							background: "var(--color-surface-hover)",
+							marginBottom: 16,
+							fontSize: "0.875rem",
+							color: "var(--color-text-secondary)",
+						}}
+					>
+						<strong style={{ color: "var(--color-text)" }}>
+							{selectedLead?.name || "Lead"}
+						</strong>
+						{selectedLead?.companyName
+							? ` · ${selectedLead.companyName}`
+							: ""}
+						{selectedLead?.phone ? ` · ${selectedLead.phone}` : ""}
+					</div>
+
+					<form
+						onSubmit={(e) => {
+							e.preventDefault();
+							handleConvertLead();
+						}}
+						style={{
+							display: "flex",
+							flexDirection: "column",
+							gap: 16,
+						}}
+					>
+						<div>
+							<label
+								style={{
+									display: "block",
+									fontSize: "0.8125rem",
+									fontWeight: 500,
+									marginBottom: 4,
+									color: "var(--color-text-secondary)",
+								}}
+							>
+								Loan Product
+							</label>
+							<select
+								className="select"
+								value={convertForm.productId}
+								onChange={(e) =>
+									setConvertForm((p) => ({
+										...p,
+										productId: e.target.value,
+									}))
+								}
+							>
+								<option value="">
+									No product yet — set it later in Files
+								</option>
+								{loanProducts
+									.filter((p: any) => p.isActive)
+									.map((p: any) => (
+										<option key={p._id} value={p._id}>
+											{p.name}
+										</option>
+									))}
+							</select>
+							<p
+								style={{
+									margin: "6px 0 0",
+									fontSize: "0.75rem",
+									color: "var(--color-text-tertiary)",
+								}}
+							>
+								The required-document checklist is copied from this
+								product's Docs Structure — manage doc statuses later
+								on the Files page.
+							</p>
+						</div>
+
+						<div>
+							<label
+								style={{
+									display: "block",
+									fontSize: "0.8125rem",
+									fontWeight: 500,
+									marginBottom: 4,
+									color: "var(--color-text-secondary)",
+								}}
+							>
+								Note (optional)
+							</label>
+							<textarea
+								className="input"
+								rows={3}
+								value={convertForm.notes}
+								onChange={(e) =>
+									setConvertForm((p) => ({
+										...p,
+										notes: e.target.value,
+									}))
+								}
+								placeholder="Anything to remember about this file"
+							/>
+						</div>
+
 						<div
 							style={{
 								display: "flex",
-								justifyContent: "space-between",
-								alignItems: "center",
-								marginBottom: 20,
+								justifyContent: "flex-end",
+								gap: 10,
+								marginTop: 4,
 							}}
 						>
-							<h2
-								style={{
-									fontSize: "1.125rem",
-									fontWeight: 700,
-									margin: 0,
-								}}
-							>
-								Create Project from Lead
-							</h2>
 							<button
-								onClick={handleCancelProject}
-								style={{
-									background: "none",
-									border: "none",
-									cursor: "pointer",
-									color: "var(--color-text-secondary)",
-									padding: 4,
-								}}
+								type="button"
+								className="btn btn-secondary"
+								onClick={handleCancelConvert}
 							>
-								<X size={18} />
+								Cancel
+							</button>
+							<button
+								type="submit"
+								className="btn btn-primary"
+								disabled={convertingLead}
+							>
+								{convertingLead ? (
+									<Loader2
+										size={16}
+										className="animate-spin"
+									/>
+								) : null}
+								{convertingLead ? "Converting..." : "Convert Lead"}
 							</button>
 						</div>
-
-						<form
-							onSubmit={(e) => {
-								e.preventDefault();
-								handleCreateProject();
-							}}
-							style={{
-								display: "flex",
-								flexDirection: "column",
-								gap: 16,
-							}}
-						>
-							<div>
-								<label
-									style={{
-										display: "block",
-										fontSize: "0.8125rem",
-										fontWeight: 500,
-										marginBottom: 4,
-										color: "var(--color-text-secondary)",
-									}}
-								>
-									Title *
-								</label>
-								<input
-									className="input"
-									required
-									value={projectForm.title}
-									onChange={(e) =>
-										setProjectForm((p) => ({
-											...p,
-											title: e.target.value,
-										}))
-									}
-									placeholder="Project title"
-								/>
-							</div>
-
-							<div>
-								<label
-									style={{
-										display: "block",
-										fontSize: "0.8125rem",
-										fontWeight: 500,
-										marginBottom: 4,
-										color: "var(--color-text-secondary)",
-									}}
-								>
-									Company Name *
-								</label>
-								<input
-									className="input"
-									required
-									value={projectForm.clientName}
-									onChange={(e) =>
-										setProjectForm((p) => ({
-											...p,
-											clientName: e.target.value,
-										}))
-									}
-									placeholder="Company name"
-								/>
-							</div>
-
-							<div
-								style={{
-									display: "grid",
-									gridTemplateColumns: "1fr 1fr",
-									gap: 12,
-								}}
-							>
-								<div>
-									<label
-										style={{
-											display: "block",
-											fontSize: "0.8125rem",
-											fontWeight: 500,
-											marginBottom: 4,
-											color: "var(--color-text-secondary)",
-										}}
-									>
-										Assignment Type
-									</label>
-									<select
-										className="input"
-										style={{ width: "100%" }}
-										value={projectForm.assignmentType}
-										onChange={(e) =>
-											setProjectForm((p) => ({
-												...p,
-												assignmentType: e.target
-													.value as any,
-											}))
-										}
-									>
-										<option value="transactional">
-											Transactional
-										</option>
-										<option value="recurring">
-											Recurring
-										</option>
-									</select>
-								</div>
-							</div>
-
-							<div>
-								<label
-									style={{
-										display: "block",
-										fontSize: "0.8125rem",
-										fontWeight: 500,
-										marginBottom: 4,
-										color: "var(--color-text-secondary)",
-									}}
-								>
-									Description
-								</label>
-								<textarea
-									className="input"
-									rows={3}
-									value={projectForm.description}
-									onChange={(e) =>
-										setProjectForm((p) => ({
-											...p,
-											description: e.target.value,
-										}))
-									}
-									placeholder="Description..."
-									style={{ resize: "vertical" }}
-								/>
-							</div>
-
-							<div
-								style={{
-									display: "grid",
-									gridTemplateColumns: "1fr 1fr 1fr",
-									gap: 12,
-								}}
-							>
-								<div>
-									<label
-										style={{
-											display: "block",
-											fontSize: "0.8125rem",
-											fontWeight: 500,
-											marginBottom: 4,
-											color: "var(--color-text-secondary)",
-										}}
-									>
-										Priority
-									</label>
-									<select
-										className="input"
-										style={{ width: "100%" }}
-										value={projectForm.priority}
-										onChange={(e) =>
-											setProjectForm((p) => ({
-												...p,
-												priority: e.target.value as any,
-											}))
-										}
-									>
-										<option value="low">Low</option>
-										<option value="medium">Medium</option>
-										<option value="high">High</option>
-										<option value="urgent">Urgent</option>
-									</select>
-								</div>
-
-								<div>
-									<label
-										style={{
-											display: "block",
-											fontSize: "0.8125rem",
-											fontWeight: 500,
-											marginBottom: 4,
-											color: "var(--color-text-secondary)",
-										}}
-									>
-										Start Date *
-									</label>
-									<input
-										type="date"
-										className="input"
-										style={{ width: "100%" }}
-										required
-										value={projectForm.startDate}
-										onChange={(e) =>
-											setProjectForm((p) => ({
-												...p,
-												startDate: e.target.value,
-											}))
-										}
-									/>
-								</div>
-
-								<div>
-									<label
-										style={{
-											display: "block",
-											fontSize: "0.8125rem",
-											fontWeight: 500,
-											marginBottom: 4,
-											color: "var(--color-text-secondary)",
-										}}
-									>
-										Due Date
-									</label>
-									<input
-										type="date"
-										className="input"
-										style={{ width: "100%" }}
-										disabled={projectForm.noDueDate}
-										value={projectForm.dueDate}
-										onChange={(e) =>
-											setProjectForm((p) => ({
-												...p,
-												dueDate: e.target.value,
-											}))
-										}
-									/>
-									<div
-										style={{
-											marginTop: 6,
-											display: "flex",
-											alignItems: "center",
-											gap: 6,
-										}}
-									>
-										<input
-											type="checkbox"
-											id="noDueDate"
-											checked={projectForm.noDueDate}
-											onChange={(e) =>
-												setProjectForm((p) => ({
-													...p,
-													noDueDate: e.target.checked,
-													dueDate: e.target.checked
-														? ""
-														: p.dueDate,
-												}))
-											}
-										/>
-										<label
-											htmlFor="noDueDate"
-											style={{
-												fontSize: "0.75rem",
-												color: "var(--color-text-secondary)",
-												cursor: "pointer",
-											}}
-										>
-											No due date
-										</label>
-									</div>
-								</div>
-							</div>
-
-							<div>
-								<label
-									style={{
-										display: "block",
-										fontSize: "0.8125rem",
-										fontWeight: 500,
-										marginBottom: 8,
-										color: "var(--color-text-secondary)",
-									}}
-								>
-									Add Members
-								</label>
-								<div
-									style={{
-										display: "flex",
-										flexWrap: "wrap",
-										gap: 8,
-										maxHeight: 120,
-										overflowY: "auto",
-										padding: "6px 0",
-									}}
-								>
-									{allUsers.length === 0 && (
-										<span
-											style={{
-												fontSize: "0.8rem",
-												color: "var(--color-text-tertiary)",
-											}}
-										>
-											Loading members...
-										</span>
-									)}
-									{allUsers.map((user: any) => (
-										<label
-											key={user._id}
-											style={{
-												display: "flex",
-												alignItems: "center",
-												gap: 6,
-												fontSize: "0.8rem",
-												cursor: "pointer",
-												padding: "4px 8px",
-												borderRadius: 6,
-												background:
-													projectForm.team.includes(
-														user._id,
-													)
-														? "var(--color-primary-light)"
-														: "transparent",
-												border: "1px solid var(--color-border)",
-											}}
-										>
-											<input
-												type="checkbox"
-												checked={projectForm.team.includes(
-													user._id,
-												)}
-												onChange={() =>
-													setProjectForm((p) => ({
-														...p,
-														team: p.team.includes(
-															user._id,
-														)
-															? p.team.filter(
-																	(id) =>
-																		id !==
-																		user._id,
-																)
-															: [
-																	...p.team,
-																	user._id,
-																],
-													}))
-												}
-											/>
-											{user.name || user.email}
-										</label>
-									))}
-								</div>
-							</div>
-
-							<div
-								style={{
-									marginTop: 24,
-									display: "flex",
-									gap: 12,
-								}}
-							>
-								<button
-									type="button"
-									className="btn btn-secondary"
-									style={{ flex: 1 }}
-									onClick={handleCancelProject}
-									disabled={creatingProject}
-								>
-									Cancel
-								</button>
-								<button
-									type="submit"
-									className="btn btn-primary"
-									style={{ flex: 1 }}
-									disabled={
-										creatingProject ||
-										!projectForm.title.trim() ||
-										!projectForm.clientName.trim()
-									}
-								>
-									{creatingProject ? (
-										<Loader2
-											size={16}
-											className="animate-spin"
-										/>
-									) : null}
-									{creatingProject
-										? "Creating..."
-										: "Create Project"}
-								</button>
-							</div>
-						</form>
-					</div>
+					</form>
+				</div>
 			</Modal>
 		</div>
 	);

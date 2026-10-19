@@ -9,7 +9,7 @@ router.get('/import/sample', downloadPartnerSampleExcel);
 
 router.use(authenticate);
 
-router.post('/import/excel', authorize('admin'), upload.single('file'), importPartnerExcel);
+router.post('/import/excel', authorize('admin', 'manager'), upload.single('file'), importPartnerExcel);
 // Agreement upload is optional; multer tolerates missing file on FormData/JSON posts
 router.post('/', authorize('admin', 'manager'), uploadDoc.single('agreement'), createPartner);
 router.get('/', getPartners);

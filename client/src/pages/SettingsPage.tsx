@@ -8,7 +8,7 @@ import Avatar from '../components/common/Avatar';
 import ToggleSwitch from '../components/common/ToggleSwitch';
 import AvatarCropModal from '../components/common/AvatarCropModal';
 import { Sun, Moon, Shield, Users, UserPlus, Trash2, Eye, EyeOff, Lock, LockKeyhole, LockKeyholeOpen, Pencil, X as XIcon, MapPinned, CheckCircle, Loader2 } from 'lucide-react';
-import { navItems, NavLinkItem } from '../components/layout/Sidebar';
+import { navItems, NavLinkItem, normalizeTab } from '../components/layout/Sidebar';
 
 // Flatten top-level items AND their subItems into one list of toggleable routes,
 // so items like /tasks and /boards (which only exist as subItems) are included.
@@ -134,7 +134,7 @@ const startEditUser = (u: any) => {
         name: u.name,
         email : u.email,
         role: u.role,
-        permissions: { allowedTabs: u.permissions?.allowedTabs ?? ALL_ALLOWED_TABS },
+        permissions: { allowedTabs: (u.permissions?.allowedTabs ?? ALL_ALLOWED_TABS).map(normalizeTab) },
     });
 };
 

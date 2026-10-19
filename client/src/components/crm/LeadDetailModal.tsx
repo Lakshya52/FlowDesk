@@ -9,6 +9,7 @@ import {
 	Pen,
 	Trash2,
 	Calendar,
+	CalendarPlus,
 	// Icon,
 	LucideIcon,
 	PhoneOutgoing,
@@ -21,8 +22,10 @@ import {
 	Angry,
 	Laugh,
 	Frown,
+	Handshake,
 } from "lucide-react";
 import type { Lead } from "./DialQueue";
+import ScheduleModal from "./ScheduleModal";
 
 const SECTION_CLASS =
 	"border border-(--color-border) rounded-xl overflow-hidden";
@@ -52,11 +55,6 @@ interface LeadDetailModalProps {
 	setShowAllContactDetails: (
 		v: boolean | ((prev: boolean) => boolean),
 	) => void;
-	followupDate: string;
-	setFollowupDate: (v: string) => void;
-	schedulingFollowup: boolean;
-	scheduleType: "follow_up" | "meeting";
-	setScheduleType: (v: "follow_up" | "meeting") => void;
 	newNote: string;
 	setNewNote: (v: string) => void;
 	updatingLead: boolean;
@@ -70,10 +68,9 @@ interface LeadDetailModalProps {
 	currentUserId?: string;
 	currentUserName?: string;
 	partners?: { _id: string; companyName?: string; name?: string; personName: string; partnerType?: string }[];
-	handleScheduleFollowup: () => void;
 	getInitials: (name: string) => string;
-	getCampaignName: (id: any) => string;
-	campaigns: { _id: string; name: string }[];
+	getDatabaseName: (id: any) => string;
+	databases: { _id: string; name: string }[];
 	formatDate: (d?: string) => string;
 	formatDateShort: (d?: string) => string;
 	formatDuration: (s: number) => string;
@@ -155,11 +152,6 @@ export default function LeadDetailModal({
 	setEditForm,
 	showAllContactDetails,
 	setShowAllContactDetails,
-	followupDate,
-	setFollowupDate,
-	schedulingFollowup,
-	scheduleType,
-	setScheduleType,
 	newNote,
 	setNewNote,
 	updatingLead,
@@ -173,10 +165,9 @@ export default function LeadDetailModal({
 	currentUserId,
 	currentUserName,
 	partners = [],
-	handleScheduleFollowup,
 	getInitials,
-	getCampaignName,
-	campaigns,
+	getDatabaseName,
+	databases,
 	formatDate,
 	formatDateShort,
 	formatDuration,
@@ -189,6 +180,7 @@ export default function LeadDetailModal({
 	const [dragOffset, setDragOffset] = useState(0);
 	const [isExiting, setIsExiting] = useState(false);
 	const [expandedMobile, setExpandedMobile] = useState(false);
+	const [showScheduleModal, setShowScheduleModal] = useState(false);
 	const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
 	const [statusDropdownPos, setStatusDropdownPos] = useState({
 		top: 0,
@@ -218,6 +210,7 @@ export default function LeadDetailModal({
 		setEditingNoteId(null);
 		setEditingText("");
 		setNoteBusyId(null);
+		setShowScheduleModal(false);
 	};
 
 	/* Reset note-editing state when switching leads */
@@ -225,6 +218,7 @@ export default function LeadDetailModal({
 		setEditingNoteId(null);
 		setEditingText("");
 		setNoteBusyId(null);
+		setShowScheduleModal(false);
 	}, [selectedLead?._id]);
 
 	const startEditingNote = (noteId: string, currentText: string) => {
@@ -380,15 +374,46 @@ export default function LeadDetailModal({
 	/* ── Early return AFTER all hooks so hook order stays stable ── */
 	if (!selectedLead) return null;
 
+	// Partner-sourced leads are final (closed won) — no call tools are shown.
+	// Exception: once a partner lead is lost it becomes callable again, and a
+	// lead that already has calls keeps its call history visible.
+	const isPartnerLead =
+		(selectedLead as any).sourceType === "partner" ||
+		!!selectedLead.partnerId;
+	const isLostLead = selectedLead.status === "closed_lost";
+	const showCallActivity =
+		!isPartnerLead || isLostLead || (selectedLead.callCount || 0) > 0;
+	const partnerRef =
+		typeof selectedLead.partnerId === "object" && selectedLead.partnerId
+			? (selectedLead.partnerId as any)
+			: partners.find((p) => p._id === selectedLead.partnerId);
+	const partnerName =
+		partnerRef?.companyName ||
+		partnerRef?.name ||
+		partnerRef?.personName ||
+		selectedLead.source ||
+		"Partner";
+	const isMeetingSchedule =
+		selectedLead.scheduleType === "meeting" ||
+		(!!selectedLead.meetingAt && !selectedLead.nextFollowupAt);
+	const scheduledAt = isMeetingSchedule
+		? selectedLead.meetingAt
+		: selectedLead.nextFollowupAt || selectedLead.meetingAt;
+	// Final leads stay final — scheduling another call on them would reopen
+	// the workflow. Lost partner leads are callable again, so they qualify.
+	const canCreateSchedule =
+		selectedLead.status !== "closed_won" &&
+		(!isPartnerLead || isLostLead);
+
 	const priorityColor =
 		PRIORITY_COLORS[selectedLead.priority] || "var(--color-text-tertiary)";
 
 	const startEditing = () => {
 		setUpdatingLead(true)
-		const currentCampaignId =
-			typeof selectedLead.campaignId === "string"
-				? selectedLead.campaignId
-				: (selectedLead.campaignId as any)?._id ?? "";
+		const currentDatabaseId =
+			typeof selectedLead.databaseId === "string"
+				? selectedLead.databaseId
+				: (selectedLead.databaseId as any)?._id ?? "";
 		const currentPartnerId =
 			typeof selectedLead.partnerId === "string"
 				? selectedLead.partnerId
@@ -409,7 +434,7 @@ export default function LeadDetailModal({
 			companyPan: selectedLead.companyPan,
 			companyGst: selectedLead.companyGst,
 			priority: selectedLead.priority,
-			campaignId: currentCampaignId,
+			databaseId: currentDatabaseId,
 			sourceType: (selectedLead as any).sourceType || "udyam",
 			partnerId: currentPartnerId,
 		});
@@ -432,6 +457,7 @@ export default function LeadDetailModal({
 	// const backdropOpacity = !mounted && !isExiting ? 0 : 1;
 
 	return (
+		<>
 		<div
 			className="backdrop-blur-sm bg-(--color-primary-light)/40 h-full w-full fixed inset-0 z-[4950] flex items-end sm:items-center justify-center transition-opacity duration-200"
 			// style={{ backgroundColor: `rgba(0,0,0,${0.2 * backdropOpacity})` }}
@@ -507,7 +533,7 @@ export default function LeadDetailModal({
 								<span className="hidden sm:inline">|</span>
 								<span className="truncate max-w-25 sm:max-w-none">
 									Camp:{" "}
-									{getCampaignName(selectedLead.campaignId)}
+									{getDatabaseName(selectedLead.databaseId)}
 								</span>
 							</div>
 						</div>
@@ -675,23 +701,23 @@ export default function LeadDetailModal({
 											</div>
 											<div className="sm:col-span-3">
 												<label className="block text-[0.65rem] sm:text-[0.7rem] text-(--color-text-tertiary) mb-0.5">
-													Campaign
+													Database
 												</label>
 												<select
 													className="input w-full px-2 py-1.5 text-xs sm:text-sm rounded-md"
-													value={editForm.campaignId || ""}
+													value={editForm.databaseId || ""}
 													onChange={(e) =>
 														setEditForm((prev) => ({
 															...prev,
-															campaignId:
+															databaseId:
 																e.target.value,
 														}))
 													}
 												>
 													<option value="">
-														No campaign
+														No database
 													</option>
-													{campaigns.map((c) => (
+													{databases.map((c) => (
 														<option
 															key={c._id}
 															value={c._id}
@@ -902,8 +928,9 @@ export default function LeadDetailModal({
 								)}
 							</div>
 
-							{/* Call Activity */}
-							{!updatingLead &&
+							{/* Call Activity — available for lost partner leads too, so a
+							    lead that was lost can still be worked from the Dial Queue. */}
+							{!updatingLead && showCallActivity &&
 								<div
 									className={SECTION_CLASS}
 									style={{
@@ -1067,6 +1094,57 @@ export default function LeadDetailModal({
 									</div>
 								</div>
 							}
+
+							{/* Partner Lead card — final lead from a channel partner, never called.
+							    Once the lead is lost it becomes callable, so the card reflects that. */}
+							{!updatingLead && isPartnerLead && (
+								<div
+									className={SECTION_CLASS}
+									style={{
+										borderColor: isLostLead
+											? "color-mix(in srgb, var(--color-danger) 35%, transparent)"
+											: "color-mix(in srgb, var(--color-primary) 20%, transparent)",
+									}}
+								>
+									<div className={HEADER_CLASS}>
+										<Handshake
+											size={14}
+											className="text-(--color-primary)"
+										/>
+										<span className="text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--color-text)">
+											Partner Lead
+										</span>
+										<span
+											className={`badge ${isLostLead ? "badge-not_started" : "badge-done"} text-[0.6rem] sm:text-[0.65rem] px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg ml-auto shrink-0`}
+										>
+											{isLostLead ? "closed lost" : "closed won"}
+										</span>
+									</div>
+									<div className="p-2 sm:p-3">
+										<div className="flex items-center justify-between gap-2 py-1.5 border-b border-(--color-border) text-[0.72rem] sm:text-[0.8rem]">
+											<span className="text-(--color-text-tertiary)">
+												Partner
+											</span>
+											<span className="font-semibold text-(--color-text) text-right truncate">
+												{partnerName}
+											</span>
+										</div>
+										<div className="flex items-center justify-between gap-2 py-1.5 border-b border-(--color-border) text-[0.72rem] sm:text-[0.8rem]">
+											<span className="text-(--color-text-tertiary)">
+												Product
+											</span>
+											<span className="font-semibold text-(--color-text) text-right truncate">
+												{selectedLead.product || "—"}
+											</span>
+										</div>
+										<p className="text-[0.68rem] sm:text-[0.72rem] text-(--color-text-tertiary) mt-2 mb-0 m-0">
+											{isLostLead
+												? "This partner lead was marked lost — call activity is available so it can be worked again."
+												: "Sourced from a channel partner — final lead, no call tracking."}
+										</p>
+									</div>
+								</div>
+							)}
 						</div>
 
 						{/* ═══ COLUMN 2: Schedule + Activity Trail ═══ */}
@@ -1088,70 +1166,79 @@ export default function LeadDetailModal({
 									<span className="text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--color-text)">
 										Schedule
 									</span>
-								</div>
-								{(selectedLead.nextFollowupAt ||
-									selectedLead.meetingAt) && (
-									<div className="text-[0.7rem] sm:text-[0.78rem] text-(--color-text-secondary) mb-2 px-2 py-1.5 bg-(--color-primary-light) rounded-md flex items-center gap-1.5 flex-wrap">
-										<span className="font-semibold text-(--color-primary) shrink-0">
-											{selectedLead.scheduleType ===
-											"meeting"
-												? "Meeting"
-												: "Follow-up"}
-											:
-										</span>
-										<span className="truncate">
-											{formatDate(
-												selectedLead.meetingAt ||
-													selectedLead.nextFollowupAt,
-											)}
-										</span>
-									</div>
-								)}
-								<div className="flex gap-1.5 mb-2">
-									{(["follow_up", "meeting"] as const).map(
-										(type) => (
-											<button
-												key={type}
-												onClick={() =>
-													setScheduleType(type)
-												}
-												className={`
-												flex items-center justify-center gap-2 px-1 
-
-												flex-1 py-2 text-[0.8rem] sm:text-[0.88rem] font-semibold rounded-md border border-(--color-primary)/20 cursor-pointer whitespace-nowrap  ${
-													scheduleType === type
-														? "bg-(--color-primary) text-white"
-														: "bg-(--color-surface) text-(--color-text-tertiary)"
-												}`}
-											>
-												{type === "follow_up"
-													? "Follow-up"
-													: "Meeting"}
-											</button>
-										),
+									{canCreateSchedule && (
+										<button
+											type="button"
+											onClick={() =>
+												setShowScheduleModal(true)
+											}
+											className="ml-auto btn btn-primary px-2.5 sm:px-3 py-1.5 rounded-md text-[0.68rem] sm:text-[0.75rem] font-semibold whitespace-nowrap flex items-center gap-1.5"
+										>
+											<CalendarPlus size={13} />
+											Create Schedule
+										</button>
 									)}
 								</div>
-								<div className="flex gap-1.5 sm:gap-2">
-									<input
-										type="datetime-local"
-										className="input flex-1 px-2 py-1.5 text-[0.7rem] sm:text-[0.78rem] rounded-md"
-										value={followupDate}
-										onChange={(e) =>
-											setFollowupDate(e.target.value)
-										}
-									/>
-									<button
-										className="btn btn-primary px-2.5 sm:px-3.5 py-1.5 rounded-md text-[0.7rem] sm:text-[0.78rem] font-semibold whitespace-nowrap"
-										disabled={
-											!followupDate || schedulingFollowup
-										}
-										onClick={handleScheduleFollowup}
-									>
-										{schedulingFollowup
-											? "Saving..."
-											: "Save"}
-									</button>
-								</div>
+								{scheduledAt ? (
+									<div className="text-[0.7rem] sm:text-[0.78rem] text-(--color-text-secondary) px-2.5 py-2 bg-(--color-primary-light) rounded-md flex flex-col gap-1">
+										<div className="flex items-center gap-1.5 flex-wrap">
+											<span className="font-semibold text-(--color-primary) shrink-0">
+												{isMeetingSchedule
+													? "Meeting"
+													: "Follow-up"}
+												:
+											</span>
+											<span className="truncate">
+												{formatDate(scheduledAt)}
+											</span>
+											{isMeetingSchedule &&
+												selectedLead.meetingMode && (
+													<span className="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-md bg-(--color-surface) text-(--color-text-secondary) capitalize">
+														{
+															selectedLead.meetingMode
+														}
+													</span>
+												)}
+											{isMeetingSchedule &&
+												selectedLead.meetingStatus && (
+													<span className="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-md bg-(--color-surface) text-(--color-text-secondary) capitalize">
+														{
+															selectedLead.meetingStatus
+														}
+													</span>
+												)}
+										</div>
+										{isMeetingSchedule &&
+											selectedLead.meetingMode ===
+												"virtual" &&
+											selectedLead.meetingLink && (
+												<a
+													href={
+														selectedLead.meetingLink
+													}
+													target="_blank"
+													rel="noreferrer"
+													className="text-[0.66rem] sm:text-[0.72rem] text-(--color-primary) truncate underline"
+												>
+													{selectedLead.meetingLink}
+												</a>
+											)}
+										{isMeetingSchedule &&
+											selectedLead.meetingMode ===
+												"physical" &&
+											selectedLead.meetingLocation && (
+												<span className="text-[0.66rem] sm:text-[0.72rem] text-(--color-text-tertiary) truncate">
+													{
+														selectedLead.meetingLocation
+													}
+												</span>
+											)}
+									</div>
+								) : (
+									<p className="text-[0.7rem] sm:text-[0.75rem] text-(--color-text-tertiary) m-0">
+										No follow-up or meeting scheduled yet.
+									</p>
+								)}
 							</div>
 
 							<div className="flex-1 overflow-y-auto min-h-0 p-3 sm:px-4 sm:py-3">
@@ -1248,7 +1335,11 @@ export default function LeadDetailModal({
 														}}
 													/>
 													<span className="font-semibold mr-1 shrink-0">
-														Meeting ({log.status})
+														Meeting
+														{log.mode
+															? ` · ${log.mode}`
+															: ""}{" "}
+														({log.status})
 													</span>
 													<span className="truncate">
 														{formatDate(
@@ -1459,5 +1550,12 @@ export default function LeadDetailModal({
 				</div>
 			</div>
 		</div>
+		<ScheduleModal
+			isOpen={showScheduleModal}
+			lead={selectedLead}
+			onClose={() => setShowScheduleModal(false)}
+			onScheduled={(updated) => setSelectedLead(updated)}
+		/>
+		</>
 	);
 }

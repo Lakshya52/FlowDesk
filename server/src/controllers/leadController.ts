@@ -1,16 +1,19 @@
 import { Response } from "express";
 import mongoose from "mongoose";
 import Lead from "../models/Lead";
-import Campaign from "../models/Campaign";
+import Database from "../models/Database";
 import Partner from "../models/Partner";
+import LoanProduct from "../models/LoanProduct";
 import ActivityLog, { EntityType } from "../models/ActivityLog";
+import CaseFile from "../models/CaseFile";
 import { AuthRequest } from "../middlewares/auth";
 import XLSX from "xlsx";
-import { emitLeadCreated, emitLeadUpdated, emitLeadDeleted } from "../services/crmSocketService";
+import { emitLeadCreated, emitLeadUpdated, emitLeadDeleted, emitCaseFileDeleted } from "../services/crmSocketService";
+import { ensureCaseFileForLead, syncCaseFileForLeadStatus } from "../services/caseFileService";
 
-const getAccessibleCampaignIds = async (user: any, tenantId: string) => {
+const getAccessibleDatabaseIds = async (user: any, tenantId: string) => {
     if (user.role === 'admin' || user.role === 'manager') return null;
-    return Campaign.find({ tenantId, $or: [{ people: user._id }, { createdBy: user._id }] }).distinct('_id');
+    return Database.find({ tenantId, $or: [{ people: user._id }, { createdBy: user._id }] }).distinct('_id');
 };
 
 const getTenantId = (user: any): string =>
@@ -52,13 +55,34 @@ const panFromGstStr = (gst: string): string => {
 	return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : "";
 };
 
+// Resolve the product a partner gave a lead for against the LoanProduct
+// catalog (case-insensitive exact name match). The text is always stored on
+// the lead; the id is filled in when it matches a catalog entry.
+const matchLeadProduct = async (
+	tenantId: any,
+	nameRaw: any,
+	cache?: Map<string, any>,
+): Promise<{ product: string; productId: any }> => {
+	const product = String(nameRaw || "").trim();
+	if (!product) return { product: "", productId: undefined };
+	const key = product.toLowerCase();
+	if (cache && cache.has(key)) return { product, productId: cache.get(key) };
+	const rx = new RegExp(`^${escapeRegExp(product)}$`, "i");
+	const found = await LoanProduct.findOne({ tenantId, name: rx })
+		.select("_id")
+		.lean();
+	const productId = found ? (found as any)._id : undefined;
+	if (cache) cache.set(key, productId);
+	return { product, productId };
+};
+
 export const getLeads = async (
 	req: AuthRequest,
 	res: Response,
 ): Promise<void> => {
 	try {
 		const tenantId = getTenantId(req.user);
-		const { campaignId, partnerId, status, search, industry, source, priority, city, state, pincode } =
+		const { databaseId, partnerId, status, search, industry, source, priority, city, state, pincode } =
 			req.query;
 		const page = Math.max(1, parseInt(req.query.page as string) || 1);
 		const limit = Math.max(
@@ -68,28 +92,28 @@ export const getLeads = async (
 		const skip = (page - 1) * limit;
 
 		const filter: any = { tenantId };
-		let campaignOr: any[] | null = null;
+		let databaseOr: any[] | null = null;
 		let searchOr: any[] | null = null;
 
-		if (campaignId === '__none__') {
-			const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
-			filter.campaignId = { $nin: allCampaignIds };
+		if (databaseId === '__none__') {
+			const allDatabaseIds = await Database.find({ tenantId }).distinct('_id');
+			filter.databaseId = { $nin: allDatabaseIds };
 		} else {
-			if (campaignId) filter.campaignId = campaignId;
+			if (databaseId) filter.databaseId = databaseId;
 
-			const accessible = await getAccessibleCampaignIds(req.user, tenantId);
+			const accessible = await getAccessibleDatabaseIds(req.user, tenantId);
 			if (accessible) {
-				if (campaignId) {
-					const hasAccess = accessible.some((id: any) => id.toString() === campaignId);
+				if (databaseId) {
+					const hasAccess = accessible.some((id: any) => id.toString() === databaseId);
 					if (!hasAccess) {
 						res.json({ success: true, leads: [], total: 0, page, limit, totalPages: 0 });
 						return;
 					}
 				} else {
-					const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
-					campaignOr = [
-						{ campaignId: { $in: accessible } },
-						{ campaignId: { $nin: allCampaignIds } },
+					const allDatabaseIds = await Database.find({ tenantId }).distinct('_id');
+					databaseOr = [
+						{ databaseId: { $in: accessible } },
+						{ databaseId: { $nin: allDatabaseIds } },
 					];
 				}
 			}
@@ -132,17 +156,17 @@ export const getLeads = async (
 			}
 		}
 
-		if (campaignOr && searchOr) {
-			filter.$and = [{ $or: campaignOr }, { $or: searchOr }];
-		} else if (campaignOr) {
-			filter.$or = campaignOr;
+		if (databaseOr && searchOr) {
+			filter.$and = [{ $or: databaseOr }, { $or: searchOr }];
+		} else if (databaseOr) {
+			filter.$or = databaseOr;
 		} else if (searchOr) {
 			filter.$or = searchOr;
 		}
 
 		const [leads, total] = await Promise.all([
 			Lead.find(filter)
-				.populate("campaignId", "name")
+				.populate("databaseId", "name")
 				.populate("partnerId", "companyName personName partnerType")
 				.populate("notes.createdBy", "name email avatar")
 				.sort({ createdAt: -1 })
@@ -170,7 +194,7 @@ export const getLead = async (
 ): Promise<void> => {
 	try {
 		const lead = await Lead.findById(req.params.id)
-			.populate("campaignId", "name")
+			.populate("databaseId", "name")
 			.populate("partnerId", "companyName personName partnerType")
 			.populate("notes.createdBy", "name email avatar");
 
@@ -179,9 +203,9 @@ export const getLead = async (
 			return;
 		}
 
-		const accessible = await getAccessibleCampaignIds(req.user, lead.tenantId.toString());
+		const accessible = await getAccessibleDatabaseIds(req.user, lead.tenantId.toString());
 		if (accessible) {
-			const hasAccess = accessible.some((id: any) => id.toString() === lead.campaignId._id?.toString() || id.toString() === lead.campaignId.toString());
+			const hasAccess = accessible.some((id: any) => id.toString() === lead.databaseId._id?.toString() || id.toString() === lead.databaseId.toString());
 			if (!hasAccess) {
 				res.status(404).json({ success: false, message: "Lead not found" });
 				return;
@@ -223,7 +247,11 @@ export const createLead = async (
 			// Backward compat: explicit source (e.g. field_visit imports)
 			source = String(req.body.source);
 		}
-		if (!req.body.campaignId) delete req.body.campaignId;
+
+		// Product the partner gave this lead for (matched against the catalog)
+		const matchedProduct = await matchLeadProduct(tenantId, req.body.product);
+
+		if (!req.body.databaseId) delete req.body.databaseId;
 		if (!req.body.partnerId) delete req.body.partnerId;
 		// Auto-derive company PAN from GSTIN (chars 3–12) when PAN not given
 		if (!req.body.companyPan && req.body.companyGst) {
@@ -239,7 +267,9 @@ export const createLead = async (
 			source,
 			sourceType,
 			...(partnerId ? { partnerId } : { partnerId: undefined }),
-			status: "new",
+			product: matchedProduct.product || undefined,
+			productId: matchedProduct.productId,
+			status: sourceType === "partner" ? "closed_won" : "new",
 			callCount: 0,
 			followUpCount: 0,
 			meetingCount: 0,
@@ -249,7 +279,7 @@ export const createLead = async (
 		});
 
 		const populated = await Lead.findById(lead._id).populate(
-			"campaignId",
+			"databaseId",
 			"name",
 		).populate("partnerId", "companyName personName partnerType");
 
@@ -263,9 +293,146 @@ export const createLead = async (
 
 		emitLeadCreated(tenantId, populated);
 
+		// Partner leads are won deals from the start — track them in CaseFiles.
+		if (lead.status === "closed_won") {
+			try {
+				await ensureCaseFileForLead(lead, req.user!);
+			} catch (caseFileErr) {
+				console.error("ensureCaseFileForLead failed:", caseFileErr);
+			}
+		}
+
 		res.status(201).json({ success: true, lead: populated });
 	} catch (error: any) {
 		res.status(400).json({ success: false, message: error.message });
+	}
+};
+
+// Quick-add batch endpoint: creates many leads in one request so a partner's
+// 50+ leads can be added almost instantly (one round-trip + one insertMany).
+export const bulkCreateLeads = async (
+	req: AuthRequest,
+	res: Response,
+): Promise<void> => {
+	try {
+		const tenantId = getTenantId(req.user);
+		const rows = Array.isArray(req.body.leads) ? req.body.leads : null;
+		if (!rows || rows.length === 0) {
+			res.status(400).json({ success: false, message: "leads array is required" });
+			return;
+		}
+		if (rows.length > 500) {
+			res.status(400).json({ success: false, message: "Too many leads in one batch (max 500)" });
+			return;
+		}
+
+		// Source attribution mirrors createLead: udyam (default) | self | partner
+		const sourceType = (req.body.sourceType || "udyam") as "udyam" | "self" | "partner";
+		let source = "Udyam Capital";
+		let partnerId: any = undefined;
+		if (sourceType === "self") {
+			source = req.user!.name;
+		} else if (sourceType === "partner") {
+			if (!req.body.partnerId) {
+				res.status(400).json({ success: false, message: "partnerId is required when source is partner" });
+				return;
+			}
+			const partner = await Partner.findOne({ _id: req.body.partnerId, tenantId });
+			if (!partner) {
+				res.status(400).json({ success: false, message: "Partner not found" });
+				return;
+			}
+			partnerId = partner._id;
+			source = (partner as any).companyName || (partner as any).name || (partner as any).personName || "Partner";
+		}
+
+		// Product the partner gave the leads for, stored on every row
+		const matchedProduct = await matchLeadProduct(tenantId, req.body.product);
+
+		// Duplicate phone detection — against the tenant's existing leads and
+		// within the submitted batch (same rules as the Excel import).
+		const phones = rows
+			.map((row: any) => String(row?.phone || "").replace(/\D/g, ""))
+			.filter((p: string) => p.length === 10);
+		const existing = phones.length
+			? await Lead.find({ tenantId, phone: { $in: phones } }).select("phone").lean()
+			: [];
+		const existingPhones = new Set(existing.map((l: any) => l.phone));
+		const seenPhones = new Set<string>();
+
+		const docs: any[] = [];
+		const errors: { row: number; message: string }[] = [];
+
+		rows.forEach((row: any, idx: number) => {
+			const rowNo = idx + 1;
+			const name = String(row?.name || "").trim();
+			if (!name) {
+				errors.push({ row: rowNo, message: "Missing name (required)" });
+				return;
+			}
+			const rawPhone = String(row?.phone ?? "").trim();
+			const phone = rawPhone.replace(/\D/g, "");
+			if (rawPhone && phone.length !== 10) {
+				errors.push({ row: rowNo, message: `Invalid phone "${rawPhone}" (must be 10 digits)` });
+				return;
+			}
+			if (phone && (existingPhones.has(phone) || seenPhones.has(phone))) {
+				errors.push({ row: rowNo, message: `Duplicate phone: ${phone}` });
+				return;
+			}
+			if (phone) seenPhones.add(phone);
+
+			docs.push({
+				tenantId,
+				name,
+				phone: phone || undefined,
+				companyName: String(row?.companyName || "").trim() || undefined,
+				source,
+				sourceType,
+				...(partnerId ? { partnerId } : { partnerId: undefined }),
+				product: matchedProduct.product || undefined,
+				productId: matchedProduct.productId,
+				status: sourceType === "partner" ? "closed_won" : "new",
+				callCount: 0,
+				followUpCount: 0,
+				meetingCount: 0,
+				followUpLogs: [],
+				meetingLogs: [],
+				notes: [],
+			});
+		});
+
+		const created = docs.length ? await Lead.insertMany(docs) : [];
+
+		if (created.length > 0) emitLeadCreated(tenantId, created[0]);
+
+		// Partner batches are won deals from the start — track each in CaseFiles.
+		if (sourceType === "partner" && created.length > 0) {
+			for (const lead of created) {
+				try {
+					await ensureCaseFileForLead(lead, req.user!);
+				} catch (caseFileErr) {
+					console.error("ensureCaseFileForLead failed:", caseFileErr);
+				}
+			}
+		}
+
+		await ActivityLog.create({
+			action: `${created.length} leads added`,
+			user: req.user!._id,
+			entityType: EntityType.LEAD,
+			entityId: created[0]?._id || req.user!._id,
+			metadata: { count: created.length, errors: errors.length },
+		});
+
+		res.status(201).json({
+			success: true,
+			total: rows.length,
+			imported: created.length,
+			errors,
+		});
+	} catch (error: any) {
+		res.status(500).json({ success: false, message: error.message });
 	}
 };
 
@@ -288,12 +455,12 @@ export const updateLead = async (
 		for (const field of protectedFields) {
 			delete sanitizedBody[field];
 		}
-		if (sanitizedBody.campaignId === '') sanitizedBody.campaignId = null;
+		if (sanitizedBody.databaseId === '') sanitizedBody.databaseId = null;
 		if (sanitizedBody.partnerId === '') sanitizedBody.partnerId = null;
-		if (sanitizedBody.campaignId) {
-			const target = await Campaign.findOne({ _id: sanitizedBody.campaignId, tenantId: lead.tenantId });
+		if (sanitizedBody.databaseId) {
+			const target = await Database.findOne({ _id: sanitizedBody.databaseId, tenantId: lead.tenantId });
 			if (!target) {
-				res.status(400).json({ success: false, message: 'Campaign not found' });
+				res.status(400).json({ success: false, message: 'Database not found' });
 				return;
 			}
 		}
@@ -339,13 +506,16 @@ export const updateLead = async (
 				scheduledAt: body.meetingAt || lead.meetingAt,
 				createdAt: new Date(),
 				status: 'scheduled',
+				mode: lead.meetingMode,
+				location: lead.meetingLocation,
+				link: lead.meetingLink,
 			});
 		}
 
 		await lead.save();
 
 		const populated = await Lead.findById(lead._id)
-			.populate("campaignId", "name")
+			.populate("databaseId", "name")
 			.populate("partnerId", "companyName personName partnerType")
 			.populate("notes.createdBy", "name email avatar");
 
@@ -379,8 +549,47 @@ export const updateLead = async (
 			});
 		}
 
+		// Follow-ups and meetings get their own log entry so the monthly
+		// report can tell scheduling apart from ordinary lead edits.
+		const meetingScheduled =
+			body.scheduleType === 'meeting' || !!body.meetingAt;
+		const followUpScheduled =
+			body.scheduleType === 'follow_up' || !!body.nextFollowupAt;
+		if (meetingScheduled || followUpScheduled) {
+			const scheduledAt = meetingScheduled
+				? body.meetingAt || lead.meetingAt
+				: body.nextFollowupAt || lead.nextFollowupAt;
+			await ActivityLog.create({
+				action: meetingScheduled
+					? `Meeting scheduled${lead.meetingMode ? ` (${lead.meetingMode})` : ''}`
+					: 'Follow-up scheduled',
+				user: req.user!._id,
+				entityType: EntityType.LEAD,
+				entityId: lead._id,
+				metadata: {
+					name: lead.name,
+					phone: lead.phone,
+					company: lead.companyName,
+					scheduleType: meetingScheduled ? 'meeting' : 'follow_up',
+					scheduledAt,
+					meetingMode: lead.meetingMode,
+					meetingLocation: lead.meetingLocation,
+					meetingLink: lead.meetingLink,
+				},
+			});
+		}
+
 		const tId = getTenantId(req.user);
 		emitLeadUpdated(tId, populated);
+
+		// A lead that reaches closed_won from any path gets tracked in CaseFiles.
+		if (oldStatus !== "closed_won" && lead.status === "closed_won") {
+			await ensureCaseFileForLead(lead, req.user!);
+		}
+		// Lost / reopened leads keep their caseFile tracker in sync.
+		if (oldStatus !== lead.status) {
+			await syncCaseFileForLeadStatus(lead, oldStatus, req.user!);
+		}
 
 		res.json({ success: true, lead: populated });
 	} catch (error: any) {
@@ -491,7 +700,7 @@ export const updateNote = async (
 		await lead.save();
 
 		const populated = await Lead.findById(lead._id)
-			.populate("campaignId", "name")
+			.populate("databaseId", "name")
 			.populate("notes.createdBy", "name email avatar");
 
 		await ActivityLog.create({
@@ -552,7 +761,7 @@ export const deleteNote = async (
 		await lead.save();
 
 		const populated = await Lead.findById(lead._id)
-			.populate("campaignId", "name")
+			.populate("databaseId", "name")
 			.populate("notes.createdBy", "name email avatar");
 
 		await ActivityLog.create({
@@ -605,7 +814,7 @@ export const recordCall = async (
 		await lead.save();
 
 		const populated = await Lead.findById(lead._id)
-			.populate("campaignId", "name")
+			.populate("databaseId", "name")
 			.populate("notes.createdBy", "name email avatar");
 
 		let action = `Call #${lead.callCount} recorded`;
@@ -631,6 +840,13 @@ export const recordCall = async (
 		const tenantId = getTenantId(req.user);
 		emitLeadUpdated(tenantId, populated);
 
+		if (statusChanged && lead.status === "closed_won") {
+			await ensureCaseFileForLead(lead, req.user!);
+		}
+		if (statusChanged) {
+			await syncCaseFileForLeadStatus(lead, oldStatus, req.user!);
+		}
+
 		res.json({ success: true, lead: populated });
 	} catch (error: any) {
 		res.status(400).json({ success: false, message: error.message });
@@ -651,6 +867,20 @@ export const deleteLead = async (
 
 		const tenantId = getTenantId(req.user);
 		emitLeadDeleted(tenantId, lead._id.toString());
+
+		// CaseFiles are derived from their lead — remove them alongside it.
+		const linkedCaseFiles = await CaseFile.find({
+			tenantId: lead.tenantId,
+			leadId: lead._id,
+		}).select("_id");
+		if (linkedCaseFiles.length) {
+			await CaseFile.deleteMany({
+				_id: { $in: linkedCaseFiles.map((c) => c._id) },
+			});
+			linkedCaseFiles.forEach((c) =>
+				emitCaseFileDeleted(tenantId, c._id.toString()),
+			);
+		}
 
 		await ActivityLog.create({
 			action: "Lead deleted",
@@ -687,10 +917,40 @@ export const importExcel = async (
 		const tenantId = getTenantId(req.user);
 		const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
 		const sheetName = workbook.SheetNames[0];
-		const rows: any[] = XLSX.utils.sheet_to_json(
-			workbook.Sheets[sheetName],
-		);
-		const campaignId = req.body.campaignId;
+		const sheet = workbook.Sheets[sheetName];
+		// Partner templates carry a title block above the headers: locate the
+		// row that actually holds the column headers (first row with a "name"
+		// cell). Files with headers in row 1 keep working unchanged.
+		const probe: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+		let headerRow = 0;
+		for (let i = 0; i < Math.min(probe.length, 10); i++) {
+			const cells = probe[i] || [];
+			if (
+				cells.some(
+					(cell: any) =>
+						String(cell ?? "").trim().toLowerCase() === "name",
+				)
+			) {
+				headerRow = i;
+				break;
+			}
+		}
+		const rows: any[] = XLSX.utils.sheet_to_json(sheet, {
+			range: headerRow,
+		});
+		const databaseId = req.body.databaseId;
+		const bodyProduct = String(req.body.product || "").trim();
+
+		// Partner-profile import: when partnerId is supplied, every row is
+		// attributed to that partner (overrides row-level source columns).
+		let forcedPartner: any = null;
+		if (req.body.partnerId) {
+			forcedPartner = await Partner.findOne({ _id: req.body.partnerId, tenantId });
+			if (!forcedPartner) {
+				res.status(400).json({ success: false, message: "Partner not found" });
+				return;
+			}
+		}
 
 		if (rows.length === 0) {
 			res.status(400).json({
@@ -749,6 +1009,9 @@ export const importExcel = async (
 			partnerCache.set(k, p || null);
 			return p || null;
 		};
+
+		// Product resolution cache for partner rows (one lookup per name)
+		const productCache = new Map<string, any>();
 
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i];
@@ -824,7 +1087,12 @@ export const importExcel = async (
 				let sourceType: "udyam" | "self" | "partner" = "udyam";
 				let source = "Udyam Capital";
 				let rowPartnerId: any = undefined;
-				if (typeRaw.startsWith("part")) {
+				if (forcedPartner) {
+					// Partner-profile import: attach the whole file to this partner
+					sourceType = "partner";
+					rowPartnerId = forcedPartner._id;
+					source = forcedPartner.companyName || forcedPartner.name || forcedPartner.personName || "Partner";
+				} else if (typeRaw.startsWith("part")) {
 					const partnerKey = pickStr(row, "partner", "Partner", "PARTNER", "partnerName", "Partner Name", "referredBy", "Referred By");
 					if (!partnerKey) {
 						errors.push({ row: rowNo, message: 'sourceType is "partner" but no partner given (use the "partner" column)' });
@@ -845,8 +1113,16 @@ export const importExcel = async (
 					source = legacySource;
 				}
 
+				// Product the partner gave this lead for (row value wins over
+				// the upload-form default)
+				const matchedProduct = await matchLeadProduct(
+					tenantId,
+					pickStr(row, "product", "Product", "PRODUCT") || bodyProduct,
+					productCache,
+				);
+
 				const lead = await Lead.create({
-					campaignId,
+					databaseId,
 					tenantId,
 					name,
 					designation: pickStr(row, "designation", "Designation"),
@@ -866,7 +1142,9 @@ export const importExcel = async (
 					source,
 					sourceType,
 					...(rowPartnerId ? { partnerId: rowPartnerId } : {}),
-					status,
+					product: matchedProduct.product || undefined,
+					productId: matchedProduct.productId,
+					status: rowPartnerId ? "closed_won" : status,
 					callCount: 0,
 					followUpCount: 0,
 					meetingCount: 0,
@@ -878,6 +1156,15 @@ export const importExcel = async (
 				if (phone) seenPhones.add(phone);
 				if (gst) seenGsts.add(gst);
 				leads.push(lead);
+
+				// Partner rows are won deals from the start — track in CaseFiles.
+				if (rowPartnerId) {
+					try {
+						await ensureCaseFileForLead(lead, req.user!);
+					} catch (caseFileErr) {
+						console.error("ensureCaseFileForLead failed:", caseFileErr);
+					}
+				}
 			} catch (err: any) {
 				errors.push({ row: rowNo, message: err.message });
 			}
@@ -1185,37 +1472,243 @@ export const downloadSampleExcel = async (
 	res.send(buffer);
 };
 
+// Partner-scoped import template: every row is attached to the given partner,
+// so the file omits the source attribution columns and names the target
+// partner in the instructions sheet instead.
+export const downloadPartnerSampleExcel = async (
+	req: AuthRequest,
+	res: Response,
+): Promise<void> => {
+	try {
+		const tenantId = getTenantId(req.user);
+		const partner = await Partner.findOne({
+			_id: req.params.partnerId,
+			tenantId,
+		});
+		if (!partner) {
+			res.status(404).json({ success: false, message: "Partner not found" });
+			return;
+		}
+		const partnerName =
+			(partner as any).companyName ||
+			(partner as any).name ||
+			(partner as any).personName ||
+			"Partner";
+
+		const wb = XLSX.utils.book_new();
+		const headers = [
+			"name",
+			"phone",
+			"email",
+			"companyName",
+			"product",
+			"addressLine",
+			"city",
+			"state",
+			"pincode",
+			"companyPan",
+			"companyGst",
+			"industry",
+			"designation",
+			"website",
+			"alternatePhone",
+			"priority",
+		];
+		const sampleData = [
+			{
+				name: "Rahul Sharma",
+				phone: "9876543210",
+				email: "rahul.sharma@technova.in",
+				companyName: "TechNova Solutions",
+				product: "Term Loan",
+				addressLine: "12 MG Road",
+				city: "Bengaluru",
+				state: "Karnataka",
+				pincode: "560001",
+				companyPan: "AABCT1234F",
+				companyGst: "29AABCT1234F1Z5",
+				industry: "IT Services",
+				designation: "Procurement Manager",
+				website: "https://www.technova.in",
+				alternatePhone: "9876543211",
+				priority: "very_high",
+			},
+			{
+				name: "Priya Mehta",
+				phone: "9811122233",
+				email: "priya@greenleaf.co.in",
+				companyName: "GreenLeaf Organics",
+				product: "Working Capital Loan",
+				addressLine: "45 AB Road",
+				city: "Indore",
+				state: "Madhya Pradesh",
+				pincode: "452001",
+				companyPan: "AACCG2345K",
+				companyGst: "23AACCG2345K1Z2",
+				industry: "Agriculture",
+				designation: "Director",
+				website: "https://www.greenleaf.co.in",
+				alternatePhone: "9811122244",
+				priority: "high",
+			},
+			{
+				name: "Arjun Patel",
+				phone: "9898989898",
+				email: "arjun@apexmfg.com",
+				companyName: "Apex Manufacturing",
+				product: "Business Loan",
+				addressLine: "88 GIDC Estate",
+				city: "Ahmedabad",
+				state: "Gujarat",
+				pincode: "380015",
+				companyPan: "AAFCA3456L",
+				companyGst: "24AAFCA3456L1Z8",
+				industry: "Manufacturing",
+				designation: "Plant Head",
+				website: "https://www.apexmfg.com",
+				alternatePhone: "9898989899",
+				priority: "medium",
+			},
+		];
+
+		// Title block on top of the sheet: the file itself states which partner
+		// the leads are imported into, even after it is saved or forwarded.
+		const aoa: any[][] = [
+			[`LEAD IMPORT — ${partnerName}`],
+			[
+				"All leads added below are imported for this partner only and marked Closed Won (source: Partner). Keep the column headers unchanged — the rows above them are skipped automatically.",
+			],
+			[],
+			headers,
+			...sampleData.map((row) =>
+				headers.map((h) => (row as any)[h] ?? ""),
+			),
+		];
+		const ws = XLSX.utils.aoa_to_sheet(aoa);
+		XLSX.utils.book_append_sheet(wb, ws, "Leads");
+
+		const colWidths = headers.map((h) => ({ wch: Math.max(h.length, 20) }));
+		ws["!cols"] = colWidths;
+		const lastCol = XLSX.utils.encode_col(headers.length - 1);
+		(ws as any)["!autofilter"] = { ref: `A4:${lastCol}${aoa.length}` };
+
+		const instructions = [
+			[`Lead Import — ${partnerName}`],
+			[
+				"Every row on the Leads sheet is imported for this partner only; the source is set automatically.",
+			],
+			["Do not rename the column headers. Fill one lead per row."],
+			[],
+			["Column", "Required?", "Notes"],
+			["name", "Yes", "Full name of the lead"],
+			[
+				"phone",
+				"No, but recommended",
+				"10 digits; duplicates (in file or already saved) are skipped with an error",
+			],
+			["email", "No", "Must be a valid email when given"],
+			["companyName", "No", "Company / organisation name"],
+			[
+				"product",
+				"Yes",
+				"Product the partner gave this lead for — matched against your product catalog; feeds the Files tracker",
+			],
+			["designation", "No", "Job title"],
+			["industry", "No", "Free text"],
+			[
+				"addressLine / city / state / pincode",
+				"No",
+				"Pincode must be 6 digits when given",
+			],
+			["companyPan", "No", "Auto-filled from companyGst when left blank"],
+			[
+				"companyGst",
+				"No",
+				"15 characters; duplicates are skipped with an error",
+			],
+			[
+				"website / alternatePhone",
+				"No",
+				"Alternate phone must be 10 digits when given",
+			],
+			[
+				"priority",
+				"No",
+				"One of: very high, high, medium, low (default medium)",
+			],
+			[
+				"status",
+				"Auto",
+				"Not required — every lead in this file is saved as Closed Won",
+			],
+			[],
+			[
+				"Source",
+				"",
+				`All imported leads are attributed to: ${partnerName} (source: partner) and saved as Closed Won`,
+			],
+			[
+				"Limits",
+				"",
+				"Max 2000 rows per import. Rows with errors are skipped; the rest are imported.",
+			],
+		];
+		const wsHelp = XLSX.utils.aoa_to_sheet(instructions);
+		wsHelp["!cols"] = [{ wch: 34 }, { wch: 34 }, { wch: 90 }];
+		XLSX.utils.book_append_sheet(wb, wsHelp, "Instructions");
+
+		const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+		const safeName =
+			partnerName
+				.replace(/[^\w.-]+/g, "-")
+				.replace(/^-+|-+$/g, "")
+				.slice(0, 40) || "partner";
+
+		res.setHeader(
+			"Content-Type",
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		);
+		res.setHeader(
+			"Content-Disposition",
+			`attachment; filename="lead-import-${safeName}.xlsx"`,
+		);
+		res.send(buffer);
+	} catch (error: any) {
+		res.status(500).json({ success: false, message: error.message });
+	}
+};
+
 export const getLeadCounts = async (
 	req: AuthRequest,
 	res: Response,
 ): Promise<void> => {
 	try {
 		const tenantId = getTenantId(req.user);
-		const { campaignId, partnerId, search, industry, source, priority, city, state, pincode } = req.query;
+		const { databaseId, partnerId, search, industry, source, priority, city, state, pincode } = req.query;
 
 		const baseFilter: any = { tenantId };
-		let campaignOr: any[] | null = null;
+		let databaseOr: any[] | null = null;
 		let searchOr: any[] | null = null;
 
-		if (campaignId === '__none__') {
-			const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
-			baseFilter.campaignId = { $nin: allCampaignIds };
+		if (databaseId === '__none__') {
+			const allDatabaseIds = await Database.find({ tenantId }).distinct('_id');
+			baseFilter.databaseId = { $nin: allDatabaseIds };
 		} else {
-			if (campaignId) baseFilter.campaignId = campaignId;
+			if (databaseId) baseFilter.databaseId = databaseId;
 
-			const accessible = await getAccessibleCampaignIds(req.user, tenantId);
+			const accessible = await getAccessibleDatabaseIds(req.user, tenantId);
 			if (accessible) {
-				if (campaignId) {
-					const hasAccess = accessible.some((id: any) => id.toString() === campaignId);
+				if (databaseId) {
+					const hasAccess = accessible.some((id: any) => id.toString() === databaseId);
 					if (!hasAccess) {
 						res.json({ success: true, counts: { all: 0, archived: 0, meeting_scheduled: 0, closed_won: 0 } });
 						return;
 					}
 				} else {
-					const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
-					campaignOr = [
-						{ campaignId: { $in: accessible } },
-						{ campaignId: { $nin: allCampaignIds } },
+					const allDatabaseIds = await Database.find({ tenantId }).distinct('_id');
+					databaseOr = [
+						{ databaseId: { $in: accessible } },
+						{ databaseId: { $nin: allDatabaseIds } },
 					];
 				}
 			}
@@ -1252,10 +1745,10 @@ export const getLeadCounts = async (
 			}
 		}
 
-		if (campaignOr && searchOr) {
-			baseFilter.$and = [{ $or: campaignOr }, { $or: searchOr }];
-		} else if (campaignOr) {
-			baseFilter.$or = campaignOr;
+		if (databaseOr && searchOr) {
+			baseFilter.$and = [{ $or: databaseOr }, { $or: searchOr }];
+		} else if (databaseOr) {
+			baseFilter.$or = databaseOr;
 		} else if (searchOr) {
 			baseFilter.$or = searchOr;
 		}
@@ -1303,9 +1796,9 @@ export const getUpcomingFollowups = async (
 
 		const tenantMatch: any = { tenantId };
 
-		const accessible = await getAccessibleCampaignIds(req.user, tenantId);
+		const accessible = await getAccessibleDatabaseIds(req.user, tenantId);
 		if (accessible) {
-			tenantMatch.campaignId = { $in: accessible };
+			tenantMatch.databaseId = { $in: accessible };
 		}
 
 		const buildDateRange = () => {
@@ -1408,7 +1901,7 @@ export const getUpcomingFollowups = async (
 
 		const [leads, total, [countAll, countMeetings, countFollowups]] = await Promise.all([
 			Lead.find(filter)
-				.populate("campaignId", "name")
+				.populate("databaseId", "name")
 				.sort({ nextFollowupAt: 1, meetingAt: 1 })
 				.skip(skip)
 				.limit(limit),
@@ -1469,7 +1962,7 @@ export const updateMeetingStatus = async (
 		await lead.save();
 
 		const populated = await Lead.findById(lead._id)
-			.populate("campaignId", "name")
+			.populate("databaseId", "name")
 			.populate("notes.createdBy", "name email avatar");
 
 		await ActivityLog.create({
@@ -1480,10 +1973,17 @@ export const updateMeetingStatus = async (
 			metadata: {
 				name: lead.name,
 				meetingStatus,
+				meetingMode: lead.meetingMode,
 				phone: lead.phone,
 				company: lead.companyName,
 			},
 		});
+
+		emitLeadUpdated(getTenantId(req.user), populated);
+
+		if (meetingStatus === "done") {
+			await ensureCaseFileForLead(lead, req.user!);
+		}
 
 		res.json({ success: true, lead: populated });
 	} catch (error: any) {
@@ -1494,15 +1994,15 @@ export const updateMeetingStatus = async (
 export const getLeadStats = async (req: AuthRequest, res: Response): Promise<void> => {
 	try {
 		const tenantId = getTenantId(req.user);
-		const accessible = await getAccessibleCampaignIds(req.user, tenantId);
+		const accessible = await getAccessibleDatabaseIds(req.user, tenantId);
 
 		const match: any = { tenantId: new mongoose.Types.ObjectId(tenantId) };
 
 		if (accessible) {
-			const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
+			const allDatabaseIds = await Database.find({ tenantId }).distinct('_id');
 			match.$or = [
-				{ campaignId: { $in: accessible } },
-				{ campaignId: { $nin: allCampaignIds } },
+				{ databaseId: { $in: accessible } },
+				{ databaseId: { $nin: allDatabaseIds } },
 			];
 		}
 
@@ -1558,31 +2058,31 @@ export const getLeadFilterOptions = async (
 ): Promise<void> => {
 	try {
 		const tenantId = getTenantId(req.user);
-		const { campaignId, status, search } = req.query;
+		const { databaseId, status, search } = req.query;
 
 		const filter: any = { tenantId: new mongoose.Types.ObjectId(tenantId) };
-		let campaignOr: any[] | null = null;
+		let databaseOr: any[] | null = null;
 		let searchOr: any[] | null = null;
 
-		if (campaignId === '__none__') {
-			const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
-			filter.campaignId = { $nin: allCampaignIds };
+		if (databaseId === '__none__') {
+			const allDatabaseIds = await Database.find({ tenantId }).distinct('_id');
+			filter.databaseId = { $nin: allDatabaseIds };
 		} else {
-			if (campaignId) filter.campaignId = new mongoose.Types.ObjectId(campaignId as string);
+			if (databaseId) filter.databaseId = new mongoose.Types.ObjectId(databaseId as string);
 
-			const accessible = await getAccessibleCampaignIds(req.user, tenantId);
+			const accessible = await getAccessibleDatabaseIds(req.user, tenantId);
 			if (accessible) {
-				if (campaignId) {
-					const hasAccess = accessible.some((id: any) => id.toString() === campaignId);
+				if (databaseId) {
+					const hasAccess = accessible.some((id: any) => id.toString() === databaseId);
 					if (!hasAccess) {
 						res.json({ success: true, options: { industries: [], sources: [], cities: [], states: [], pincodes: [] } });
 						return;
 					}
 				} else {
-					const allCampaignIds = await Campaign.find({ tenantId }).distinct('_id');
-					campaignOr = [
-						{ campaignId: { $in: accessible } },
-						{ campaignId: { $nin: allCampaignIds } },
+					const allDatabaseIds = await Database.find({ tenantId }).distinct('_id');
+					databaseOr = [
+						{ databaseId: { $in: accessible } },
+						{ databaseId: { $nin: allDatabaseIds } },
 					];
 				}
 			}
@@ -1614,10 +2114,10 @@ export const getLeadFilterOptions = async (
 			];
 		}
 
-		if (campaignOr && searchOr) {
-			filter.$and = [{ $or: campaignOr }, { $or: searchOr }];
-		} else if (campaignOr) {
-			filter.$or = campaignOr;
+		if (databaseOr && searchOr) {
+			filter.$and = [{ $or: databaseOr }, { $or: searchOr }];
+		} else if (databaseOr) {
+			filter.$or = databaseOr;
 		} else if (searchOr) {
 			filter.$or = searchOr;
 		}

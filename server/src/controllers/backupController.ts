@@ -12,7 +12,7 @@ const getCollections = () => ({
   withTenantId: [
     { name: 'users', model: 'User' },
     { name: 'leads', model: 'Lead' },
-    { name: 'campaigns', model: 'Campaign' },
+    { name: 'databases', model: 'Database' },
     { name: 'fieldvisits', model: 'FieldVisit' },
     { name: 'locationtracks', model: 'LocationTrack' },
   ],

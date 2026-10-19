@@ -8,7 +8,7 @@ import Modal from "../common/Modal";
 import toast from "react-hot-toast";
 import { useCrmSocket } from "../../hooks/useCrmSocket";
 
-interface Campaign {
+interface Database {
 	_id: string;
 	name: string;
 }
@@ -24,7 +24,7 @@ interface Lead {
 	scheduleType?: "follow_up" | "meeting";
 	meetingStatus?: "scheduled" | "done" | "canceled";
 	meetingAt?: string;
-	campaignId?: Campaign | string;
+	databaseId?: Database | string;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -94,6 +94,14 @@ const formatRelativeDateTime = (d?: string): { label: string; time: string; isOv
 	}
 
 	return { label, time: timeStr, isOverdue };
+};
+
+// Local-time YYYY-MM-DD — toISOString() would shift the day in non-UTC timezones.
+const toDateParam = (d: Date): string => {
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
 };
 
 interface DateGroup {
@@ -166,6 +174,7 @@ const Schedule = () => {
 	const [dateFrom, setDateFrom] = useState("");
 	const [dateTo, setDateTo] = useState("");
 	const [datePreset, setDatePreset] = useState("all");
+	const [showRangePanel, setShowRangePanel] = useState(false);
 	const [showFollowupModal, setShowFollowupModal] = useState(false);
 	const [followupLeadId, setFollowupLeadId] = useState<string | null>(null);
 	const [followupNotes, setFollowupNotes] = useState("");
@@ -192,25 +201,25 @@ const Schedule = () => {
 			setDateFrom("");
 			setDateTo("");
 		} else if (preset === "today") {
-			setDateFrom(startOfDay.toISOString().slice(0, 10));
-			setDateTo(startOfDay.toISOString().slice(0, 10));
+			setDateFrom(toDateParam(startOfDay));
+			setDateTo(toDateParam(startOfDay));
 		} else if (preset === "week") {
 			const weekStart = new Date(startOfDay);
 			weekStart.setDate(weekStart.getDate() - weekStart.getDay());
 			const weekEnd = new Date(weekStart);
 			weekEnd.setDate(weekEnd.getDate() + 6);
-			setDateFrom(weekStart.toISOString().slice(0, 10));
-			setDateTo(weekEnd.toISOString().slice(0, 10));
+			setDateFrom(toDateParam(weekStart));
+			setDateTo(toDateParam(weekEnd));
 		} else if (preset === "month") {
 			const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 			const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-			setDateFrom(monthStart.toISOString().slice(0, 10));
-			setDateTo(monthEnd.toISOString().slice(0, 10));
+			setDateFrom(toDateParam(monthStart));
+			setDateTo(toDateParam(monthEnd));
 		} else if (preset === "year") {
 			const yearStart = new Date(now.getFullYear(), 0, 1);
 			const yearEnd = new Date(now.getFullYear(), 11, 31);
-			setDateFrom(yearStart.toISOString().slice(0, 10));
-			setDateTo(yearEnd.toISOString().slice(0, 10));
+			setDateFrom(toDateParam(yearStart));
+			setDateTo(toDateParam(yearEnd));
 		}
 	};
 
@@ -218,6 +227,31 @@ const Schedule = () => {
 		setDateFrom("");
 		setDateTo("");
 		setDatePreset("all");
+		setPage(1);
+	};
+
+	const formatRangeDate = (d: string) =>
+		d ? new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "";
+
+	const rangePillLabel = dateFrom && dateTo
+		? `${formatRangeDate(dateFrom)} – ${formatRangeDate(dateTo)}`
+		: dateFrom
+			? `From ${formatRangeDate(dateFrom)}`
+			: dateTo
+				? `Until ${formatRangeDate(dateTo)}`
+				: "";
+
+	const hasActiveFilters = !!(searchQuery || filterStatus || dateFrom || dateTo || dateFilter !== "all");
+
+	const resetScheduleFilters = () => {
+		setSearchInput("");
+		setSearchQuery("");
+		setFilterStatus("");
+		setDateFrom("");
+		setDateTo("");
+		setDatePreset("all");
+		setDateFilter("all");
+		setShowRangePanel(false);
 		setPage(1);
 	};
 
@@ -249,9 +283,9 @@ const Schedule = () => {
 	const totalPages = data?.totalPages ?? 1;
 	const tabCounts = data?.counts ?? { all: 0, meetings: 0, followups: 0 };
 
-	const getCampaignName = (campaignId: any): string => {
-		if (!campaignId) return "—";
-		if (typeof campaignId === "object" && campaignId.name) return campaignId.name;
+	const getDatabaseName = (databaseId: any): string => {
+		if (!databaseId) return "—";
+		if (typeof databaseId === "object" && databaseId.name) return databaseId.name;
 		return "—";
 	};
 
@@ -430,7 +464,7 @@ const Schedule = () => {
 					onClick={async () => {
 						await Promise.all([
 							queryClient.invalidateQueries({ queryKey: ["leads"] }),
-							queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
+							queryClient.invalidateQueries({ queryKey: ["databases"] }),
 						]);
 						toast.success("Refreshed");
 					}}
@@ -506,10 +540,19 @@ const Schedule = () => {
 							)}
 						</div>
 						<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-							<Filter size={14} style={{ color: "var(--color-text-tertiary)" }} />
+							<Filter size={14} style={{ color: filterStatus ? "var(--color-primary)" : "var(--color-text-tertiary)" }} />
 							<select
 								className="input"
-								style={{ padding: "6px 10px", fontSize: "0.8rem" }}
+								style={{
+									padding: "6px 10px", fontSize: "0.8rem", cursor: "pointer",
+									...(filterStatus ? {
+										borderColor: "var(--color-primary)",
+										boxShadow: "0 0 0 2px rgba(99, 102, 241, 0.14)",
+										background: "var(--color-primary-light)",
+										color: "var(--color-primary)",
+										fontWeight: 600,
+									} : {}),
+								}}
 								value={filterStatus}
 								onChange={(e) => handleStatusChange(e.target.value)}
 							>
@@ -519,58 +562,8 @@ const Schedule = () => {
 								))}
 							</select>
 						</div>
-						<div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: "auto" }}>
-							{presets.map((p) => (
-								<button
-									key={p.value}
-									onClick={() => applyPreset(p.value)}
-									style={{
-										padding: "4px 10px", fontSize: "0.75rem", fontWeight: datePreset === p.value ? 600 : 500,
-										color: datePreset === p.value ? "var(--color-primary)" : "var(--color-text-secondary)",
-										background: datePreset === p.value ? "var(--color-primary-light)" : "transparent",
-										border: `1px solid ${datePreset === p.value ? "var(--color-primary)" : "var(--color-border)"}`,
-										borderRadius: 6, cursor: "pointer",
-									}}
-								>
-									{p.label}
-								</button>
-							))}
-						</div>
 					</div>
 					<div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-						<div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-							<span style={{ fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--color-text-tertiary)" }}>
-								Date Range
-							</span>
-							<input
-								type="date"
-								value={dateFrom}
-								onChange={(e) => { setDateFrom(e.target.value); setDatePreset("custom"); setPage(1); }}
-								style={{
-									padding: "5px 8px", fontSize: "0.78rem", border: "1px solid var(--color-border)",
-									borderRadius: 6, background: "var(--color-surface)", color: "var(--color-text)",
-								}}
-							/>
-							<span style={{ fontSize: "0.78rem", color: "var(--color-text-tertiary)" }}>–</span>
-							<input
-								type="date"
-								value={dateTo}
-								onChange={(e) => { setDateTo(e.target.value); setDatePreset("custom"); setPage(1); }}
-								style={{
-									padding: "5px 8px", fontSize: "0.78rem", border: "1px solid var(--color-border)",
-									borderRadius: 6, background: "var(--color-surface)", color: "var(--color-text)",
-								}}
-							/>
-							{(dateFrom || dateTo) && (
-								<button
-									onClick={clearDateRange}
-									style={{ border: "none", background: "none", cursor: "pointer", color: "var(--color-text-tertiary)", padding: 4 }}
-									title="Clear date range"
-								>
-									<X size={14} />
-								</button>
-							)}
-						</div>
 						<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
 							{DATE_FILTERS.map((f) => {
 								const count = f.key === "all"
@@ -602,7 +595,120 @@ const Schedule = () => {
 								);
 							})}
 						</div>
+						<div style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
+							{dateFrom || dateTo ? (
+								<div style={{
+									display: "flex", alignItems: "center", gap: 2,
+									border: "1px solid var(--color-primary)", background: "var(--color-primary-light)",
+									borderRadius: 6, paddingLeft: 10,
+								}}>
+									<button
+										onClick={() => setShowRangePanel(v => !v)}
+										title="Edit date range"
+										style={{
+											border: "none", background: "none", cursor: "pointer", padding: "4px 0",
+											display: "flex", alignItems: "center", gap: 6,
+											fontSize: "0.75rem", fontWeight: 600, color: "var(--color-primary)",
+										}}
+									>
+										<CalendarClock size={13} />
+										{rangePillLabel}
+									</button>
+									<button
+										onClick={clearDateRange}
+										title="Clear date range"
+										style={{ border: "none", background: "none", cursor: "pointer", padding: "4px 6px", display: "flex", color: "var(--color-primary)" }}
+									>
+										<X size={12} />
+									</button>
+								</div>
+							) : (
+								<button
+									onClick={() => setShowRangePanel(v => !v)}
+									style={{
+										padding: "4px 10px", fontSize: "0.75rem", fontWeight: 500,
+										color: showRangePanel ? "var(--color-primary)" : "var(--color-text-secondary)",
+										background: showRangePanel ? "var(--color-primary-light)" : "transparent",
+										border: `1px solid ${showRangePanel ? "var(--color-primary)" : "var(--color-border)"}`,
+										borderRadius: 6, cursor: "pointer",
+										display: "flex", alignItems: "center", gap: 6,
+									}}
+								>
+									<CalendarClock size={13} />
+									Custom range
+								</button>
+							)}
+							{hasActiveFilters && (
+								<button
+									onClick={resetScheduleFilters}
+									title="Reset all filters"
+									style={{
+										padding: "4px 10px", fontSize: "0.75rem", fontWeight: 500,
+										color: "var(--color-text-secondary)", background: "transparent",
+										border: "1px solid var(--color-border)", borderRadius: 6, cursor: "pointer",
+										display: "flex", alignItems: "center", gap: 6,
+									}}
+								>
+									<RefreshCw size={12} />
+									Reset
+								</button>
+							)}
+						</div>
 					</div>
+					{showRangePanel && (
+						<div style={{
+							display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center",
+							borderTop: "1px dashed var(--color-border)", paddingTop: 12,
+						}}>
+							<span style={{ fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--color-text-tertiary)" }}>
+								Quick Range
+							</span>
+							{presets.filter(p => p.value !== "all").map((p) => (
+								<button
+									key={p.value}
+									onClick={() => { applyPreset(p.value); setShowRangePanel(false); }}
+									style={{
+										padding: "4px 10px", fontSize: "0.75rem", fontWeight: datePreset === p.value ? 600 : 500,
+										color: datePreset === p.value ? "var(--color-primary)" : "var(--color-text-secondary)",
+										background: datePreset === p.value ? "var(--color-primary-light)" : "transparent",
+										border: `1px solid ${datePreset === p.value ? "var(--color-primary)" : "var(--color-border)"}`,
+										borderRadius: 6, cursor: "pointer",
+									}}
+								>
+									{p.label}
+								</button>
+							))}
+							<span style={{ fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>or pick dates</span>
+							<input
+								type="date"
+								value={dateFrom}
+								onChange={(e) => { setDateFrom(e.target.value); setDatePreset("custom"); setPage(1); }}
+								style={{
+									padding: "5px 8px", fontSize: "0.78rem", border: "1px solid var(--color-border)",
+									borderRadius: 6, background: "var(--color-surface)", color: "var(--color-text)",
+								}}
+							/>
+							<span style={{ fontSize: "0.78rem", color: "var(--color-text-tertiary)" }}>–</span>
+							<input
+								type="date"
+								value={dateTo}
+								onChange={(e) => { setDateTo(e.target.value); setDatePreset("custom"); setPage(1); }}
+								style={{
+									padding: "5px 8px", fontSize: "0.78rem", border: "1px solid var(--color-border)",
+									borderRadius: 6, background: "var(--color-surface)", color: "var(--color-text)",
+								}}
+							/>
+							{(dateFrom || dateTo) && (
+								<button
+									onClick={clearDateRange}
+									title="Clear date range"
+									style={{ border: "none", background: "none", cursor: "pointer", color: "var(--color-text-tertiary)", padding: 4 }}
+								>
+									<X size={14} />
+								</button>
+							)}
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -714,7 +820,7 @@ const Schedule = () => {
 															</span>
 														)}
 														<span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-															{getCampaignName(lead.campaignId)}
+															{getDatabaseName(lead.databaseId)}
 														</span>
 													</div>
 

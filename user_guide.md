@@ -108,13 +108,13 @@ E2EE per-device `encryptedKeyWraps` → `POST /conversations` (direct/group + `n
 
 ---
 
-## 👥 CRM `CrmPage.tsx:80` (`SECTIONS L18`: dashboard/campaigns/dial/schedule/summary/logs/field-visits)
+## 👥 CRM `CrmPage.tsx:80` (`SECTIONS L18`: dashboard/databases/dial/schedule/summary/logs/field-visits)
 
-### Campaigns `campaigns.ts:8`
-`POST/GET/PUT/DELETE /campaigns`, Excel import `POST /import/excel` + `GET /import/sample`.
+### Databases `databases.ts:8`
+`POST/GET/PUT/DELETE /databases`, Excel import `POST /import/excel` + `GET /import/sample`.
 
 ### Leads `leads.ts:14` `Lead.ts:58`
-Table filters `campaign/status/priority/source/city/nextFollowup/search` pagination `getLeads L18`. Detail modal: notes timeline `POST /:id/notes`, call dial `POST /:id/call` increments `callCount/duration`, `PATCH /:id/meeting-status L1106`. Status 11-stage funnel, endpoints `GET /counts|upcoming|stats|filter-options`. Excel bulk import `importExcel L438`.
+Table filters `database/status/priority/source/city/nextFollowup/search` pagination `getLeads L18`. Detail modal: notes timeline `POST /:id/notes`, call dial `POST /:id/call` increments `callCount/duration`, `PATCH /:id/meeting-status L1106`. Status 11-stage funnel, endpoints `GET /counts|upcoming|stats|filter-options`. Excel bulk import `importExcel L438`.
 
 ### Companies & Contacts `companies.ts:27` `Company.ts:32` `Contact.ts:20`
 Hierarchy tree unlimited `parentCompanyId`, industry/website/phone/+countryCode/address, contacts `isPrimary`. Excel import `POST /import L351`, export Excel `L495` / PDF `L608` (pdfkit), **Bulk Email** `POST /bulk-email L726` → primary contacts via Brevo `sendGenericEmail`. Client tree `ClientsPage.tsx:37` + hierarchical selector `BulkEmailPage.tsx:19` Tiptap editor + virtual scroll.
