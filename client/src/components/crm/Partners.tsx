@@ -29,6 +29,12 @@ import {
 } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../../lib/api";
+import {
+	API_BASE_URL,
+	apiUrl,
+	joinUrl,
+	stripTrailingSlashes,
+} from "../../lib/urls";
 import Modal from "../common/Modal";
 import FilePreviewModal from "../common/FilePreviewModal";
 import ToggleSwitch from "../common/ToggleSwitch";
@@ -71,19 +77,19 @@ interface Lead {
 	product?: string;
 }
 
-const apiBase =
-	(import.meta.env.VITE_API_URL as string) || "http://localhost:5000/api";
-const FILE_BASE =
+const apiBase = API_BASE_URL;
+const FILE_BASE = stripTrailingSlashes(
 	(import.meta.env.VITE_SOCKET_URL as string) ||
-	apiBase.replace(/\/+$/, "").replace(/\/api$/, "");
+		apiBase.replace(/\/api$/, ""),
+);
 
 // Tenant-checked download URL for agreements (requires auth header, which
 // FilePreviewModal now sends). Falls back to the public path when only
 // the legacy path is known.
 const agreementUrl = (p: Partner): string => {
 	if (p.agreementFileName)
-		return `${apiBase.replace(/\/+$/, "")}/files/by-name/${encodeURIComponent(p.agreementFileName)}`;
-	return p.agreementFilePath ? `${FILE_BASE}${p.agreementFilePath}` : "";
+		return apiUrl(`/files/by-name/${encodeURIComponent(p.agreementFileName)}`);
+	return p.agreementFilePath ? joinUrl(FILE_BASE, p.agreementFilePath) : "";
 };
 
 // GSTIN chars 3–12 are the holder's PAN (e.g. 27ABCDE1234F1Z5 → ABCDE1234F)
@@ -2562,7 +2568,7 @@ const Partners = () => {
 									</p>
 								</label>
 								<a
-									href={`${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/partners/import/sample`}
+									href={apiUrl("/partners/import/sample")}
 									className="flex items-center justify-center gap-1.5 text-[0.8rem] font-medium text-(--color-primary) no-underline"
 								>
 									Download sample format

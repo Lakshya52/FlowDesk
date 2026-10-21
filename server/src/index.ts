@@ -135,6 +135,22 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// Collapse duplicate slashes in the request path so URLs like
+// `/api//partners/import/sample` still reach `/api/partners/import/sample`.
+// Only the pathname is normalized; query strings may legitimately contain
+// `https://` and must be left untouched.
+app.use((req, _res, next) => {
+  const queryIndex = req.url.indexOf("?");
+  const pathname = queryIndex === -1 ? req.url : req.url.slice(0, queryIndex);
+  const query = queryIndex === -1 ? "" : req.url.slice(queryIndex);
+  const normalizedPathname = pathname.replace(/\/{2,}/g, "/");
+
+  if (normalizedPathname !== pathname) {
+    req.url = normalizedPathname + query;
+  }
+  next();
+});
+
 // Serve files from GridFS (no auth — browsers need direct img src).
 // Avatars and other non-sensitive images only; sensitive documents must go
 // through the tenant-checked GET /api/files/by-name/:filename instead.

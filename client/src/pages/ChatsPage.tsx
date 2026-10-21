@@ -2,6 +2,7 @@
 import { useAuthStore } from "../store/authStore";
 import { useChatStore, MessageSnippet, UserSnippet } from "../store/chatStore";
 import api from "../lib/api";
+import { mediaUrl, SOCKET_BASE_URL } from "../lib/urls";
 import {
     initE2EE,
     ensureConversationKeys,
@@ -39,8 +40,6 @@ import {
   Eye,
   ChevronRight,
 } from "lucide-react";
-
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
 // Cache for instant image previews — capped to prevent memory leaks
 const MAX_PREVIEW_CACHE_SIZE = 50;
@@ -324,7 +323,7 @@ export default function ChatsPage() {
     // E2EE identity: create/load device keypair and publish the public half
     void initE2EE();
 
-    const socket = io(SOCKET_URL, {
+    const socket = io(SOCKET_BASE_URL, {
       // Function form re-reads the (refreshed) token on every reconnect â€”
       // the server rejects unauthenticated sockets since the E2EE rollout.
       auth: (cb) => cb({ token: localStorage.getItem("flowdesk_token") }),
@@ -733,9 +732,9 @@ export default function ChatsPage() {
           if (!att?._id || !att.encIv || !att.encKey) continue;
           const key = `${activeConversationId}:${att._id}`;
           if (decryptedAttUrlsRef.current[key]) continue;
-          const url = att.filePath
-            ? `${SOCKET_URL}${att.filePath}`
-            : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`;
+          const url = mediaUrl(
+            att.filePath || `/uploads/${att.fileName || att.filename}`,
+          );
           tasks.push(
             (async () => {
               try {
@@ -1170,9 +1169,9 @@ export default function ChatsPage() {
       const attachments = (forwardingMessage.attachments ?? []) as any[];
       for (const att of attachments) {
         try {
-          const url = att.filePath
-            ? `${SOCKET_URL}${att.filePath}`
-            : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`;
+          const url = mediaUrl(
+            att.filePath || `/uploads/${att.fileName || att.filename}`,
+          );
           const resp = await fetch(url, { credentials: "include" });
           if (!resp.ok) continue;
           const cipherBuf = await resp.arrayBuffer();
@@ -2592,9 +2591,10 @@ export default function ChatsPage() {
                                             localUrl ||
                                             (isEncrypted
                                               ? decryptedUrl || ""
-                                              : (att.filePath
-                                                ? `${SOCKET_URL}${att.filePath}`
-                                                : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`));
+                                              : mediaUrl(
+                                                  att.filePath ||
+                                                    `/uploads/${att.fileName || att.filename}`,
+                                                ));
                                           const ext =
                                             (
                                               att.fileName ||
@@ -2780,9 +2780,10 @@ export default function ChatsPage() {
                                                     let href = fileUrl;
                                                     if (isEncrypted && activeConversationId && !href) {
                                                       try {
-                                                        const url2 = att.filePath
-                                                          ? `${SOCKET_URL}${att.filePath}`
-                                                          : `${SOCKET_URL}/uploads/${att.fileName || att.filename}`;
+                                                        const url2 = mediaUrl(
+                                                          att.filePath ||
+                                                            `/uploads/${att.fileName || att.filename}`,
+                                                        );
                                                         const objUrl = await getDecryptedAttachmentUrl(
                                                           activeConversationId,
                                                           url2,

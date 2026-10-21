@@ -1,4 +1,5 @@
 import React from 'react';
+import { mediaUrl } from '../../lib/urls';
 
 interface AvatarProps {
     src?: string;
@@ -9,7 +10,6 @@ interface AvatarProps {
 }
 
 const Avatar: React.FC<AvatarProps> = ({ src, name, size = 32, style, className }) => {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-backend-l5tt.onrender.com';
     const initials = name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?';
 
     const baseStyle: React.CSSProperties = {
@@ -33,7 +33,7 @@ const Avatar: React.FC<AvatarProps> = ({ src, name, size = 32, style, className 
                 className={className}
                 style={{
                     ...baseStyle,
-                    background: `url(${socketUrl}${src}) center/cover`,
+                    background: `url(${mediaUrl(src, 'https://flowdesk-backend-l5tt.onrender.com')}) center/cover`,
                 }}
                 title={name}
             />

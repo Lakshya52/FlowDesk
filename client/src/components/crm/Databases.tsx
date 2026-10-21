@@ -3,6 +3,7 @@ import { Plus, X, Users, Target, Calendar, Loader2, Trash2, Pencil, Phone, Build
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
+import { apiUrl, mediaUrl } from '../../lib/urls';
 import Modal from '../common/Modal';
 import { useAuthStore } from '../../store/authStore';
 import { useCrmSocket } from '../../hooks/useCrmSocket';
@@ -488,7 +489,7 @@ const Databases = () => {
                                                 <div className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[0.55rem] font-semibold shrink-0"
                                                     style={{ background: AVATAR_COLORS[idx % AVATAR_COLORS.length] }}>
                                                     {person.avatar ? (
-                                                        <img src={`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-api.raksco.in'}${person.avatar}/resize?w=40&q=60`} alt={person.name} width={20} height={20} loading="lazy" decoding="async" className="w-full h-full rounded-full object-cover" />
+                                                        <img src={mediaUrl(`${person.avatar}/resize?w=40&q=60`, 'https://flowdesk-api.raksco.in')} alt={person.name} width={20} height={20} loading="lazy" decoding="async" className="w-full h-full rounded-full object-cover" />
                                                     ) : getInitials(person.name)}
                                                 </div>
                                                 <span className="text-[0.7rem] font-medium text-(--color-text-secondary)">
@@ -790,7 +791,7 @@ const Databases = () => {
                                 </div>
 
                                 <a
-                                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/leads/import/sample`}
+                                    href={apiUrl('/leads/import/sample')}
                                     className="flex items-center justify-center gap-1.5 text-[0.8rem] font-medium text-(--color-primary) no-underline"
                                 >
                                     <Download size={14} /> Download sample format

@@ -7,6 +7,7 @@ import { io } from 'socket.io-client';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
+import { mediaUrl, SOCKET_BASE_URL } from '../lib/urls';
 import Avatar from '../components/common/Avatar';
 import { useAuthStore } from '../store/authStore';
 import { ArrowLeft, Plus, Minus, X, Paperclip, MessageSquare, Upload, 
@@ -273,8 +274,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
         fetchAll();
 
         // Socket connection — server rejects unauthenticated sockets
-        const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
-        const socket = io(socketUrl, {
+        const socket = io(SOCKET_BASE_URL, {
             auth: (cb) => cb({ token: localStorage.getItem('flowdesk_token') }),
         });
         socketRef.current = socket;
@@ -2070,8 +2070,7 @@ const AssignmentDetailPage = (): React.JSX.Element | null => {
                                             )}
                                             {/* Attachments in message */}
                                             {msg.attachments?.map((att: any) => {
-                                                const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
-                                                const fileUrl = att.filePath ? `${socketUrl}${att.filePath}` : `${socketUrl}/uploads/${att.fileName || att.filename}`;
+                                                const fileUrl = mediaUrl(att.filePath || `/uploads/${att.fileName || att.filename}`);
                                                 const ext = (att.fileName || att.filename || att.originalName || '').split('.').pop()?.toLowerCase() || '';
                                                 const isImage = att.fileType?.startsWith('image/') || att.contentType?.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext);
 

@@ -3,6 +3,7 @@ import React from "react";
 import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
+import { ToastLimiter } from "./components/common/ToastLimiter";
 import { getFirstAllowedRoute, navItems, normalizeTab } from "./components/layout/Sidebar";
 import { useAuthStore } from "./store/authStore";
 // import { WifiOff } from "lucide-react";
@@ -188,6 +189,7 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       {/* <OfflineBanner /> */}
+      <ToastLimiter />
       <Toaster
         position="top-center"
         containerStyle={{

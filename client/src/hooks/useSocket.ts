@@ -1,10 +1,11 @@
 import { io, Socket } from "socket.io-client";
+import { SOCKET_BASE_URL } from "../lib/urls";
 
 let socket: Socket | null = null;
 
 export const getSocket = (): Socket => {
   if (!socket) {
-    const url = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+    const url = SOCKET_BASE_URL;
     // Function form re-reads the (refreshed) token on every reconnect —
     // the server rejects unauthenticated sockets.
     socket = io(url, {

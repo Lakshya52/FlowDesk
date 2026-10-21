@@ -10,6 +10,7 @@ import {
 	keepPreviousData,
 } from "@tanstack/react-query";
 import api from "../../lib/api";
+import { apiUrl } from "../../lib/urls";
 import Modal from "../common/Modal";
 import { useAuthStore } from "../../store/authStore";
 import toast from "react-hot-toast";
@@ -2001,7 +2002,7 @@ const handlePincodeChange = async (value: string) => {
 								</div>
 
 								<a
-									href={`${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}leads/import/sample`}
+									href={apiUrl("/leads/import/sample")}
 									style={{
 										display: "flex",
 										alignItems: "center",

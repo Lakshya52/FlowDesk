@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Loader2, Save, Plus, User, Building2, CalendarDays, X, Clock, LayoutList,AlignJustify } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../../lib/api";
+import { mediaUrl } from "../../lib/urls";
 import {useAuthStore} from "../../store/authStore";
 
 
@@ -406,7 +407,7 @@ const FieldVisitRoutePlanner: React.FC<{ refreshKey?: number }> = ({ refreshKey 
             {selectedEmployeeData && (
               <div className="flex items-center gap-3 p-3 bg-(--color-primary-light) rounded-lg border border-(--color-primary-light)">
                 {selectedEmployeeData.avatar ? (
-                  <img src={`${import.meta.env.VITE_SOCKET_URL || 'https://flowdesk-backend-l5tt.onrender.com'}${selectedEmployeeData.avatar}`} className="w-10 h-10 rounded-full object-cover" />
+                  <img src={mediaUrl(selectedEmployeeData.avatar, 'https://flowdesk-backend-l5tt.onrender.com')} className="w-10 h-10 rounded-full object-cover" />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-(--color-primary-light) flex items-center justify-center">
                     <User size={18} className="text-(--color-primary)" />

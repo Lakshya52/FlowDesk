@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
+import { apiUrl } from "../lib/urls";
 import Avatar from "../components/common/Avatar";
 import Modal from "../components/common/Modal";
 import { PriorityBadge } from "../components/common/PriorityIcon";
@@ -2340,7 +2341,7 @@ const AssignmentsPage: React.FC = () => {
                 </div>
 
                 <a
-                  href={`${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/assignments/import/sample`}
+                  href={apiUrl("/assignments/import/sample")}
                   style={{
                     display: "flex",
                     alignItems: "center",

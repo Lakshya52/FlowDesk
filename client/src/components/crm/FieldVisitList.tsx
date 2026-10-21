@@ -24,6 +24,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../../lib/api";
+import { mediaUrl } from "../../lib/urls";
 import { useAuthStore } from "../../store/authStore";
 import FieldVisitCheckIn from "./FieldVisitCheckIn";
 
@@ -667,7 +668,7 @@ const FieldVisitList: React.FC<Props> = ({
 										<div className="flex items-center gap-2">
 											{visit.employeeId?.avatar ? (
 												<img
-													src={`${import.meta.env.VITE_SOCKET_URL || "https://flowdesk-backend-l5tt.onrender.com"}${visit.employeeId.avatar}`}
+													src={mediaUrl(visit.employeeId.avatar, "https://flowdesk-backend-l5tt.onrender.com")}
 													className="w-8 h-8 rounded-full object-cover"
 												/>
 											) : (
@@ -779,11 +780,11 @@ const FieldVisitList: React.FC<Props> = ({
 									{visit.checkInSelfie && (
 										<div className="mb-2 ml-5">
 											<img
-												src={`${import.meta.env.VITE_SOCKET_URL || "https://flowdesk-backend-l5tt.onrender.com"}/uploads/${visit.checkInSelfie}`}
+												src={mediaUrl(`/uploads/${visit.checkInSelfie}`, "https://flowdesk-backend-l5tt.onrender.com")}
 												className="w-full max-h-40 rounded-lg object-cover border border-(--color-border) cursor-pointer hover:opacity-90 transition-opacity"
 												onClick={() =>
 													setPreviewImage(
-														`${import.meta.env.VITE_SOCKET_URL || "https://flowdesk-backend-l5tt.onrender.com"}/uploads/${visit.checkInSelfie}`,
+														mediaUrl(`/uploads/${visit.checkInSelfie}`, "https://flowdesk-backend-l5tt.onrender.com"),
 													)
 												}
 											/>
