@@ -77,6 +77,7 @@ export interface Lead {
 	sourceType?: "udyam" | "self" | "partner";
 	partnerId?: { _id: string; companyName?: string; name?: string; personName?: string; partnerType?: string } | string;
 	product?: string;
+	productId?: { _id: string; name: string } | string | null;
 	status:
 		| "new"
 		| "attempted"
@@ -2194,7 +2195,7 @@ const handlePincodeChange = async (value: string) => {
 										marginBottom: 4,
 									}}
 								>
-									Name *
+									Name <span className="text-danger">*</span>
 								</label>
 								<input
 									className="input"
@@ -2225,7 +2226,7 @@ const handlePincodeChange = async (value: string) => {
 											marginBottom: 4,
 										}}
 									>
-										Phone *
+										Phone <span className="text-danger">*</span>
 									</label>
 									<input
 										type="text"
@@ -2656,7 +2657,7 @@ const handlePincodeChange = async (value: string) => {
 											marginBottom: 4,
 										}}
 									>
-										Lead Source *
+										Lead Source (selected default)
 									</label>
 									<select
 										className="input"
@@ -2687,7 +2688,7 @@ const handlePincodeChange = async (value: string) => {
 											marginBottom: 4,
 										}}
 									>
-										Select Partner *
+										Select Partner
 									</label>
 									<select
 										className="input"
@@ -2734,7 +2735,7 @@ const handlePincodeChange = async (value: string) => {
 											marginBottom: 4,
 										}}
 									>
-										Project *
+										Database <span className="text-danger">*</span>
 									</label>
 									<select
 										className="input"

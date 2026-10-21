@@ -2,6 +2,7 @@ import { Response } from 'express';
 import mongoose from 'mongoose';
 import CaseFile from '../models/CaseFile';
 import Lead from '../models/Lead';
+import LoanProduct from '../models/LoanProduct';
 import DocStatus from '../models/DocStatus';
 import ActivityLog, { EntityType } from '../models/ActivityLog';
 import { AuthRequest } from '../middlewares/auth';
@@ -39,6 +40,23 @@ const CASE_FILE_STATUS_LABELS: Record<string, string> = {
 
 const caseFileStatusLabel = (s: string): string =>
     CASE_FILE_STATUS_LABELS[s] || s.replace(/_/g, ' ');
+
+// Product picked in the Files tracker is the source of truth once a lead is
+// converted. Mirror it onto the lead so the lead details popup shows the same
+// product instead of an empty value.
+const syncLeadProduct = async (leadId: any, productId: any, tenantId: any) => {
+    try {
+        if (!productId) return;
+        const product = await LoanProduct.findOne({ _id: productId, tenantId }).select('name');
+        if (!product) return;
+        await Lead.updateOne(
+            { _id: leadId, tenantId },
+            { $set: { product: product.name, productId: product._id } }
+        );
+    } catch (err) {
+        console.error('syncLeadProduct failed:', err);
+    }
+};
 
 const getPopulated = (id: any) =>
     CaseFile.findById(id)
@@ -312,6 +330,7 @@ export const createCaseFile = async (req: AuthRequest, res: Response): Promise<v
                 lead.status = 'closed_won';
                 await lead.save();
             }
+            await syncLeadProduct(lead._id, existing.productId, tenantId);
             const populated = await getPopulated(existing._id);
             emitCaseFileUpdated(tenantId, populated);
             await respondCaseFile(res, populated, tenantId, { existing: true });
@@ -374,6 +393,8 @@ export const createCaseFile = async (req: AuthRequest, res: Response): Promise<v
             leadId: lead._id,
             productId: resolvedProductId,
         });
+
+        await syncLeadProduct(lead._id, resolvedProductId, tenantId);
 
         const populatedLead = await Lead.findById(lead._id).populate('databaseId', 'name');
         emitLeadUpdated(tenantId, populatedLead);
@@ -468,6 +489,12 @@ export const updateCaseFile = async (req: AuthRequest, res: Response): Promise<v
         }
 
         await caseFile.save();
+
+        // Files picked/changed a product — keep the lead's product fields in
+        // sync so its details popup shows the same value.
+        if (productId !== undefined) {
+            await syncLeadProduct(caseFile.leadId, caseFile.productId, tenantId);
+        }
 
         if (statusChanged) {
             await logCaseFile(

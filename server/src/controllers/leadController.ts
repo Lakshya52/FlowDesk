@@ -168,6 +168,7 @@ export const getLeads = async (
 			Lead.find(filter)
 				.populate("databaseId", "name")
 				.populate("partnerId", "companyName personName partnerType")
+				.populate("productId", "name")
 				.populate("notes.createdBy", "name email avatar")
 				.sort({ createdAt: -1 })
 				.skip(skip)
@@ -196,6 +197,7 @@ export const getLead = async (
 		const lead = await Lead.findById(req.params.id)
 			.populate("databaseId", "name")
 			.populate("partnerId", "companyName personName partnerType")
+			.populate("productId", "name")
 			.populate("notes.createdBy", "name email avatar");
 
 		if (!lead) {

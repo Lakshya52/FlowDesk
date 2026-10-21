@@ -538,6 +538,9 @@ const CaseFileDetailModal: React.FC<Props> = ({
 		queryClient.invalidateQueries({ queryKey: ["case-files"] });
 		queryClient.invalidateQueries({ queryKey: ["case-file-stats"] });
 		queryClient.invalidateQueries({ queryKey: ["case-file-timeline", caseFile._id] });
+		// Product/status changes are mirrored onto the lead by the API.
+		queryClient.invalidateQueries({ queryKey: ["leads"] });
+		queryClient.invalidateQueries({ queryKey: ["lead-product"] });
 	};
 
 	const run = async (key: string, fn: () => Promise<any>, successMsg?: string) => {
@@ -825,10 +828,10 @@ const CaseFileDetailModal: React.FC<Props> = ({
 									onClose();
 									navigate(`/crm/dial?leadId=${caseFile.leadId}`);
 								}}
-								title="Open this lead in the Dial Queue"
+								title="Open this file in leads details view"
 							>
 								<ExternalLink size={14} />
-								<span>Dial Queue</span>
+								<span>View Lead Details</span>
 							</button>
 							{canManage && !terminal ? (
 								<button

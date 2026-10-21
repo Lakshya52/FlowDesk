@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import {
 	Building,
 	X,
@@ -7,6 +9,7 @@ import {
 	MessageSquare,
 	PhoneCall,
 	Pen,
+	FolderOpen,
 	Trash2,
 	Calendar,
 	CalendarPlus,
@@ -25,6 +28,7 @@ import {
 	Handshake,
 } from "lucide-react";
 import type { Lead } from "./DialQueue";
+import api from "../../lib/api";
 import ScheduleModal from "./ScheduleModal";
 
 const SECTION_CLASS =
@@ -173,6 +177,7 @@ export default function LeadDetailModal({
 	formatDuration,
 }: LeadDetailModalProps) {
 	/* ── All hooks must run unconditionally, before any early return ── */
+	const navigate = useNavigate();
 	const [mounted, setMounted] = useState(false);
 	const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 	const [editingText, setEditingText] = useState("");
@@ -371,6 +376,33 @@ export default function LeadDetailModal({
 		};
 	}, []);
 
+	/* Product picked in Files lives on the case file, not always on the lead.
+	   Fall back to it so the details popup never shows a blank product. */
+	const leadProductName =
+		selectedLead?.product?.trim() ||
+		(selectedLead?.productId &&
+		typeof selectedLead.productId === "object"
+			? selectedLead.productId.name
+			: "") ||
+		"";
+
+	const { data: caseFileProduct } = useQuery<string | null>({
+		queryKey: ["lead-product", selectedLead?._id],
+		queryFn: async () => {
+			const { data } = await api.get("/case-files", {
+				params: { leadId: selectedLead!._id, limit: 1 },
+			});
+			const product = data?.caseFiles?.[0]?.productId;
+			return product && typeof product === "object"
+				? product.name || null
+				: null;
+		},
+		enabled: !!selectedLead?._id && !leadProductName,
+		staleTime: 60 * 1000,
+	});
+
+	const productName = leadProductName || caseFileProduct || "";
+
 	/* ── Early return AFTER all hooks so hook order stays stable ── */
 	if (!selectedLead) return null;
 
@@ -381,8 +413,10 @@ export default function LeadDetailModal({
 		(selectedLead as any).sourceType === "partner" ||
 		!!selectedLead.partnerId;
 	const isLostLead = selectedLead.status === "closed_lost";
+	const isClosedWon = selectedLead.status === "closed_won";
 	const showCallActivity =
-		!isPartnerLead || isLostLead || (selectedLead.callCount || 0) > 0;
+		!isClosedWon &&
+		(!isPartnerLead || isLostLead || (selectedLead.callCount || 0) > 0);
 	const partnerRef =
 		typeof selectedLead.partnerId === "object" && selectedLead.partnerId
 			? (selectedLead.partnerId as any)
@@ -928,6 +962,59 @@ export default function LeadDetailModal({
 								)}
 							</div>
 
+							{/* Converted leads are worked from Files, not the dial queue. */}
+							{!updatingLead && isClosedWon && (
+								<div
+									className={SECTION_CLASS}
+									style={{
+										borderColor:
+											"color-mix(in srgb, var(--color-primary) 20%, transparent)",
+									}}
+								>
+									<div className={HEADER_CLASS}>
+										<FolderOpen
+											size={14}
+											className="text-(--color-primary)"
+										/>
+										<span className="text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--color-text)">
+											Converted Lead
+										</span>
+										<span className="badge badge-done text-[0.6rem] sm:text-[0.65rem] px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg ml-auto shrink-0">
+											closed won
+										</span>
+									</div>
+									<div className="p-2 sm:p-3">
+										<p className="text-[0.68rem] sm:text-[0.72rem] text-(--color-text-tertiary) mt-0 mb-2.5 m-0">
+											This lead has been converted.
+											Continue with document tracking,
+											approvals and status updates in
+											Files.
+										</p>
+										<button
+											type="button"
+											onClick={() => {
+												closeModal();
+												navigate(
+													`/crm/files?leadId=${selectedLead._id}`,
+												);
+											}}
+											className="w-full flex items-center justify-center gap-1.5 sm:gap-2 py-2 rounded-lg font-semibold border-none cursor-pointer text-[0.8rem] sm:text-[0.88rem]"
+											style={{
+												background:
+													"var(--color-primary)",
+												color: "white",
+											}}
+										>
+											<FolderOpen
+												size={14}
+												className="sm:size-4"
+											/>
+											View File
+										</button>
+									</div>
+								</div>
+							)}
+
 							{/* Call Activity — available for lost partner leads too, so a
 							    lead that was lost can still be worked from the Dial Queue. */}
 							{!updatingLead && showCallActivity &&
@@ -1130,11 +1217,14 @@ export default function LeadDetailModal({
 											</span>
 										</div>
 										<div className="flex items-center justify-between gap-2 py-1.5 border-b border-(--color-border) text-[0.72rem] sm:text-[0.8rem]">
-											<span className="text-(--color-text-tertiary)">
+											<span className="shrink-0 text-(--color-text-tertiary)">
 												Product
 											</span>
-											<span className="font-semibold text-(--color-text) text-right truncate">
-												{selectedLead.product || "—"}
+											<span
+												className="font-semibold text-(--color-text) text-right truncate min-w-0"
+												title={productName || undefined}
+											>
+												{productName || "—"}
 											</span>
 										</div>
 										<p className="text-[0.68rem] sm:text-[0.72rem] text-(--color-text-tertiary) mt-2 mb-0 m-0">

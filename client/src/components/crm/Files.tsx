@@ -361,7 +361,7 @@ const Files = (): React.JSX.Element => {
 					Loading caseFiles...
 				</div>
 			) : caseFiles.length === 0 ? (
-				<div className="card" style={{ padding: 36, textAlign: "center" }}>
+				<div className="card" style={{ padding: 36, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
 					<FolderOpen
 						size={34}
 						style={{
