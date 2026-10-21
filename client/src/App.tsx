@@ -210,7 +210,7 @@ const App: React.FC = () => {
           },
           success: { iconTheme: { primary: "var(--color-success)", secondary: "#ffffff" } },
           error: { iconTheme: { primary: "var(--color-danger)", secondary: "#ffffff" } },
-          duration: 4000,
+          duration: 2000,
         }}
       />
       <HashRouter>

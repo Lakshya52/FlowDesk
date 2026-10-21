@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "ts-node-dev src/seed.ts",
-    "migrate:campaigns": "node scripts/rename-campaign-to-database.cjs"
+    "migrate:campaigns": "node scripts/rename-campaign-to-database.cjs",
+    "fix:mojibake": "node scripts/fix-mojibake.cjs"
   },
   "dependencies": {
     "@getbrevo/brevo": "^5.0.4",

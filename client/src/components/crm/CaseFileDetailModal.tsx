@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -457,6 +458,7 @@ const CaseFileDetailModal: React.FC<Props> = ({
 	const [busy, setBusy] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState<Set<CheckpointKey>>(new Set());
 	const [docMenu, setDocMenu] = useState<string | null>(null);
+	const [docMenuPos, setDocMenuPos] = useState({ top: 0, left: 0 });
 	const [showLose, setShowLose] = useState(false);
 	const [loseReason, setLoseReason] = useState("");
 	const [confirmSanction, setConfirmSanction] = useState(false);
@@ -466,6 +468,7 @@ const CaseFileDetailModal: React.FC<Props> = ({
 	const [notesDraft, setNotesDraft] = useState(caseFile.notes || "");
 	const [notesOpen, setNotesOpen] = useState(false);
 	const docMenuRef = useRef<HTMLDivElement | null>(null);
+	const docMenuPanelRef = useRef<HTMLDivElement | null>(null);
 
 	const statusById = useMemo(
 		() => new Map(docStatuses.map((s: any) => [String(s._id), s])),
@@ -506,22 +509,31 @@ const CaseFileDetailModal: React.FC<Props> = ({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [caseFile._id]);
 
-	// Close the document status menu on an outside click or Escape.
+	// Close the document status menu on an outside click, Escape, scroll or resize.
 	useEffect(() => {
 		if (!docMenu) return;
 		const onDown = (e: MouseEvent) => {
-			if (docMenuRef.current && !docMenuRef.current.contains(e.target as Node)) {
-				setDocMenu(null);
-			}
+			const target = e.target as Node;
+			if (docMenuRef.current?.contains(target) || docMenuPanelRef.current?.contains(target)) return;
+			setDocMenu(null);
+		};
+		const onScroll = (e: Event) => {
+			if (docMenuPanelRef.current?.contains(e.target as Node)) return;
+			setDocMenu(null);
 		};
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === "Escape") setDocMenu(null);
 		};
+		const onResize = () => setDocMenu(null);
 		document.addEventListener("mousedown", onDown);
 		document.addEventListener("keydown", onKey);
+		window.addEventListener("scroll", onScroll, true);
+		window.addEventListener("resize", onResize);
 		return () => {
 			document.removeEventListener("mousedown", onDown);
 			document.removeEventListener("keydown", onKey);
+			window.removeEventListener("scroll", onScroll, true);
+			window.removeEventListener("resize", onResize);
 		};
 	}, [docMenu]);
 
@@ -1163,7 +1175,24 @@ const CaseFileDetailModal: React.FC<Props> = ({
 														{canManage ? (
 															<button
 																type="button"
-																onClick={() => setDocMenu((v) => (v === doc._id ? null : doc._id))}
+																onClick={(e) => {
+																	if (docMenu === doc._id) {
+																		setDocMenu(null);
+																		return;
+																	}
+																	const rect = e.currentTarget.getBoundingClientRect();
+																	const menuWidth = 176;
+																	const itemCount = docStatuses.filter(
+																		(s: CaseFileDocStatus) => s.isActive || String(s._id) === String(doc.statusId)
+																	).length;
+																	const menuHeight = Math.min(itemCount * 31 + 8, 240);
+																	const flipUp = rect.bottom + menuHeight + 8 > window.innerHeight;
+																	setDocMenuPos({
+																		top: flipUp ? Math.max(8, rect.top - menuHeight - 6) : rect.bottom + 6,
+																		left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
+																	});
+																	setDocMenu(doc._id);
+																}}
 																title="Choose a specific status"
 																style={{
 																	background: "none",
@@ -1178,22 +1207,25 @@ const CaseFileDetailModal: React.FC<Props> = ({
 															</button>
 														) : null}
 
-														{docMenu === doc._id ? (
-															<div
-																style={{
-																	position: "absolute",
-																	top: "100%",
-																	right: 0,
-																	marginTop: 4,
-																	zIndex: 10,
-																	background: "var(--color-surface)",
-																	border: "1px solid var(--color-border)",
-																	borderRadius: 10,
-																	boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-																	minWidth: 150,
-																	padding: 4,
-																}}
-															>
+														{docMenu === doc._id
+															? createPortal(
+																	<div
+																		ref={docMenuPanelRef}
+																		style={{
+																			position: "fixed",
+																			top: docMenuPos.top,
+																			left: docMenuPos.left,
+																			width: 176,
+																			maxHeight: 240,
+																			overflowY: "auto",
+																			zIndex: 4965,
+																			background: "var(--color-surface)",
+																			border: "1px solid var(--color-border)",
+																			borderRadius: 10,
+																			boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+																			padding: 4,
+																		}}
+																	>
 																{docStatuses
 																	.filter((s: any) => s.isActive || String(s._id) === String(doc.statusId))
 																	.map((s: any) => (
@@ -1235,8 +1267,10 @@ const CaseFileDetailModal: React.FC<Props> = ({
 																			) : null}
 																		</button>
 																	))}
-															</div>
-														) : null}
+																	</div>,
+																	document.body
+																)
+															: null}
 													</div>
 												</div>
 											);

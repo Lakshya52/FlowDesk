@@ -320,7 +320,6 @@ export default function ChatsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<any>(null);
 
-  // â”€â”€â”€ Socket: create ONCE on mount, clean up on unmount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     // E2EE identity: create/load device keypair and publish the public half
     void initE2EE();
@@ -605,7 +604,6 @@ export default function ChatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?._id]);
 
-  // â”€â”€â”€ Join/leave conversation rooms when active chat changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
@@ -622,7 +620,6 @@ export default function ChatsPage() {
     }
   }, [activeConversationId]);
 
-  // â”€â”€â”€ Fetch users lazily on search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!searchQuery.trim() || users.length > 0) return;
     const fetchUsers = async () => {
@@ -636,7 +633,6 @@ export default function ChatsPage() {
     fetchUsers();
   }, [searchQuery, users.length]);
 
-  // â”€â”€â”€ Fetch messages for active conversation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (
       activeConversationId &&
@@ -716,19 +712,16 @@ export default function ChatsPage() {
     setPendingDeleteMsgId(null);
   }, [activeConversationId, user?._id]);
 
-  // â”€â”€â”€ Scroll to bottom on new messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typingUsers]);
 
-  // â”€â”€â”€ Sync messages to cache ref â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (activeConversationId) {
       messagesCacheRef.current[activeConversationId] = messages;
     }
   }, [messages, activeConversationId]);
 
-  // â”€â”€â”€ E2EE: decrypt encrypted attachments to blob URLs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Plaintext bytes never hit disk â€” decrypted blobs live in memory only.
   useEffect(() => {
     if (!activeConversationId) return;
@@ -769,7 +762,6 @@ export default function ChatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, activeConversationId]);
 
-  // â”€â”€â”€ Fetch all users for forward dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!forwardingMessage) return;
 
@@ -785,7 +777,6 @@ export default function ChatsPage() {
     fetchUsersForForward();
   }, [forwardingMessage]);
 
-  // â”€â”€â”€ Input & Typing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setMessageInput(val);
@@ -826,7 +817,6 @@ export default function ChatsPage() {
     setShowMentions(false);
   };
 
-  // â”€â”€â”€ Send Message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     // FIX: require actual text content â€” a bare reply with no text should not send
@@ -904,7 +894,6 @@ export default function ChatsPage() {
     }
   };
 
-  // â”€â”€â”€ File Upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !activeConversationId) return;
@@ -1041,7 +1030,6 @@ export default function ChatsPage() {
     }
   };
 
-  // â”€â”€â”€ Reactions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleReactToMessage = async (messageId: string, emoji: string) => {
     try {
       await api.post(`/conversations/messages/${messageId}/react`, { emoji });
@@ -1051,7 +1039,6 @@ export default function ChatsPage() {
     }
   };
 
-  // â”€â”€â”€ Delete Message (inline confirm) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleDeleteMessage = async (messageId: string) => {
     try {
       await api.delete(`/conversations/messages/${messageId}`);
@@ -1073,7 +1060,6 @@ export default function ChatsPage() {
     }
   };
 
-  // â”€â”€â”€ Edit Message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleEditMessage = async (messageId: string) => {
     if (!editMessageInput.trim()) return;
     if (!activeConversationId) return;
@@ -1102,7 +1088,6 @@ export default function ChatsPage() {
     }
   };
 
-  // â”€â”€â”€ Delete Conversation (inline confirm) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleDeleteConversation = async () => {
     if (!activeConversationId) return;
     try {
@@ -1114,7 +1099,6 @@ export default function ChatsPage() {
     }
   };
 
-  // â”€â”€â”€ Forward Message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // const handleForwardMessage = async (targetConversationId: string) => {
   //     if (!forwardingMessage) return;
   //     try {
@@ -1153,7 +1137,6 @@ export default function ChatsPage() {
 
       if (!finalConversationId || finalConversationId === sourceConvId) return;
 
-      // â”€â”€ E2EE forward: decrypt locally, re-encrypt under the TARGET key.
       // The server never sees plaintext and never shares attachment ids
       // between conversations (the old IDOR-prone path is gone).
       const targetConv =
@@ -1996,7 +1979,7 @@ export default function ChatsPage() {
                           "Offline"
                         )
                       ) : (
-                        `Group Â· ${activeConv.participants?.length || 0} participants`
+                        `Group · ${activeConv.participants?.length || 0} participants`
                       )}
                     </p>
                   </div>
@@ -3544,42 +3527,42 @@ export default function ChatsPage() {
                         }}
                       >
                         {[
-                          "ðŸ˜€",
-                          "ðŸ˜ƒ",
-                          "ðŸ˜„",
-                          "ðŸ˜",
-                          "ðŸ˜†",
-                          "ðŸ˜…",
-                          "ðŸ˜‚",
-                          "ðŸ¤£",
-                          "ðŸ˜Š",
-                          "ðŸ˜‡",
-                          "ðŸ™‚",
-                          "ðŸ™ƒ",
-                          "ðŸ˜‰",
-                          "ðŸ˜Œ",
-                          "ðŸ˜",
-                          "ðŸ¥°",
-                          "ðŸ˜˜",
-                          "ðŸ˜—",
-                          "ðŸ˜™",
-                          "ðŸ˜š",
-                          "ðŸ˜‹",
-                          "ðŸ˜›",
-                          "ðŸ˜",
-                          "ðŸ˜œ",
-                          "ðŸ¤ª",
-                          "ðŸ¤¨",
-                          "ðŸ§",
-                          "ðŸ¤“",
-                          "ðŸ˜Ž",
-                          "ðŸ¥¸",
-                          "ðŸ¥³",
-                          "ðŸ˜",
-                          "ðŸ˜’",
-                          "ðŸ˜ž",
-                          "ðŸ˜”",
-                          "ðŸ˜Ÿ",
+                          "😀",
+                          "😃",
+                          "😄",
+                          "😁",
+                          "😆",
+                          "😅",
+                          "😂",
+                          "🤣",
+                          "😊",
+                          "😇",
+                          "🙂",
+                          "🙃",
+                          "😉",
+                          "😌",
+                          "😍",
+                          "🥰",
+                          "😘",
+                          "😗",
+                          "😙",
+                          "😚",
+                          "😋",
+                          "😛",
+                          "😝",
+                          "😜",
+                          "🤪",
+                          "🤨",
+                          "🧐",
+                          "🤓",
+                          "😎",
+                          "🥸",
+                          "🥳",
+                          "😏",
+                          "😒",
+                          "😞",
+                          "😔",
+                          "😟",
                         ].map((e) => (
                           <button
                             key={e}

@@ -31,7 +31,7 @@ const escapeRegex = (s: string): string =>
 
 const CASE_FILE_STATUSES = ['in_process', 'closed', 'lost'];
 
-// Display labels only â€” stored values stay in_process / closed / lost.
+// Display labels only — stored values stay in_process / closed / lost.
 const CASE_FILE_STATUS_LABELS: Record<string, string> = {
     in_process: 'In Process',
     closed: 'Sanctioned',
@@ -63,7 +63,7 @@ const getPopulated = (id: any) =>
         .populate('productId', 'name isActive')
         .populate('clarifications.createdBy', 'name email avatar');
 
-// Load the tenant's document statuses once per request â€” used for progress
+// Load the tenant's document statuses once per request — used for progress
 // computation and one-click status advancing.
 const loadDocStatusMap = async (tenantId: any) => {
     const statuses = await DocStatus.find({ tenantId }).sort({ order: 1, createdAt: 1 });
@@ -101,9 +101,9 @@ const logCaseFile = async (
 };
 
 // Keep the lead's own status in sync with the caseFile outcome.
-//  - lost      â†’ lead closed_lost (call activity becomes available)
-//  - sanctioned â†’ lead closed_won
-//  - reopen     â†’ lead connected / attempted (never leave it closed_lost)
+//  - lost      → lead closed_lost (call activity becomes available)
+//  - sanctioned → lead closed_won
+//  - reopen     → lead connected / attempted (never leave it closed_lost)
 const syncLeadStatus = async (
     caseFile: any,
     nextStatus: 'closed_lost' | 'closed_won' | 'connected' | 'attempted',
@@ -117,7 +117,7 @@ const syncLeadStatus = async (
     await lead.save();
 
     await ActivityLog.create({
-        action: `Lead status changed: ${oldStatus.replace(/_/g, ' ')} â†’ ${nextStatus.replace(/_/g, ' ')}`,
+        action: `Lead status changed: ${oldStatus.replace(/_/g, ' ')} → ${nextStatus.replace(/_/g, ' ')}`,
         user: actor._id,
         entityType: EntityType.LEAD,
         entityId: lead._id,
@@ -140,9 +140,7 @@ const syncLeadStatus = async (
     return populated;
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Reads
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const getCaseFiles = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -216,7 +214,7 @@ export const getCaseFile = async (req: AuthRequest, res: Response): Promise<void
     }
 };
 
-// Chronological trail: lead import â†’ caseFile created â†’ every logged action.
+// Chronological trail: lead import → caseFile created → every logged action.
 // Merges caseFile logs with the lead's own activity (calls, notes, status
 // changes) so the popup tells the whole story in one place.
 export const getCaseFileTimeline = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -257,7 +255,7 @@ export const getCaseFileTimeline = async (req: AuthRequest, res: Response): Prom
         entries.push({
             _id: 'converted',
             at: caseFile.convertedAt,
-            action: 'Lead marked closed won â€” file started',
+            action: 'Lead marked closed won — file started',
             user: null,
             kind: 'converted',
         });
@@ -280,7 +278,7 @@ export const getCaseFileTimeline = async (req: AuthRequest, res: Response): Prom
         }
 
         // The caseFile-created log already carries the "Lead converted"
-        // message â€” drop the synthetic row when it's present.
+        // message — drop the synthetic row when it's present.
         const hasConvertedLog = logs.some((l) => /converted/i.test(l.action));
         const timeline = entries
             .filter((e) => !(e._id === 'converted' && hasConvertedLog))
@@ -292,12 +290,10 @@ export const getCaseFileTimeline = async (req: AuthRequest, res: Response): Prom
     }
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Create / update
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Convert a lead: creates the caseFile and marks the lead closed_won.
-// Idempotent â€” one caseFile per lead.
+// Idempotent — one caseFile per lead.
 export const createCaseFile = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const tenantId = getTenantId(req.user!);
@@ -315,7 +311,7 @@ export const createCaseFile = async (req: AuthRequest, res: Response): Promise<v
 
         const existing = await CaseFile.findOne({ tenantId, leadId: lead._id });
         if (existing) {
-            // Already tracked â€” optionally fill in the product if it was missing.
+            // Already tracked — optionally fill in the product if it was missing.
             if (!existing.productId && productId) {
                 const docs = await buildDocsFromTemplate(productId, tenantId);
                 if (docs) {
@@ -374,7 +370,7 @@ export const createCaseFile = async (req: AuthRequest, res: Response): Promise<v
             lead.status = 'closed_won';
             await lead.save();
             await ActivityLog.create({
-                action: `Lead status changed: ${oldStatus.replace(/_/g, ' ')} â†’ closed won`,
+                action: `Lead status changed: ${oldStatus.replace(/_/g, ' ')} → closed won`,
                 user: req.user!._id,
                 entityType: EntityType.LEAD,
                 entityId: lead._id,
@@ -445,7 +441,7 @@ export const updateCaseFile = async (req: AuthRequest, res: Response): Promise<v
                     caseFile,
                     req.user!,
                     nextPid
-                        ? 'Loan product updated â€” checklist switched (matching documents kept their status)'
+                        ? 'Loan product updated — checklist switched (matching documents kept their status)'
                         : 'Loan product removed',
                     { kind: 'product', productId: nextPid }
                 );
@@ -500,7 +496,7 @@ export const updateCaseFile = async (req: AuthRequest, res: Response): Promise<v
             await logCaseFile(
                 caseFile,
                 req.user!,
-                `File ${caseFileStatusLabel(oldStatus)} â†’ ${caseFileStatusLabel(caseFile.status)}${caseFile.leadName ? `: ${caseFile.leadName}` : ''}`,
+                `File ${caseFileStatusLabel(oldStatus)} → ${caseFileStatusLabel(caseFile.status)}${caseFile.leadName ? `: ${caseFile.leadName}` : ''}`,
                 { kind: 'status', oldStatus, newStatus: caseFile.status }
             );
 
@@ -528,9 +524,7 @@ export const updateCaseFile = async (req: AuthRequest, res: Response): Promise<v
     }
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Document checklist â€” one-click advance
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Document checklist — one-click advance
 
 export const advanceCaseFileDoc = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -572,11 +566,11 @@ export const advanceCaseFileDoc = async (req: AuthRequest, res: Response): Promi
             await logCaseFile(
                 caseFile,
                 req.user!,
-                `Document "${doc.name}" â†’ ${(next as any).name}`,
+                `Document "${doc.name}" → ${(next as any).name}`,
                 {
                     kind: 'doc',
                     docName: doc.name,
-                    oldStatus: previous?.name || 'â€”',
+                    oldStatus: previous?.name || '—',
                     newStatus: (next as any).name,
                 }
             );
@@ -633,11 +627,11 @@ export const updateCaseFileDoc = async (req: AuthRequest, res: Response): Promis
             await logCaseFile(
                 caseFile,
                 req.user!,
-                `Document "${doc.name}" â†’ ${docStatus.name}`,
+                `Document "${doc.name}" → ${docStatus.name}`,
                 {
                     kind: 'doc',
                     docName: doc.name,
-                    oldStatus: previous?.name || 'â€”',
+                    oldStatus: previous?.name || '—',
                     newStatus: docStatus.name,
                 }
             );
@@ -651,9 +645,7 @@ export const updateCaseFileDoc = async (req: AuthRequest, res: Response): Promis
     }
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Proposal / Finalizing sub-checkpoints
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const toggleWorkflowItem = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -705,12 +697,10 @@ export const toggleWorkflowItem = async (req: AuthRequest, res: Response): Promi
     }
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Clarifications (notes trail)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Explicitly confirm that this lead needs no clarifications. This is the only
-// way an empty Clarifications checkpoint can complete â€” it never auto-ticks.
+// way an empty Clarifications checkpoint can complete — it never auto-ticks.
 export const setClarificationsCleared = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const tenantId = getTenantId(req.user!);
@@ -742,7 +732,7 @@ export const setClarificationsCleared = async (req: AuthRequest, res: Response):
         await logCaseFile(
             caseFile,
             req.user!,
-            cleared ? 'Clarifications confirmed â€” none needed' : 'Clarifications reopened',
+            cleared ? 'Clarifications confirmed — none needed' : 'Clarifications reopened',
             { kind: 'clarification', cleared }
         );
 
@@ -885,9 +875,7 @@ export const deleteClarification = async (req: AuthRequest, res: Response): Prom
     }
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Outcomes â€” sanction / lose / reopen
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Outcomes — sanction / lose / reopen
 
 export const sanctionCaseFile = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -944,7 +932,7 @@ export const loseCaseFile = async (req: AuthRequest, res: Response): Promise<voi
         caseFile.sanctionedAt = null;
         await caseFile.save();
 
-        await logCaseFile(caseFile, req.user!, `File marked lost â€” ${reason}`, {
+        await logCaseFile(caseFile, req.user!, `File marked lost — ${reason}`, {
             kind: 'status',
             newStatus: 'lost',
             reason,
@@ -985,7 +973,7 @@ export const reopenCaseFile = async (req: AuthRequest, res: Response): Promise<v
         await logCaseFile(
             caseFile,
             req.user!,
-            `File reopened${wasLost ? ' â€” lead is active again' : ''}`,
+            `File reopened${wasLost ? ' — lead is active again' : ''}`,
             { kind: 'status', newStatus: 'in_process', previousLostReason }
         );
 

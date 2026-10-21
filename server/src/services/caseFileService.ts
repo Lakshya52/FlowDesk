@@ -86,7 +86,7 @@ export const reconcileCaseFileDocs = async (productId: any, tenantId: any) => {
 
 // Called from the lead side (Dial Queue status change, call logging) so the
 // caseFile tracker mirrors the lead outcome:
-//  - lead â†’ closed_lost  : caseFile is marked Lost (reason kept if already set)
+//  - lead → closed_lost  : caseFile is marked Lost (reason kept if already set)
 //  - lead leaves closed_lost : a lost caseFile is reopened automatically
 export const syncCaseFileForLeadStatus = async (
     lead: any,
@@ -108,7 +108,7 @@ export const syncCaseFileForLeadStatus = async (
         await caseFile.save();
 
         await ActivityLog.create({
-            action: `File marked lost â€” ${caseFile.lostReason}`,
+            action: `File marked lost — ${caseFile.lostReason}`,
             user: actor?._id || lead._id,
             entityType: EntityType.CASE_FILE,
             entityId: caseFile._id,
@@ -134,7 +134,7 @@ export const syncCaseFileForLeadStatus = async (
         await caseFile.save();
 
         await ActivityLog.create({
-            action: 'File reopened â€” lead is active again',
+            action: 'File reopened — lead is active again',
             user: actor?._id || lead._id,
             entityType: EntityType.CASE_FILE,
             entityId: caseFile._id,
@@ -211,7 +211,7 @@ export const ensureCaseFileForLead = async (lead: any, actor: any) => {
     if (existing) return existing;
 
     try {
-        // Partner leads can arrive already carrying a product â€” carry it over
+        // Partner leads can arrive already carrying a product — carry it over
         // so the caseFile tracker starts with the right doc checklist.
         const productId = (lead as any).productId || null;
         const docs = productId
@@ -248,7 +248,7 @@ export const ensureCaseFileForLead = async (lead: any, actor: any) => {
         emitCaseFileCreated((lead.tenantId as any).toString(), caseFile);
         return caseFile;
     } catch (err: any) {
-        // Unique index race â€” reuse the caseFile that won the race.
+        // Unique index race — reuse the caseFile that won the race.
         if (err?.code === 11000) {
             return CaseFile.findOne({ tenantId: lead.tenantId, leadId: lead._id });
         }

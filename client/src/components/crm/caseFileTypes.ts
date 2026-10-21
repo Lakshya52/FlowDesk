@@ -14,6 +14,7 @@ export interface CaseFileDocStatus {
 	name: string;
 	color: string;
 	isResolved: boolean;
+	isActive?: boolean;
 }
 
 export interface CaseFileDoc {
