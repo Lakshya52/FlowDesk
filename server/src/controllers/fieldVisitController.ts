@@ -4,6 +4,7 @@ import FieldVisit from "../models/FieldVisit";
 import LocationTrack from "../models/LocationTrack";
 import Company from "../models/Company";
 import Lead from "../models/Lead";
+import Partner from "../models/Partner";
 import Database from "../models/Database";
 import Tenant from "../models/Tenant";
 import { AuthRequest } from "../middlewares/auth";
@@ -34,6 +35,26 @@ export const createFieldVisit = async (req: AuthRequest, res: Response): Promise
             return;
         }
 
+        if (!['company', 'lead', 'partner'].includes(clientType)) {
+            res.status(400).json({ message: "clientType must be company, lead, or partner" });
+            return;
+        }
+
+        let resolvedClientName = typeof clientName === 'string' ? clientName : '';
+        if (clientType === 'partner') {
+            if (!mongoose.Types.ObjectId.isValid(clientId)) {
+                res.status(400).json({ message: "Invalid partner id" });
+                return;
+            }
+            const partner = await Partner.findOne({ _id: clientId, tenantId })
+                .select('companyName name personName');
+            if (!partner) {
+                res.status(404).json({ message: "Partner not found" });
+                return;
+            }
+            resolvedClientName = partner.companyName || partner.name || partner.personName;
+        }
+
         let targetEmployee = user._id;
         const isScheduled = !!(scheduledDate || scheduledTime) && (user.role === 'admin' || user.role === 'manager');
 
@@ -49,7 +70,7 @@ export const createFieldVisit = async (req: AuthRequest, res: Response): Promise
             employeeId: targetEmployee,
             clientId,
             clientType,
-            clientName: clientName || '',
+            clientName: resolvedClientName,
             scheduledDate: scheduledDate || undefined,
             scheduledTime: scheduledTime || undefined,
             geoFenceRadius,

@@ -211,6 +211,10 @@ const Partners = () => {
 	const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(
 		null,
 	);
+	const [showScheduleVisit, setShowScheduleVisit] = useState(false);
+	const [visitDate, setVisitDate] = useState("");
+	const [visitTime, setVisitTime] = useState("10:00");
+	const [schedulingVisit, setSchedulingVisit] = useState(false);
 	const [leadSearch, setLeadSearch] = useState("");
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [quickAddText, setQuickAddText] = useState("");
@@ -650,6 +654,38 @@ const Partners = () => {
 	const canManage =
 		currentUser?.role === "admin" || currentUser?.role === "manager";
 
+	const handleSchedulePartnerVisit = async (
+		e: React.FormEvent<HTMLFormElement>,
+	) => {
+		e.preventDefault();
+		if (!selectedPartner || !visitDate || !visitTime) return;
+
+		const scheduledDate = new Date(`${visitDate}T${visitTime}`);
+		if (Number.isNaN(scheduledDate.getTime())) {
+			toast.error("Please choose a valid visit date and time");
+			return;
+		}
+
+		setSchedulingVisit(true);
+		try {
+			await api.post("/field-visits", {
+				clientId: selectedPartner._id,
+				clientType: "partner",
+				clientName: partnerDisplayName(selectedPartner),
+				scheduledDate: scheduledDate.toISOString(),
+				scheduledTime: visitTime,
+			});
+			toast.success("Partner visit scheduled");
+			setShowScheduleVisit(false);
+		} catch (err: any) {
+			toast.error(
+				err.response?.data?.message || "Failed to schedule partner visit",
+			);
+		} finally {
+			setSchedulingVisit(false);
+		}
+	};
+
 	// Search + paging are server-side; `partners` is the current page.
 	const filtered = partners;
 
@@ -693,7 +729,7 @@ const Partners = () => {
 
 	const partnerDetailModal = (
 		<Modal
-			isOpen={!!selectedPartnerId}
+			isOpen={!!selectedPartnerId && !showScheduleVisit}
 			onClose={() => {
 				if (
 					!showQuickAdd &&
@@ -758,6 +794,27 @@ const Partners = () => {
 								</p>
 							</div>
 							<div className="flex items-center gap-1.5 shrink-0">
+								<button
+									onClick={() => {
+										const localDate = new Date();
+										localDate.setMinutes(
+											localDate.getMinutes() -
+												localDate.getTimezoneOffset(),
+										);
+										setVisitDate(
+											localDate.toISOString().slice(0, 10),
+										);
+										setVisitTime("10:00");
+										setShowScheduleVisit(true);
+									}}
+									title="Schedule a partner visit"
+									className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border border-(--color-primary-light) bg-(--color-primary-light) text-(--color-primary) text-xs font-semibold cursor-pointer hover:opacity-80"
+								>
+									<Calendar size={14} />
+									<span className="hidden sm:inline">
+										Schedule visit
+									</span>
+								</button>
 								{canManage && (
 									<>
 										<button
@@ -1886,6 +1943,82 @@ const Partners = () => {
 					</div>
 				</div>
 				{partnerDetailModal}
+				<Modal
+					isOpen={showScheduleVisit}
+					onClose={() => {
+						if (!schedulingVisit) setShowScheduleVisit(false);
+					}}
+				>
+					<form
+						onSubmit={handleSchedulePartnerVisit}
+						className="card w-full p-6 space-y-5"
+						style={{ maxWidth: 440 }}
+					>
+						<div>
+							<h3 className="text-base font-bold m-0">
+								Schedule partner visit
+							</h3>
+							<p className="text-sm text-(--color-text-secondary) mt-1 mb-0">
+								{selectedPartner
+									? `Plan a visit to ${partnerDisplayName(selectedPartner)}.`
+									: "Choose a date and time for the visit."}
+							</p>
+						</div>
+						<div>
+							<label
+								htmlFor="partner-visit-date"
+								className="block text-sm font-medium mb-1.5"
+							>
+								Date
+							</label>
+							<input
+								id="partner-visit-date"
+								type="date"
+								className="input w-full"
+								value={visitDate}
+								min={new Date().toLocaleDateString("en-CA")}
+								onChange={(e) => setVisitDate(e.target.value)}
+								required
+							/>
+						</div>
+						<div>
+							<label
+								htmlFor="partner-visit-time"
+								className="block text-sm font-medium mb-1.5"
+							>
+								Time
+							</label>
+							<input
+								id="partner-visit-time"
+								type="time"
+								className="input w-full"
+								value={visitTime}
+								onChange={(e) => setVisitTime(e.target.value)}
+								required
+							/>
+						</div>
+						<div className="flex justify-end gap-2">
+							<button
+								type="button"
+								className="btn btn-secondary"
+								onClick={() => setShowScheduleVisit(false)}
+								disabled={schedulingVisit}
+							>
+								Cancel
+							</button>
+							<button
+								type="submit"
+								className="btn btn-primary flex items-center gap-2"
+								disabled={schedulingVisit || !selectedPartner}
+							>
+								{schedulingVisit && (
+									<Loader2 size={15} className="animate-spin" />
+								)}
+								Schedule visit
+							</button>
+						</div>
+					</form>
+				</Modal>
 				{quickAddModal}
 				{leadImportModal}
 

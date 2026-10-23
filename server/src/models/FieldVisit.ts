@@ -11,7 +11,7 @@ export interface IFieldVisit extends Document {
     tenantId: mongoose.Types.ObjectId;
     employeeId: mongoose.Types.ObjectId;
     clientId: mongoose.Types.ObjectId;
-    clientType: 'company' | 'lead';
+    clientType: 'company' | 'lead' | 'partner';
     clientName: string;
     scheduledDate?: Date;
     scheduledTime?: string;
@@ -70,7 +70,7 @@ const fieldVisitSchema = new Schema<IFieldVisit>(
         tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true },
         employeeId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
         clientId: { type: Schema.Types.ObjectId, required: true },
-        clientType: { type: String, enum: ['company', 'lead'], required: true },
+        clientType: { type: String, enum: ['company', 'lead', 'partner'], required: true },
         clientName: { type: String, trim: true },
         scheduledDate: { type: Date },
         scheduledTime: { type: String, trim: true },

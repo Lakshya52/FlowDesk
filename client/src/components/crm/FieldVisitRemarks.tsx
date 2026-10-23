@@ -30,7 +30,7 @@ const FieldVisitRemarks: React.FC<Props> = ({ visitId, onComplete, onCancel }) =
   const [submitting, setSubmitting] = useState(false);
   const [clientName, setClientName] = useState("");
   const [clientId, setClientId] = useState("");
-  const [clientType, setClientType] = useState("lead");
+  const [clientType, setClientType] = useState<"company" | "lead" | "partner">("lead");
 
   useEffect(() => {
     fetchVisit();
@@ -80,6 +80,10 @@ const FieldVisitRemarks: React.FC<Props> = ({ visitId, onComplete, onCancel }) =
       toast.error("Please enter some remarks");
       return;
     }
+    if (outcome === "rescheduled" && (!rescheduledDate || !rescheduledTime)) {
+      toast.error("Please choose a date and time for the rescheduled visit");
+      return;
+    }
     setSubmitting(true);
     try {
       const payload: any = { remarks: remarks.trim() };
@@ -124,7 +128,7 @@ const FieldVisitRemarks: React.FC<Props> = ({ visitId, onComplete, onCancel }) =
         noteText = metText;
       }
 
-      if (noteText && clientId) {
+      if (noteText && clientId && clientType === "lead") {
         await api.post(`/leads/${clientId}/notes`, { text: noteText });
       }
 
@@ -150,9 +154,13 @@ const FieldVisitRemarks: React.FC<Props> = ({ visitId, onComplete, onCancel }) =
     <div className="bg-(--color-surface) p-6">
       <h2 className="text-lg font-semibold mb-1 text-(--color-text)">Visit Details</h2>
       <p className="text-sm mb-4">
-        <button onClick={() => clientId && navigate(`/crm/dial?leadId=${clientId}`)} className={`${clientId ? "text-(--color-primary) hover:text-(--color-primary-hover) hover:underline" : "text-(--color-text-tertiary)"}`}>
-          {clientName}
-        </button>
+        {clientType === "lead" ? (
+          <button onClick={() => clientId && navigate(`/crm/dial?leadId=${clientId}`)} className={`${clientId ? "text-(--color-primary) hover:text-(--color-primary-hover) hover:underline" : "text-(--color-text-tertiary)"}`}>
+            {clientName}
+          </button>
+        ) : (
+          <span className="text-(--color-text-secondary)">{clientName}</span>
+        )}
       </p>
 
       <div className="space-y-4">

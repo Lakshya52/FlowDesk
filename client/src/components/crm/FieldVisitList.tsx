@@ -44,7 +44,7 @@ interface Visit {
 		employeeId: string;
 	};
 	clientId: string;
-	clientType: "company" | "lead";
+	clientType: "company" | "lead" | "partner";
 	clientName: string;
 	scheduledDate?: string;
 	scheduledTime?: string;
@@ -478,17 +478,25 @@ const FieldVisitList: React.FC<Props> = ({
 																size={13}
 																className="text-(--color-text-tertiary) shrink-0"
 															/>
-															<button
-																onClick={() =>
-																	navigate(
-																		`/crm/dial?leadId=${visit.clientId}`,
-																	)
-																}
-																className="text-sm font-medium text-(--color-primary) hover:text-(--color-primary) hover:underline truncate"
-															>
-																{visit.clientName ||
-																	visit.clientType}
-															</button>
+															{visit.clientType ===
+															"partner" ? (
+																<span className="text-sm font-medium truncate">
+																	{visit.clientName ||
+																		"Partner"}
+																</span>
+															) : (
+																<button
+																	onClick={() =>
+																		navigate(
+																			`/crm/dial?leadId=${visit.clientId}`,
+																		)
+																	}
+																	className="text-sm font-medium text-(--color-primary) hover:text-(--color-primary) hover:underline truncate"
+																>
+																	{visit.clientName ||
+																		visit.clientType}
+																</button>
+															)}
 														</div>
 														<div className="flex items-center gap-2 mt-0.5 text-xs text-(--color-text-tertiary)">
 															<User
@@ -699,22 +707,29 @@ const FieldVisitList: React.FC<Props> = ({
 										</span>
 									</div>
 
-									<div className="flex items-center gap-1.5 text-sm text-(--color-text-secondary) mb-1.5 cursor-pointer">
+									<div className="flex items-center gap-1.5 text-sm text-(--color-text-secondary) mb-1.5">
 										<Building2
 											size={14}
 											className="text-(--color-text-tertiary)"
 										/>
-										<button
-											onClick={() =>
-												navigate(
-													`/crm/dial?leadId=${visit.clientId}`,
-												)
-											}
-											className="cursor-pointer text-(--color-primary) hover:text-(--color-primary) hover:underline text-left"
-										>
-											{visit.clientName ||
-												visit.clientType}
-										</button>
+										{visit.clientType === "lead" ? (
+											<button
+												onClick={() =>
+													navigate(
+														`/crm/dial?leadId=${visit.clientId}`,
+													)
+												}
+												className="cursor-pointer text-(--color-primary) hover:text-(--color-primary) hover:underline text-left"
+											>
+												{visit.clientName ||
+													visit.clientType}
+											</button>
+										) : (
+											<span>
+												{visit.clientName ||
+													visit.clientType}
+											</span>
+										)}
 									</div>
 
 									{(visit.scheduledDate ||

@@ -148,7 +148,7 @@ export const navItems: NavItem[] = [
 				],
 			},
 			// { to: "/crm/schedule", label: "Work Schedule" }, // removed as of now dated 19-10-2026 
-			// { to: "/crm/field-visits", label: "Field Visits" }, // removed as of now dated 19-10-2026 
+			{ to: "/crm/field-visits", label: "Field Visits" }, // removed as of now dated 19-10-2026 
 			// { to: "/crm/plan", label: "Plan" }, // removed was very early stage and not used by anyone dated
 			{
 				to: "/crm/files",
