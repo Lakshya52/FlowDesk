@@ -406,7 +406,7 @@ const Files = (): React.JSX.Element => {
 										textOverflow: "ellipsis",
 									}}
 								>
-									{c.leadName || "Lead"}
+									{c.companyName || "No company name available"}
 								</div>
 								<div
 									style={{
@@ -417,7 +417,7 @@ const Files = (): React.JSX.Element => {
 										textOverflow: "ellipsis",
 									}}
 								>
-									{[c.companyName, c.phone]
+									{[c.leadName || "No name available", c.phone]
 										.filter(Boolean)
 										.join(" · ") || "—"}
 								</div>

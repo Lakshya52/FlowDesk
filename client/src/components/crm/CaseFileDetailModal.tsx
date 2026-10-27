@@ -784,7 +784,7 @@ const CaseFileDetailModal: React.FC<Props> = ({
 						<div style={{ flex: 1, minWidth: 180 }}>
 							<div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
 								<h2 style={{ margin: 0, fontSize: isMobile ? "1rem" : "1.15rem", fontWeight: 800 }}>
-									{caseFile.leadName || "File"}
+									{caseFile.companyName || "No company name available"}
 								</h2>
 								<span
 									className="badge"
@@ -824,7 +824,7 @@ const CaseFileDetailModal: React.FC<Props> = ({
 									flexWrap: "wrap",
 								}}
 							>
-								<span>{[caseFile.companyName, caseFile.phone].filter(Boolean).join(" · ") || "No contact info"}</span>
+								<span>{[caseFile.leadName, caseFile.phone].filter(Boolean).join(" · ") || "No contact info"}</span>
 								<span style={{ color: "var(--color-text-tertiary)" }}>·</span>
 								<span style={{ color: "var(--color-text-tertiary)" }}>
 									Converted {fmtDate(caseFile.convertedAt)}

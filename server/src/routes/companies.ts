@@ -31,7 +31,7 @@ router.get('/export/pdf', exportCompaniesToPDF);
 router.post('/bulk-email', sendBulkCompanyEmail);
 
 // Company routes
-router.post('/', authorize('admin', 'manager'), createCompany);
+router.post('/', authorize('admin', 'manager', 'member'), createCompany);
 router.get('/', getCompanies);
 router.get('/:id', getCompany);
 router.put('/:id', authorize('admin', 'manager'), updateCompany);

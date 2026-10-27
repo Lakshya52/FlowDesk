@@ -72,10 +72,37 @@ const loadDocStatusMap = async (tenantId: any) => {
     return { statuses, map };
 };
 
+// Case files snapshot the lead's details when the file is created. Those
+// details can be edited later, so responses prefer the lead's current values
+// and keep the snapshot only as a fallback (e.g. if the lead was deleted).
+const applyLiveLeadFields = (payload: any, lead: any) => {
+    if (!payload || !lead) return payload;
+    if (lead.name !== undefined && lead.name !== null) payload.leadName = lead.name;
+    if (lead.companyName !== undefined && lead.companyName !== null) payload.companyName = lead.companyName;
+    if (lead.phone !== undefined && lead.phone !== null) payload.phone = lead.phone;
+    return payload;
+};
+
+const fetchLeadsById = async (leadIds: any[], tenantId: any) => {
+    const ids = [...new Set(leadIds.filter(Boolean).map((id) => String(id)))];
+    if (!ids.length) return new Map<string, any>();
+    const leads = await Lead.find({ _id: { $in: ids }, tenantId })
+        .select('name companyName phone')
+        .lean();
+    return new Map(leads.map((lead: any) => [String(lead._id), lead]));
+};
+
 // Send a caseFile in its fully serialized (workflow + progress) shape.
 const respondCaseFile = async (res: Response, caseFile: any, tenantId: any, extra: any = {}) => {
     const { map } = await loadDocStatusMap(tenantId);
     const payload = serializeCaseFile(caseFile, map);
+    const lead = await Lead.findOne({
+        _id: caseFile.leadId?._id || caseFile.leadId,
+        tenantId,
+    })
+        .select('name companyName phone')
+        .lean();
+    applyLiveLeadFields(payload, lead);
     res.json({ success: true, caseFile: payload, ...extra });
     return payload;
 };
@@ -157,7 +184,20 @@ export const getCaseFiles = async (req: AuthRequest, res: Response): Promise<voi
         const s = String(search || '').trim();
         if (s) {
             const rx = new RegExp(escapeRegex(s), 'i');
-            filter.$or = [{ leadName: rx }, { companyName: rx }, { phone: rx }];
+            // Lead details are the source of truth — the snapshot on the file
+            // can be stale after the lead is edited.
+            const matchingLeads = await Lead.find({
+                tenantId: filter.tenantId,
+                $or: [{ name: rx }, { companyName: rx }, { phone: rx }],
+            })
+                .select('_id')
+                .lean();
+            filter.$or = [
+                { leadName: rx },
+                { companyName: rx },
+                { phone: rx },
+                { leadId: { $in: matchingLeads.map((l: any) => l._id) } },
+            ];
         }
 
         const [caseFiles, total, docStatusMap] = await Promise.all([
@@ -169,10 +209,16 @@ export const getCaseFiles = async (req: AuthRequest, res: Response): Promise<voi
             CaseFile.countDocuments(filter),
             loadDocStatusMap(tenantId).then((r) => r.map),
         ]);
+        const leadMap = await fetchLeadsById(caseFiles.map((c) => c.leadId), tenantId);
 
         res.json({
             success: true,
-            caseFiles: caseFiles.map((c) => serializeCaseFile(c, docStatusMap)),
+            caseFiles: caseFiles.map((c) =>
+                applyLiveLeadFields(
+                    serializeCaseFile(c, docStatusMap),
+                    leadMap.get(String(c.leadId))
+                )
+            ),
             total,
             page,
             totalPages: Math.max(1, Math.ceil(total / limit)),

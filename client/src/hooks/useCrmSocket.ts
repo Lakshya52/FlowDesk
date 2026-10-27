@@ -30,6 +30,10 @@ export const useCrmSocket = () => {
       queryClient.invalidateQueries({ queryKey: ["partners"] });
       queryClient.invalidateQueries({ queryKey: ["partner"] });
       queryClient.invalidateQueries({ queryKey: ["partner-leads"] });
+      // Files show the lead's current name/company/phone, so a lead edit must
+      // refresh the file tracker too.
+      queryClient.invalidateQueries({ queryKey: ["case-files"] });
+      queryClient.invalidateQueries({ queryKey: ["case-file-stats"] });
       queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     };
 
